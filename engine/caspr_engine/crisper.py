@@ -254,20 +254,36 @@ PROMPT_ARTIFACT_RE = re.compile(
 # au lieu de « le component, sinon ». Un prompt plus long dilue le contexte et
 # pousse vers un style télégraphique.
 #
-# À 18 termes la ponctuation est intacte et les termes techniques restent
-# corrects. Sans lexique du tout, on retombe sur « use effect », « react » en
-# minuscules et « UseEffect » mal capitalisé — donc il sert bien à quelque
-# chose, mais court.
+# ## Il n'y a plus de lexique par défaut, et c'est mesuré
 #
-# Règle : un terme n'entre ici que s'il a échoué de façon répétée, et il faut
-# en retirer un pour en ajouter un.
-DEFAULT_LEXICON = [
-    "useEffect", "useState", "component", "React", "Next.js", "TypeScript",
-    "hook", "props", "state",
-    "refactor", "merge", "commit", "branch", "pull request",
-    "endpoint", "dependencies", "async", "await",
-    "chunk",
-]
+# Ce fichier en portait un — dix-neuf termes de développement web, appliqués
+# dès que l'appelant passait `hotwords=None`. L'application ne l'atteignait
+# pas : elle envoie toujours une liste explicite, vide tant que personne n'a
+# ajouté de terme. Mais tout autre appelant y tombait, et le banc de ce projet
+# y est tombé.
+#
+# Rejoué sur 173 dictées réelles, avec et sans ces dix-neuf termes :
+#
+#     fragments/100 mots   0,25 avec   →   0,19 sans
+#     bafouillages         0,43        →   0,26
+#     phrase moyenne       16,0 mots   →   17,6
+#     fuites du lexique    4           →   0
+#
+# Cinquante-trois pour cent des textes changent, quatre divergent franchement,
+# et les quatre sont réparés par la suppression. Il ne dégrade pas la phrase,
+# il la remplace : « Effect the button functions. » là où l'audio dit « Ça ne
+# fonctionne plus du tout, je sais pas pourquoi. »
+#
+# Le plus contre-intuitif tient à la casse. « Whisper », qui ne figurait pas
+# dans la liste, était écrit correctement 51 fois sans elle et 12 fois avec :
+# le prompt perturbe la casse au-delà de ses propres termes.
+#
+# Ce que ça ne dit pas, c'est que le conditionnement lexical soit inutile. Les
+# 94 % de termes préservés du README ont été mesurés sur huit clips choisis,
+# avec un lexique adapté à eux. Ce qui est mesuré ici, c'est qu'un lexique que
+# personne n'a choisi coûte plus qu'il ne rapporte sur de la parole réelle.
+#
+# `hotwords=None` veut donc dire « aucun lexique », et plus « celui d'ici ».
 
 
 class CrisperWhisperEngine:
@@ -850,7 +866,7 @@ class CrisperWhisperEngine:
             self._processor.tokenizer,
             mode=mode,
             language=language,
-            hotwords=hotwords if hotwords is not None else DEFAULT_LEXICON,
+            hotwords=hotwords,
             context=context,
             timestamps=timestamps,
         )
@@ -871,7 +887,7 @@ class CrisperWhisperEngine:
 
         raw = self._processor.tokenizer.decode(tokens, skip_special_tokens=True)
         text = self._clean(raw, keep_disfluencies=keep_disfluencies)
-        active_lexicon = hotwords if hotwords is not None else DEFAULT_LEXICON
+        active_lexicon = hotwords
         if active_lexicon:
             text = self._strip_lexicon_echo(text, active_lexicon).strip()
             text = self._normalise_case(text, active_lexicon)

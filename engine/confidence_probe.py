@@ -7,7 +7,19 @@ permettrait de les repérer sans relire.
 """
 import numpy as np, soundfile as sf, torch
 from pathlib import Path
-from caspr_engine.crisper import CrisperWhisperEngine, SAMPLE_RATE, MEL_FRAMES_PER_S, DEFAULT_LEXICON
+from caspr_engine.crisper import CrisperWhisperEngine, SAMPLE_RATE, MEL_FRAMES_PER_S
+
+#: Le lexique qui servait à cette sonde quand `crisper.py` en portait un.
+#: Recopié ici le jour où il en a été retiré — mesuré nuisible sur voix réelle,
+#: cf. `poc/README.md` — pour que les relevés de cette sonde restent
+#: comparables entre eux.
+SONDE_LEXICON = [
+    "useEffect", "useState", "component", "React", "Next.js", "TypeScript",
+    "hook", "props", "state",
+    "refactor", "merge", "commit", "branch", "pull request",
+    "endpoint", "dependencies", "async", "await",
+    "chunk",
+]
 from caspr_engine import prompt as prompt_mod
 
 engine = CrisperWhisperEngine()
@@ -23,7 +35,7 @@ def decode_with_confidence(audio, language="fr"):
     enc = engine._encode(mel)
 
     ids = prompt_mod.build(engine._processor.tokenizer, mode="intended",
-                           language=language, hotwords=DEFAULT_LEXICON)
+                           language=language, hotwords=SONDE_LEXICON)
     cur = torch.tensor([ids], device=engine.device)
     past, out = None, []
     for _ in range(256):

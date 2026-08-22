@@ -9,7 +9,7 @@ fonctionnalités, ce qui est le pire mode d'échec.
 import pytest
 
 from caspr_engine import prompt as prompt_mod
-from caspr_engine.crisper import (DEFAULT_LEXICON, LOOP_WINDOW_TOKENS,
+from caspr_engine.crisper import (LOOP_WINDOW_TOKENS,
                                   MAX_NGRAM_REPEATS,
                                   CrisperWhisperEngine as Engine)
 
@@ -179,6 +179,16 @@ def test_prompt_markers_never_leak():
     assert Engine._clean(raw, keep_disfluencies=False) == "Bonjour"
 
 
+#: Un lexique d'essai, écrit ici plutôt qu'importé. Le moteur n'en porte plus —
+#: mesuré nuisible sur voix réelle, cf. `poc/README.md` — mais le filtre d'écho
+#: qu'on éprouve ici sert toujours, dès que quelqu'un règle ses propres termes.
+LEXIQUE_ESSAI = [
+    "useEffect", "useState", "component", "React", "Next.js", "TypeScript",
+    "hook", "props", "state", "refactor", "merge", "commit", "branch",
+    "pull request", "endpoint", "dependencies", "async", "await", "chunk",
+]
+
+
 @pytest.mark.parametrize("text,should_strip", [
     ("Effects.Ok, donc là un texte.", True),
     ("Component. Je pense que oui.", True),
@@ -190,7 +200,7 @@ def test_prompt_markers_never_leak():
 ])
 def test_lexicon_echo_filter(text, should_strip):
     """Retire un terme du lexique recraché seul en tête, sans toucher au reste."""
-    result = Engine._strip_lexicon_echo(text, DEFAULT_LEXICON).strip()
+    result = Engine._strip_lexicon_echo(text, LEXIQUE_ESSAI).strip()
     assert (result != text) == should_strip
 
 
@@ -208,13 +218,13 @@ def test_lexicon_echo_filter(text, should_strip):
     ("Bonjour tout le monde", "Bonjour tout le monde"),
 ])
 def test_case_normalisation(given, expected):
-    assert Engine._normalise_case(given, DEFAULT_LEXICON) == expected
+    assert Engine._normalise_case(given, LEXIQUE_ESSAI) == expected
 
 
 def test_case_normalisation_never_changes_letters():
     """Seule la casse bouge : jamais une lettre, jamais un mot entier."""
     text = "Le futur du framework est incertain"
-    result = Engine._normalise_case(text, DEFAULT_LEXICON)
+    result = Engine._normalise_case(text, LEXIQUE_ESSAI)
     assert result.lower() == text.lower()
 
 

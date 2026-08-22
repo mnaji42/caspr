@@ -22,11 +22,15 @@ CORPUS = Path.home() / "Library/Application Support/Caspr/corpus"
 #: `voxtral-run.json` et `crisper-run.json` sont volontairement exclus : ils
 #: viennent de la série tournée sous 9 Go de swap, qui coûtait 18 % de latence.
 BANCS = {
-    "crisperwhisper_lexique_defaut": ("run-crisper.json",
-        "CrisperWhisper 2.0 turbo, PyTorch/MPS, DEFAULT_LEXICON actif "
-        "(19 termes) — c'est ce que fait l'application aujourd'hui"),
-    "crisperwhisper_sans_lexique": ("run-crisper-nolex.json",
-        "Le même, hotwords=[] — lexique désactivé"),
+    "crisperwhisper": ("run-crisper-nolex.json",
+        "CrisperWhisper 2.0 turbo, PyTorch/MPS, hotwords=[] — CE QUE FAIT "
+        "L'APPLICATION : elle envoie toujours une liste explicite, vide tant "
+        "que personne n'a ajouté de terme"),
+    "crisperwhisper_lexique_impose": ("run-crisper.json",
+        "Le même avec un lexique de 19 termes imposé — configuration que "
+        "l'application n'utilise PAS, gardée parce qu'elle chiffre ce que "
+        "coûterait un lexique par défaut : 0,25 fragment pour cent mots contre "
+        "0,19, quatre fuites contre zéro"),
     "voxtral_3b_mlx": ("run-voxtral3b.json",
         "Voxtral-Mini-3B-2507 bf16 sous MLX, language=fr, max_tokens=4096, "
         "transcription en lot"),

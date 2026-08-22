@@ -18,19 +18,35 @@ Cinq moteurs, 170 dictées communes, rejouées à code figé, un seul modèle ch
 | Moteur | Latence méd. | Phrase moy. | Fragments | Bafouillages | Disque | RAM (pic Metal) |
 |---|---|---|---|---|---|---|
 | **macOS Apple Intelligence** | **0,28 s** | 26,7 | 0,10 | 0,83 | **0** | négligeable |
-| CrisperWhisper turbo, sans lexique | 1,15 s | 17,6 | 0,19 | 0,26 | 2,5 Go | 2,3 Go |
-| CrisperWhisper turbo, lexique par défaut | 1,37 s | 16,0 | 0,25 | 0,43 | 2,5 Go | 2,3 Go |
+| **CrisperWhisper turbo** (ce que fait l'app) | 1,15 s | 17,6 | 0,19 | 0,26 | 2,5 Go | 2,3 Go |
+| CrisperWhisper turbo, lexique de 19 termes imposé* | 1,37 s | 16,0 | 0,25 | 0,43 | 2,5 Go | 2,3 Go |
 | Voxtral 3B (MLX bf16) | 6,41 s | **19,4** | **0,07** | **0,17** | 9,7 Go | 10,9 Go |
 | Voxtral Realtime 4B (MLX 4-bit, flux) | 17,61 s | 16,4 | 0,11 | 0,35 | 3,9 Go | 5,5 Go |
 
 « Fragments » et « bafouillages » sont comptés pour cent mots — voir
 `french_quality.py` pour ce que ces mots recouvrent.
 
+\* Configuration que l'application n'utilise pas : elle envoie toujours une
+liste explicite. Gardée dans le tableau parce qu'elle chiffre ce que coûterait
+un lexique imposé.
+
 ### Les cinq conclusions qui ont compté
 
-**1. Le lexique par défaut coûte plus qu'il ne rapporte.** `DEFAULT_LEXICON`,
-dix-neuf termes codés dans `crisper.py`, s'applique dès que l'application passe
-`nil` — c'est-à-dire en permanence tant qu'aucun terme n'a été ajouté à la main.
+**1. Le lexique par défaut coûtait plus qu'il ne rapportait — il a été retiré.**
+`DEFAULT_LEXICON`, dix-neuf termes codés dans `crisper.py`, s'appliquait dès
+qu'un appelant passait `hotwords=None`.
+
+> **Correction importante.** L'application ne l'atteignait **pas** : elle envoie
+> toujours une liste explicite, vide tant que personne n'a ajouté de terme —
+> vérifié dans `Preferences.init`, où une installation neuve reçoit `[]`, et
+> confirmé par le socket. C'est le **banc** qui y est tombé, en appelant
+> `hotwords=None`. Le passage étiqueté « lexique par défaut » mesurait donc une
+> configuration que l'application n'a jamais utilisée ; c'est le passage « sans
+> lexique » qui la représente.
+>
+> Ce qui rend la mesure utile quand même : elle a chiffré ce que coûterait un
+> lexique imposé, et justifié de retirer le piège pour les appelants suivants.
+
 Rejoué sans lui sur 173 dictées : moins de fragments, moins de bafouillages,
 phrases plus longues, et **zéro fuite** contre quatre. Il ne dégrade pas la
 phrase, il la remplace : « Effect the button functions. » pour « Ça ne
@@ -45,6 +61,13 @@ termes préservés annoncés dans le README ont été mesurés sur huit clips ch
 avec un lexique adapté à eux. Ce qui est mesuré ici, c'est qu'un lexique **par
 défaut**, que personne n'a choisi, coûte plus qu'il ne rapporte sur de la parole
 réelle.
+
+Une précision qui compte pour qui règle son propre lexique : la fuite tient au
+mécanisme, pas à la liste. Sur la même dictée de six secondes, un lexique réduit
+à `["useEffect", "React"]` donne « **Effect React** ne fonctionne plus du tout ».
+Deux termes suffisent. Le conseil de garder la liste courte n'est donc pas une
+question de longueur seulement — c'est que sur un audio bref, n'importe quel
+prompt lexical peut prendre le dessus.
 
 **2. La pression mémoire fausse les mesures.** Une première série a tourné avec
 9 Go de swap actif : CrisperWhisper y était à 1,52 s de latence médiane, contre

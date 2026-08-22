@@ -6,6 +6,18 @@ On branche donc l'encodeur Core ML sur le décodeur PyTorch existant, avec le
 même prompt, les mêmes échantillons.
 """
 import time
+
+#: Le lexique qui servait à cette sonde quand `crisper.py` en portait un.
+#: Recopié ici le jour où il en a été retiré — mesuré nuisible sur voix réelle,
+#: cf. `poc/README.md` — pour que les relevés de cette sonde restent
+#: comparables entre eux.
+SONDE_LEXICON = [
+    "useEffect", "useState", "component", "React", "Next.js", "TypeScript",
+    "hook", "props", "state",
+    "refactor", "merge", "commit", "branch", "pull request",
+    "endpoint", "dependencies", "async", "await",
+    "chunk",
+]
 from pathlib import Path
 import numpy as np, soundfile as sf, torch
 import coremltools as ct
@@ -38,9 +50,8 @@ def transcribe(audio, language, backend):
     torch.mps.synchronize()
     enc_ms = (time.perf_counter() - t0) * 1000
 
-    from caspr_engine.crisper import DEFAULT_LEXICON
     ids = prompt_mod.build(engine._processor.tokenizer, mode="intended",
-                           language=language, hotwords=DEFAULT_LEXICON)
+                           language=language, hotwords=SONDE_LEXICON)
     toks = engine._decode(enc, ids, 256)
     raw = engine._processor.tokenizer.decode(toks, skip_special_tokens=True)
     return engine._clean(raw, keep_disfluencies=False), enc_ms

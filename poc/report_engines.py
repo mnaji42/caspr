@@ -25,9 +25,9 @@ import engine_stats as st
 from french_quality import analyse as st_analyse
 
 CORPUS = Path.home() / "Library/Application Support/Caspr/corpus"
-VOXTRAL_RUN = Path(__file__).parent / "voxtral-run.json"
-CRISPER_RUN = Path(__file__).parent / "crisper-run.json"
-AUDIO_DIR = Path(__file__).parent / "audio16"
+VOXTRAL_RUN = Path(__file__).parent / "mesures/voxtral-run.json"
+CRISPER_RUN = Path(__file__).parent / "mesures/crisper-run.json"
+AUDIO_DIR = Path(__file__).parent / "mesures/audio16"
 
 # Les moteurs, dans l'ordre où ils s'affichent. La clé est celle du corpus :
 # (engine, mode). La couleur encode la **famille** — deux nuances d'indigo pour
@@ -75,7 +75,7 @@ def load() -> list[dict]:
     rows = [json.loads(l) for l in (CORPUS / "sessions.jsonl").read_text().splitlines() if l.strip()]
     passages: dict[str, dict] = {}
     for cle, nom in RUNS.items():
-        f = Path(__file__).parent / nom
+        f = Path(__file__).parent / "mesures" / nom
         if f.exists():
             data = json.loads(f.read_text())
             passages[cle] = {r["id"]: r for r in data["results"] if r.get("text")}
@@ -917,7 +917,7 @@ def render_html(entries: list[dict]) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(Path(__file__).parent / "comparaison-moteurs.html"))
+    ap.add_argument("--out", default=str(Path(__file__).parent / "mesures/comparaison-moteurs.html"))
     args = ap.parse_args()
     entries = load()
     out = Path(args.out)

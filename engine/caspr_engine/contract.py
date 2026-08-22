@@ -1,10 +1,13 @@
 """Ce qu'un moteur rend, sans dire comment il le calcule.
 
-Extrait de `crisper.py` le jour où un second moteur est arrivé. Le problème
-était concret et immédiat : `voxtral.py` importait `Transcription` depuis
-`crisper.py`, qui importe `torch` en tête de fichier — donc faire tourner un
-moteur MLX exigeait d'installer PyTorch pour rien. Un contrat qui traîne le
-runtime de sa première implémentation n'est pas un contrat.
+Extrait de `crisper.py` le jour où un second moteur a été essayé. Le problème
+était concret et immédiat : le nouveau moteur importait `Transcription` depuis
+`crisper.py`, qui importe `torch` en tête de fichier — donc le faire tourner
+sur un autre runtime exigeait d'installer PyTorch pour rien. Un contrat qui
+traîne le runtime de sa première implémentation n'est pas un contrat.
+
+L'essai en question a été retiré ; l'extraction reste, parce que le défaut
+qu'elle corrige reviendra au moteur suivant.
 
 Rien ici ne doit importer autre chose que la bibliothèque standard.
 """

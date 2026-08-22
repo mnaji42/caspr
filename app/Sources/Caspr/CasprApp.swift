@@ -10,16 +10,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var reArmTimer: Timer?
     private var controller: DictationController!
 
-    /// Le banc d'essai de la dictée au fil de la parole, sur ⌥ **gauche**.
-    ///
-    /// Un moniteur à lui, un contrôleur à lui, un service à lui : rien de ce
-    /// qui suit n'est partagé avec le chemin principal, et c'est la condition
-    /// pour l'éprouver sans risquer ce qui marche. Le côté est fixé à
-    /// `.left` en dur — c'est un essai, pas un réglage, et le rendre
-    /// configurable supposerait de traiter le cas où les deux déclencheurs
-    /// désignent la même touche.
-    private var streamingKey: ModifierKeyMonitor?
-    private let streaming = StreamingDictation()
     private let preferences = PreferencesWindowController()
     private let onboarding = OnboardingWindowController()
     private let engineNotice = EngineStartupNoticeController()
@@ -79,12 +69,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if prefs.triggerKind == .shortcut, !hotkey.register(shortcut) {
             NSLog("caspr: impossible d'enregistrer \(shortcut.label) — raccourci déjà pris ?")
         }
-
-        // Second déclencheur, indépendant du premier : ⌥ gauche ouvre la
-        // dictée au fil de la parole. Installé seulement si le service Voxtral
-        // tourne — sans lui, la touche resterait morte et l'échec
-        // n'apparaîtrait qu'après avoir parlé.
-        installStreamingTrigger()
 
         // Ouvrir le menu au clavier : sans ça, retrouver une transcription
         // suppose de viser une icône de barre de menus à la souris.
@@ -629,33 +613,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Reporte les réglages sur les composants déjà en place.
-    /// Installe ⌥ gauche si, et seulement si, le service Voxtral répond.
-    ///
-    /// La condition n'est pas une politesse : le tap est un droit
-    /// d'accessibilité, et poser un déclencheur qui ne peut mener qu'à un
-    /// message d'erreur consomme ce droit pour rien. Si le déclencheur
-    /// principal est déjà sur ⌥ gauche, on s'efface — deux taps sur la même
-    /// touche se voleraient l'événement.
-    private func installStreamingTrigger() {
-        streamingKey?.stop()
-        streamingKey = nil
-        let prefs = Preferences.shared
-        guard VoxtralStreamClient.isAvailable else { return }
-        guard !(prefs.triggerKind == .option && prefs.triggerSide == .left) else {
-            Log.info("⌥ gauche déjà pris par le déclencheur principal — "
-                     + "dictée au fil non installée")
-            return
-        }
-        let monitor = ModifierKeyMonitor(
-            side: .left,
-            onTrigger: { [weak self] in self?.streaming.toggle() },
-            onHold: { [weak self] in self?.streaming.cancel() })
-        if monitor.start() {
-            streamingKey = monitor
-            Log.info("dictée au fil de la parole installée sur ⌥ gauche")
-        }
-    }
-
     private func applyPreferences() {
         let prefs = Preferences.shared
         // Un modèle de 3 Go ne reste pas chargé « au cas où » : le service
@@ -672,7 +629,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onTrigger: { [weak self] in self?.controller.toggle() },
             onHold: { [weak self] in self?.openSettingsFromHold() })
         if prefs.triggerKind == .option { modifierKey.start() }
-        installStreamingTrigger()
 
         // Le raccourci Carbon est enregistré auprès du système : en changer
         // suppose de rendre l'ancien avant de prendre le nouveau.

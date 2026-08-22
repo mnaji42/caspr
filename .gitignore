@@ -13,17 +13,9 @@ poc/samples_tts/
 *.aiff
 
 # Sorties des bancs sur le corpus réel. Le dépôt est public et ces fichiers
-# contiennent les dictées mot pour mot — c'est-à-dire de la parole privée,
-# sur des sujets qui n'ont pas vocation à être lisibles par tout le monde.
-# Les scripts qui les produisent sont versionnés ; leur sortie, jamais.
-poc/comparaison-moteurs.html
-poc/voxtral-run.json
-poc/crisper-run.json
-poc/*-run.json
-poc/run-*.json
-poc/benchmark-complet.json
-poc/cost-*.json
-poc/audio*/
+# contiennent les dictées mot pour mot, c'est-à-dire de la parole privée. Les
+# scripts qui les produisent sont versionnés ; leur sortie, jamais.
+poc/mesures/
 
 # Python
 .venv/

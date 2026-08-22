@@ -33,7 +33,7 @@ import unicodedata
 from pathlib import Path
 
 CORPUS = Path.home() / "Library/Application Support/Caspr/corpus"
-OUT = Path(__file__).parent / "voxtral-run.json"
+OUT = Path(__file__).parent / "mesures/voxtral-run.json"
 REPO = "mistralai/Voxtral-Mini-3B-2507"
 
 # Le vocabulaire que Caspr existe pour préserver. Relevé sur le corpus lui-même

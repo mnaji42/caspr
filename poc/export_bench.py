@@ -60,7 +60,7 @@ MACOS = {
 def main() -> None:
     runs = {}
     for cle, (nom, desc) in BANCS.items():
-        f = POC / nom
+        f = POC / "mesures" / nom
         if not f.exists():
             continue
         d = json.loads(f.read_text())
@@ -171,7 +171,7 @@ def main() -> None:
                     for k, v in runs.items()},
         "dictees": dictees,
     }
-    f = POC / "benchmark-complet.json"
+    f = POC / "mesures/benchmark-complet.json"
     f.write_text(json.dumps(sortie, ensure_ascii=False, indent=1))
     print(f"{len(tous)} dictées → {f}")
     print(f"  {len(quatre)} avec les cinq moteurs rejoués, {len(communs)} avec les six")

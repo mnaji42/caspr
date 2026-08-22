@@ -15,16 +15,6 @@ Requêtes acceptées (champ ``op``) :
     ping         -> {ready, model, device}
     shutdown     -> {ok}
 
-    stream_start header {delay_ms?}                  -> {ok}
-    stream_chunk + PCM int16                         -> {delta, text}
-    stream_end   header {mode?, language?}           -> {text, tail_ms}
-
-Le moteur se choisit au démarrage :
-
-    uv run python -m caspr_engine.server --engine voxtral
-
-L'application ne voit pas la différence — le protocole n'a jamais nommé de
-modèle, et c'est ce qui rend l'échange possible sans toucher une ligne de Swift.
 """
 
 from __future__ import annotations
@@ -86,7 +76,6 @@ class EngineServer:
                         protocol.write_message(conn, {"error": "internal"})
 
     def _handle(self, conn: socket.socket) -> None:
-        stream = None
         while True:
             try:
                 header, payload = protocol.read_message(conn)
@@ -109,50 +98,6 @@ class EngineServer:
                 if self._sock:
                     self._sock.close()
                 return
-
-            # --- dictée au fil de la parole ---------------------------------
-            #
-            # Trois opérations plutôt qu'une, parce que la connexion vit le
-            # temps d'une dictée : `stream_start` ouvre la session,
-            # `stream_chunk` l'alimente et rend ce qui est apparu depuis le
-            # morceau précédent, `stream_end` ferme et rend le texte complet.
-            # L'état vit sur la connexion, pas sur le serveur : deux dictées
-            # simultanées n'ont aucune raison de se marcher dessus, et un
-            # client qui meurt en cours de route n'en laisse pas la trace.
-            if op == "stream_start":
-                if not hasattr(self.engine, "open_stream"):
-                    protocol.write_message(conn, {
-                        "error": f"{self.engine.model_id} ne sait pas travailler au fil"})
-                    continue
-                stream = self.engine.open_stream(delay_ms=header.get("delay_ms"))
-                log.info("flux ouvert")
-                protocol.write_message(conn, {"ok": True})
-                continue
-
-            if op == "stream_chunk":
-                if stream is None:
-                    protocol.write_message(conn, {"error": "aucun flux ouvert"})
-                    continue
-                delta = stream.feed(protocol.pcm16_to_float32(payload))
-                protocol.write_message(conn, {"delta": delta, "text": stream.text})
-                continue
-
-            if op == "stream_end":
-                if stream is None:
-                    protocol.write_message(conn, {"error": "aucun flux ouvert"})
-                    continue
-                t0 = time.perf_counter()
-                final = stream.close()
-                wall = (time.perf_counter() - t0) * 1000
-                log.info("flux fermé | %.0f ms de rattrapage | %d mots | %s",
-                         wall, len(final.split()), final[:60])
-                protocol.write_message(conn, {
-                    "text": final, "mode": header.get("mode", "intended"),
-                    "language": header.get("language", "fr"),
-                    "tail_ms": round(wall, 1),
-                })
-                stream = None
-                continue
 
             if op != "transcribe":
                 protocol.write_message(conn, {"error": f"op inconnue : {op}"})
@@ -213,25 +158,8 @@ class EngineServer:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Service de transcription Caspr")
-    # Le moteur se choisit ici, pas dans le protocole : il se charge une fois
-    # au démarrage et reste chaud, donc en changer suppose de redémarrer le
-    # service de toute façon. L'application ne voit pas la différence — le
-    # protocole n'a jamais nommé de modèle.
-    ap.add_argument("--engine", default="crisper", choices=("crisper", "voxtral"),
-                    help="moteur d'inférence (défaut : crisper)")
-    ap.add_argument("--model", default=None,
-                    help="identifiant du modèle ; défaut selon --engine")
-    # « auto » mesure Metal au lieu de le supposer : sur une machine virtuelle
-    # macOS il n'y en a pas, et « mps » écrit en dur y tuait le service au
-    # chargement du modèle. Cf. caspr_engine.crisper.resolve_device.
+    ap.add_argument("--model", default="nyralabs/CrisperWhisper2.0_turbo")
     ap.add_argument("--device", default="auto")
-    # Un socket distinct permet de faire tourner deux moteurs côte à côte. Ce
-    # n'est pas une commodité de développement : l'application régénère
-    # elle-même l'agent de lancement du moteur principal — cf.
-    # `EngineInstall.writeAgent` — donc tout argument ajouté à la main y est
-    # effacé à la première réconciliation. Un second service, sur son propre
-    # socket et son propre agent, est le seul endroit où un moteur
-    # expérimental survit.
     ap.add_argument("--socket", type=Path, default=protocol.DEFAULT_SOCKET)
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
@@ -242,18 +170,11 @@ def main() -> int:
         datefmt="%H:%M:%S",
     )
 
-    if args.engine == "voxtral":
-        from caspr_engine.voxtral import DEFAULT_MODEL, VoxtralEngine
-        engine = VoxtralEngine(model_id=args.model or DEFAULT_MODEL,
-                               device=args.device)
-    else:
-        engine = CrisperWhisperEngine(
-            model_id=args.model or "nyralabs/CrisperWhisper2.0_turbo",
-            device=args.device)
+    engine = CrisperWhisperEngine(model_id=args.model, device=args.device)
     # Le device dans la ligne qui précède le chargement : c'est le chargement
     # qui échoue quand il est mauvais, et le journal doit dire sur quoi il
     # portait avant de montrer la trace.
-    log.info("chargement de %s sur %s …", engine.model_id, engine.device)
+    log.info("chargement de %s sur %s …", args.model, engine.device)
     engine.load()
 
     server = EngineServer(engine, args.socket)

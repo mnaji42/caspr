@@ -49,14 +49,6 @@ final class AudioRecorder: @unchecked Sendable {
     /// ne jamais bloquer, sous peine de trous dans l'enregistrement.
     var onBuffer: (@Sendable (AVAudioPCMBuffer) -> Void)?
 
-    /// Appelé à chaque morceau converti en 16 kHz mono, pendant l'enregistrement.
-    ///
-    /// Existe pour la dictée au fil de la parole : envoyer l'audio au moteur
-    /// pendant qu'on parle plutôt qu'après fait passer l'attente de 34 s à
-    /// 0,84 s sur une dictée d'une minute, mesuré. `stop()` continue de rendre
-    /// le tout, donc rien de l'existant ne change.
-    var onSamples: (@Sendable ([Float]) -> Void)?
-
     /// Niveau sonore courant, entre 0 et 1, pour l'indicateur d'enregistrement.
     ///
     /// Lissé par une moyenne mobile : la valeur brute par tampon saute trop
@@ -225,11 +217,6 @@ final class AudioRecorder: @unchecked Sendable {
         lock.lock()
         samples.append(contentsOf: converted)
         lock.unlock()
-        // Les échantillons **convertis** — 16 kHz mono — et non le tampon
-        // d'entrée que porte déjà `onBuffer`. La dictée au fil verse exactement
-        // ce que le moteur attend, sans reconvertir de son côté ; l'aperçu en
-        // direct, lui, veut le tampon brut pour ses propres besoins. Deux
-        // consommateurs, deux formats, et aucun des deux ne paie pour l'autre.
-        if let onSamples { onSamples(Array(converted)) }
+
     }
 }

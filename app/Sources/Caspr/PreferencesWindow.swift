@@ -493,8 +493,9 @@ private struct CollectionTab: View {
     /// Un `switch` plutôt qu'une égalité, et ici la raison n'est pas la même
     /// qu'ailleurs : ces libellés **nomment une version et un modèle actif**.
     /// Sous une égalité, un moteur ajouté demain aurait composé tout seul
-    /// « Voxtral 2.0 (Modèle TURBO actif) » — une phrase fausse, affichée sans
-    /// que rien n'ait échoué. Le compilateur pose maintenant la question.
+    /// « <NouveauMoteur> 2.0 (Modèle TURBO actif) » — une phrase fausse,
+    /// affichée sans que rien n'ait échoué. Le compilateur pose maintenant la
+    /// question.
     private func label(for choice: EngineChoice, available: Bool) -> String {
         switch choice {
         case .crisperWhisper:

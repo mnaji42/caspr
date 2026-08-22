@@ -34,7 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "engine"))
 
 CORPUS = Path.home() / "Library/Application Support/Caspr/corpus"
-OUT = Path(__file__).parent / "crisper-run.json"
+OUT = Path(__file__).parent / "mesures/crisper-run.json"
 
 
 def main() -> None:

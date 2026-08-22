@@ -9,7 +9,7 @@ NOMS = {"crisper": "CrisperWhisper turbo", "voxtral3b": "Voxtral 3B · MLX",
         "realtime": "Voxtral Realtime · flux"}
 runs = {}
 for k in NOMS:
-    f = P / f"poc/run-{k}.json"
+    f = P / f"poc/mesures/run-{k}.json"
     if f.exists():
         d = json.load(open(f))
         runs[k] = {r["id"]: r for r in d["results"] if r.get("text")}

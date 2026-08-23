@@ -116,8 +116,28 @@ struct AppleEngineCard: View, ValidatingComponent {
                     LegacySpeechEngine.unavailabilityReason(for: language)
                         ?? "Le moteur Apple Intelligence n'est pas disponible ici.")
             }
-            return SpeechAssets.shared.state(of: language).isReady
-                ? nil : .missingLanguageModels([language])
+            // Seulement quand le modèle manque vraiment.
+            //
+            // `isReady` était le critère, donc tout ce qui n'est pas `.ready`
+            // valait « pas installé » — y compris `.unknown` et `.checking`,
+            // qui veulent dire « on ne sait pas encore ». L'accueil affirmait
+            // alors « Le modèle de Français (France) n'est pas encore
+            // installé » et grisait « Continuer », pendant que la carte
+            // n'offrait aucun bouton pour l'installer : elle, elle n'agit que
+            // sur `.missing`. Deux lectures du même état qui se contredisent,
+            // et un écran dont on ne peut pas sortir.
+            //
+            // Interroger les actifs du système prend un instant, et un instant
+            // suffit à voir l'écran bloqué. Ne bloquer que sur ce qui appelle
+            // vraiment une action : le modèle absent, ou son installation
+            // échouée. Un état encore inconnu ne justifie pas d'arrêter
+            // quelqu'un avec une phrase qu'on ne sait pas vraie.
+            switch SpeechAssets.shared.state(of: language) {
+            case .missing, .failed:
+                return .missingLanguageModels([language])
+            case .ready, .unknown, .checking, .installing, .unsupported:
+                return nil
+            }
         case .appleLegacy:
             guard EngineChoice.appleLegacy.isAvailable(for: language) else {
                 return .noSystemEngine(

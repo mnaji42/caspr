@@ -48,6 +48,14 @@ struct RelaisSelecteurs: Codable, Equatable {
     /// qu'une fois la réponse terminée : sa présence est donc le signal de fin
     /// que l'on devinait jusque-là à coups de chronomètre.
     var copier = ""
+    /// Le bloc qui porte le bouton « copier » de la réponse.
+    ///
+    /// Capturé au même clic que le bouton. La page contient un bouton
+    /// « copier » par message, celui de l'utilisateur compris : le désigner
+    /// seul revenait à chercher lequel des deux, et toutes les façons de
+    /// deviner — remonter l'arbre, prendre le dernier, exiger la visibilité —
+    /// se sont trompées tour à tour. La paire ne devine rien.
+    var copierParent = ""
 
     subscript(cible: RelaisCible) -> String {
         get {
@@ -77,7 +85,12 @@ struct RelaisSelecteurs: Codable, Equatable {
     var estCalibre: Bool { !micro.isEmpty && !stop.isEmpty }
 
     /// Vrai quand l'aller-retour avec ChatGPT est possible.
-    var saitDialoguer: Bool { estCalibre && !envoi.isEmpty && !reponse.isEmpty }
+    /// L'un ou l'autre suffit : le bouton « copier » est le chemin d'aujourd'hui,
+    /// le repère de la réponse celui des configurations d'avant. Exiger le
+    /// premier ferait disparaître le mode chez qui l'a calibré hier.
+    var saitDialoguer: Bool {
+        estCalibre && !envoi.isEmpty && (!copier.isEmpty || !reponse.isEmpty)
+    }
 
     /// Sait-on récupérer la réponse par le bouton de ChatGPT ?
     var saitCopier: Bool { !copier.isEmpty }
@@ -103,6 +116,7 @@ struct RelaisSelecteurs: Codable, Equatable {
         envoi = try c.decodeIfPresent(String.self, forKey: .envoi) ?? ""
         reponse = try c.decodeIfPresent(String.self, forKey: .reponse) ?? ""
         copier = try c.decodeIfPresent(String.self, forKey: .copier) ?? ""
+        copierParent = try c.decodeIfPresent(String.self, forKey: .copierParent) ?? ""
     }
 
     init() {}

@@ -371,22 +371,17 @@ final class Relais {
             do { _ = try await page.calibrer(.envoi) }
             catch { Self.alerter("Relais", error.localizedDescription); return }
 
-            Self.alerter("Bouton 2 sur 3 — la réponse", """
-                Attendez que ChatGPT ait fini de répondre, puis cliquez sur sa réponse.
+            Self.alerter("Bouton 2 sur 2 — copier la réponse", """
+                Attendez que ChatGPT ait fini de répondre, puis cliquez l'icône \
+                « copier » sous sa réponse — deux carrés superposés.
 
-                Sur le texte lui-même, pas sur les icônes en dessous.
-                """)
-            do { _ = try await page.calibrer(.reponse) }
-            catch { Self.alerter("Relais", error.localizedDescription); return }
+                Sous la **réponse**, pas sous votre propre message : la page en porte \
+                une par message, et Caspr retient au passage le bloc qui l'entoure pour \
+                ne jamais confondre les deux.
 
-            Self.alerter("Bouton 3 sur 3 — copier", """
-                Cliquez maintenant l'icône « copier » sous la réponse — deux carrés \
-                superposés.
-
-                C'est par elle que Caspr récupérera le texte. Elle rend la réponse \
-                entière et proprement mise en forme, là où lire la page directement \
-                donnait parfois un seul paragraphe. Et comme elle n'apparaît qu'une fois \
-                la réponse finie, elle dit aussi à Caspr quand attendre est terminé.
+                C'est par elle que le texte sera récupéré : elle rend la réponse entière \
+                et bien mise en forme, et comme elle n'apparaît qu'une fois la réponse \
+                finie, elle dit aussi quand l'attente est terminée.
                 """)
             do { _ = try await page.calibrer(.copier) }
             catch { Self.alerter("Relais", error.localizedDescription); return }

@@ -97,15 +97,15 @@ struct RelaisCard<Moteurs: View>: View {
                     ? (Relais.partage.saitCopier
                        ? "Ce que vous dictez repart à ChatGPT pour être remis en ordre. "
                        : "⚠︎ Recalibrez : la réponse est désormais récupérée par le bouton "
-                         + "« copier » de ChatGPT, qui la rend entière. Sans lui, il arrive "
-                         + "qu'un seul paragraphe soit écrit.\n\n"
+                         + "« copier » de ChatGPT, qui la rend entière et sans confusion "
+                         + "possible avec votre propre message. Deux clics suffisent.\n\n"
                          + "Ce que vous dictez repart à ChatGPT pour être remis en ordre. ")
                       + "Le mode se choisit sur la barre de dictée. Comptez une trentaine "
                       + "de secondes de plus, et sachez que le texte entre alors dans "
                       + "votre historique ChatGPT."
-                    : "Deux boutons de plus à montrer : l'envoi et la réponse. Un message "
-                      + "d'essai sera envoyé — c'est le seul moyen de faire exister une "
-                      + "réponse à désigner.") {
+                    : "Deux boutons de plus à montrer : l'envoi, et « copier » sous la "
+                      + "réponse. Un message d'essai sera envoyé — c'est le seul moyen de "
+                      + "faire exister une réponse à désigner.") {
                 Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer « Réorganiser »…") {
                     Relais.partage.calibrerDialogue(relire)
                 }

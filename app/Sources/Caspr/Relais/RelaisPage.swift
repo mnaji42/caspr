@@ -713,13 +713,14 @@ final class RelaisPage: NSObject {
             try Task.checkCancellation()
             try? await Task.sleep(for: .milliseconds(250))
             let r = try? await appeler(
-                "return window.__relais.copierLaReponse(selReponse, selCopier);",
-                ["selReponse": selecteurs.reponse, "selCopier": selecteurs.copier])
+                "return window.__relais.copierLaReponse(selParent, selCopier, selRepli);",
+                ["selParent": selecteurs.copierParent,
+                 "selCopier": selecteurs.copier,
+                 "selRepli": selecteurs.reponse])
             if r?["ok"] as? Bool == true {
                 // Le niveau et le nombre de candidats, pour que le prochain
                 // défaut se lise dans le journal plutôt que dans une capture.
-                Log.info("relais : copier cliqué (niveau \(r?["niveau"] ?? "?"), "
-                         + "\(r?["candidats"] ?? "?") candidat(s))")
+                Log.info("relais : copier cliqué (\(r?["voie"] ?? "?"))")
                 clique = true
                 break
             }
@@ -834,6 +835,11 @@ final class RelaisPage: NSObject {
             throw Erreur.introuvable(cible)
         }
         selecteurs[cible] = sel
+        // Le bloc qui porte l'élément, retenu avec lui pour le bouton
+        // « copier » : c'est la paire qui lève l'ambiguïté, pas le bouton seul.
+        if cible == .copier {
+            selecteurs.copierParent = (r["parent"] as? String) ?? ""
+        }
         selecteurs.enregistrer()
         return sel
     }

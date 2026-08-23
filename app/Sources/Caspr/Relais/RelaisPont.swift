@@ -113,6 +113,25 @@ extension RelaisPage {
         return parts.join(' > ');
       }
 
+      // Le premier ancêtre qui porte un identifiant stable.
+      //
+      // Capturé en même temps que l'élément lui-même, il permet de désigner
+      // « ce bouton, dans ce bloc » plutôt que « un bouton qui ressemble à
+      // celui-ci ». Pour le bouton « copier », la différence est décisive : la
+      // page en contient un par message, et seule la paire dit lequel.
+      function selecteurAncetre(el) {
+        let n = el.parentElement;
+        for (let i = 0; i < 5 && n; i++) {
+          if (n.id) return '#' + esc(n.id);
+          const testid = n.getAttribute('data-testid');
+          if (testid) return '[data-testid="' + testid.replace(/"/g, '\\"') + '"]';
+          const aria = n.getAttribute('aria-label');
+          if (aria) return '[aria-label="' + aria.replace(/"/g, '\\"') + '"]';
+          n = n.parentElement;
+        }
+        return '';
+      }
+
       window.__relais = {
         cliquer(cible, selecteur) {
           const el = trouver(cible, selecteur);
@@ -225,50 +244,59 @@ extension RelaisPage {
           return { ok: true };
         },
 
-        // Clique le bouton « copier » **de la réponse**, et non le premier venu.
+        // Clique le bouton « copier » de la réponse.
         //
-        // ChatGPT en pose un sous chaque message, celui de l'utilisateur
-        // compris. Chercher dans toute la page revenait à copier sa propre
-        // demande : le prompt et la transcription atterrissaient au curseur,
-        // sans que rien ne signale l'erreur puisqu'un texte arrivait bien.
+        // Une paire calibrée — le bloc d'actions de la réponse, puis le bouton
+        // dedans — et non une recherche qui remonte l'arbre en devinant. La
+        // page contient un bouton « copier » par message, celui de
+        // l'utilisateur compris ; seule la paire dit lequel, et elle le dit
+        // sans ambiguïté.
         //
-        // Deux précautions, et la seconde manquait.
-        //
-        // On part de la dernière réponse et on remonte, en s'arrêtant au
-        // premier niveau qui contient un bouton : le plus proche est le plus
-        // sûr. Mais surtout, on prend le **dernier** bouton de ce niveau et non
-        // le premier — un conteneur un peu large englobe le message précédent,
-        // et l'ordre du document y place le bouton de l'utilisateur devant.
-        //
-        // La visibilité est préférée, pas exigée : ChatGPT masque parfois la
-        // barre d'actions jusqu'au survol, et un bouton présent répond au clic
-        // qu'on le voie ou non.
-        copierLaReponse(selReponse, selCopier) {
-          let reponses = [];
-          if (selReponse) {
-            try { reponses = [...document.querySelectorAll(selReponse)]; } catch (e) {}
-          }
-          if (!reponses.length) {
-            for (const s of HEURISTIQUES.reponse) {
-              reponses = [...document.querySelectorAll(s)];
-              if (reponses.length) break;
+        // Rien n'est écrit en dur : les libellés d'accessibilité changent avec
+        // la langue de l'interface, et un sélecteur codé pour le français
+        // laisserait tomber tout le monde ailleurs. C'est la calibration qui
+        // les apprend, l'un et l'autre, d'un seul clic.
+        copierLaReponse(selParent, selCopier, selReponseRepli) {
+          if (selParent && selCopier) {
+            let parents = [];
+            try { parents = [...document.querySelectorAll(selParent)]; } catch (e) {}
+            const vus = parents.filter((p) => p.getClientRects().length > 0);
+            const liste = vus.length ? vus : parents;
+            if (liste.length) {
+              // Le dernier : un fil neuf n'a qu'une réponse, mais un
+              // rechargement qui n'aurait pas abouti en laisserait plusieurs.
+              let bouton = null;
+              try { bouton = liste[liste.length - 1].querySelector(selCopier); }
+              catch (e) { bouton = null; }
+              if (bouton) { bouton.click(); return { ok: true, voie: 'paire' }; }
             }
           }
-          const visibles = reponses.filter((el) => el.getClientRects().length > 0);
-          if (!visibles.length) return { ok: false, raison: 'pas de réponse' };
 
-          const selecteurs = selCopier ? [selCopier, ...HEURISTIQUES.copier]
-                                       : HEURISTIQUES.copier;
-          let noeud = visibles[visibles.length - 1];
+          // Repli pour les configurations calibrées avant que la paire
+          // n'existe : on part de la dernière réponse et on cherche autour.
+          // La visibilité est exigée, elle : le bouton d'une réponse est
+          // toujours affiché, celui d'un message d'utilisateur ne l'est qu'au
+          // survol — c'est donc elle qui les distingue.
+          let reponses = [];
+          if (selReponseRepli) {
+            try { reponses = [...document.querySelectorAll(selReponseRepli)]; } catch (e) {}
+          }
+          for (const s of HEURISTIQUES.reponse) {
+            if (reponses.length) break;
+            reponses = [...document.querySelectorAll(s)];
+          }
+          const visiblesR = reponses.filter((el) => el.getClientRects().length > 0);
+          if (!visiblesR.length) return { ok: false, raison: 'pas de réponse' };
+
+          let noeud = visiblesR[visiblesR.length - 1];
           for (let niveau = 0; niveau < 6 && noeud; niveau++) {
-            for (const s of selecteurs) {
+            for (const s of HEURISTIQUES.copier) {
               let trouves = [];
               try { trouves = [...noeud.querySelectorAll(s)]; } catch (e) { continue; }
-              if (!trouves.length) continue;
               const vus = trouves.filter((b) => b.getClientRects().length > 0);
-              const cible = (vus.length ? vus : trouves).pop();
-              cible.click();
-              return { ok: true, niveau, candidats: trouves.length };
+              if (!vus.length) continue;
+              vus[vus.length - 1].click();
+              return { ok: true, voie: 'repli', niveau };
             }
             noeud = noeud.parentElement;
           }
@@ -461,7 +489,9 @@ extension RelaisPage {
               const el = ev.target.closest(
                 'button, [role="button"], [contenteditable="true"], textarea, input'
               ) || ev.target;
-              resolve({ ok: true, selecteur: selecteurStable(el) });
+              resolve({ ok: true,
+                        selecteur: selecteurStable(el),
+                        parent: selecteurAncetre(el) });
             };
             document.addEventListener('click', surClic, true);
           });

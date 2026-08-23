@@ -168,6 +168,23 @@ struct RelaisModule: Codable, Equatable, Identifiable {
         return fusion
     }
 
+    /// L'affichage que ce module ne laisse pas choisir, s'il en impose un.
+    ///
+    /// Une sortie qui n'écrit nulle part met la réponse **à l'écran** : c'est
+    /// le seul endroit où elle existe. Choisir « Rien » reviendrait alors à
+    /// demander une réponse qu'on ne verra jamais.
+    ///
+    /// Sauf si le module la fait lire à haute voix — on peut écouter sans
+    /// regarder. La contrainte n'est donc pas attachée au module « Discuter »
+    /// mais à ce qui la justifie, et elle vaudra d'elle-même pour les modules
+    /// que l'utilisateur écrira.
+    var affichageImpose: RelaisAffichage? {
+        sortieParDefaut == .aucune && !ditLaReponse ? .page : nil
+    }
+
+    /// Ce qu'on montre réellement, contrainte comprise.
+    var affichageEffectif: RelaisAffichage { affichageImpose ?? affichage }
+
     // MARK: - Ce qu'il exige de la page
 
     /// Les étapes actives, dans l'ordre du chemin.

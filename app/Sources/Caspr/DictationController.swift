@@ -160,6 +160,7 @@ final class DictationController {
         overlay.onSelectModeIndex = { [weak self] index in
             guard let self else { return }
             let modes = RelaisCatalogue.proposes
+            let modeCourant = RelaisCatalogue.courant
             guard modes.indices.contains(index) else { return }
             RelaisCatalogue.courant = modes[index]
             // L'affichage appartient au module : changer de module en pleine
@@ -222,6 +223,7 @@ final class DictationController {
             // est calibré. Sans lui, un seul mode est possible : proposer un
             // choix qui échouerait vaut moins que ne rien proposer.
             let modes = RelaisCatalogue.proposes
+            let courant = RelaisCatalogue.courant
             return RecordingOverlay.Status(
                 mode: mode,
                 target: target,
@@ -229,8 +231,10 @@ final class DictationController {
                 canPickNote: state != .recording,
                 previewEnabled: Preferences.shared.livePreviewEnabled,
                 modesAvailable: modes.count > 1,
+                destinationImposee: courant.sorties == [.aucune]
+                    ? "Réponse à l'écran" : nil,
                 modeLabels: modes.count > 1 ? modes.map(\.nom) : nil,
-                modeIndex: modes.firstIndex(of: RelaisCatalogue.courant) ?? 0,
+                modeIndex: modes.firstIndex(of: courant) ?? 0,
                 corpusEnabled: false,
                 corpusKeepsAudio: false,
                 languageBadge: "ChatGPT",
@@ -320,6 +324,12 @@ final class DictationController {
     }
 
     func cancel() {
+        // RELAIS — hors dictée, Échap met fin à la discussion ouverte.
+        if state == .idle, Relais.partage.enDiscussion {
+            quitterLaDiscussion()
+            Feedback.cancelled()
+            return
+        }
         // RELAIS — deux différences avec le chemin ordinaire, et la seconde
         // avait été manquée.
         //
@@ -503,6 +513,18 @@ final class DictationController {
                 TranscriptionRequest(samples: samples, mode: used,
                                      language: language, lexicon: lexicon))
 
+            // RELAIS — une sortie qui n'écrit nulle part s'arrête ici.
+            //
+            // La réponse est déjà à l'écran, dans la page que l'utilisateur a
+            // sous les yeux. Rien à insérer, rien à archiver — l'historique est
+            // un filet pour retrouver un texte qu'une insertion aurait perdu,
+            // et une conversation n'est pas une dictée qu'on range.
+            if parRelais, Relais.partage.sortieCourante == .aucune {
+                overlay.hide()
+                state = .idle
+                entrerEnDiscussion()
+                return
+            }
             let text = result.text
             guard !text.isEmpty else {
                 // Le dernier chemin réellement muet de l'application : le
@@ -560,6 +582,10 @@ final class DictationController {
             // application-là : si c'est Caspr, le texte part dans une de nos
             // propres fenêtres et disparaît sans qu'aucune erreur ne soit
             // levée. C'était indiagnosticable de l'extérieur.
+            // RELAIS — rendre le clavier avant d'écrire. Après une discussion,
+            // ou si l'on bascule vers un module qui écrit en pleine dictée, la
+            // fenêtre du relais est au premier plan : le texte y partirait.
+            if parRelais { await Relais.partage.rendreLeClavier() }
             let devant = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
             Log.info("insertion vers \(devant)")
             try await deliver(text)
@@ -1031,6 +1057,22 @@ final class DictationController {
 
     /// Échap n'est capté que le temps de l'enregistrement : le monopoliser en
     /// permanence casserait son usage normal dans toutes les autres apps.
+    // RELAIS — une discussion est ouverte : la page reste, Échap la referme.
+    //
+    // C'est un état à part, et il fallait le nommer : Caspr est au repos — la
+    // touche de dictée relance une dictée dans le même fil — mais une fenêtre
+    // attend qu'on en sorte. Sans cet état, rien n'écoutait Échap une fois le
+    // cycle terminé.
+    private func entrerEnDiscussion() {
+        Relais.partage.entrerEnDiscussion()
+        captureEscape()
+    }
+
+    private func quitterLaDiscussion() {
+        releaseEscape()
+        Relais.partage.terminerDiscussion()
+    }
+
     private func captureEscape() {
         let monitor = HotkeyMonitor { [weak self] in self?.cancel() }
         // Le résultat était jeté : un échec d'enregistrement laissait Échap

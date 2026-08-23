@@ -61,6 +61,12 @@ final class RecordingOverlay {
         // appartiennent à CrisperWhisper. Il a ses propres modes, et la
         // pastille est l'endroit où on les choisit — au moment de parler, pas
         // dans un écran de réglages qu'on n'ouvrira pas pour une phrase.
+        // RELAIS — la destination qu'un module impose, quand il en impose une.
+        //
+        // « Discuter » n'écrit ni au curseur ni dans les notes : proposer les
+        // deux laisserait choisir entre deux options sans effet. Une seule
+        // pastille inerte dit ce qui va se passer.
+        var destinationImposee: String? = nil
         var modeLabels: [String]? = nil
         var modeIndex: Int = 0
         var corpusEnabled: Bool
@@ -482,9 +488,15 @@ final class RecordingOverlay {
                    usesMenu: usesMenu)
         layoutMode(showMode: status.modesAvailable)
 
-        targetControl.setLabel(Self.noteLabel(for: status), at: 1)
-        targetControl.select(status.target.isLocked ? 1 : 0)
-        targetControl.setEnabled(status.noteName != nil || status.canPickNote, at: 1)
+        if let imposee = status.destinationImposee {          // RELAIS —
+            targetControl.setLabels([imposee])
+            targetControl.select(0)
+            targetControl.setEnabled(false, at: 0)
+        } else {
+            targetControl.setLabels(["Curseur", Self.noteLabel(for: status)])
+            targetControl.select(status.target.isLocked ? 1 : 0)
+            targetControl.setEnabled(status.noteName != nil || status.canPickNote, at: 1)
+        }
         // Court, et sur deux lignes : macOS ne replie pas les infobulles, une
         // phrase entière produit une bulle plus large que la moitié de l'écran.
         targetControl.toolTip = status.noteName.map {

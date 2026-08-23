@@ -26,6 +26,11 @@ struct RelaisModuleCard: View {
         Card {
             entete
             recette
+            if module.affichageImpose != nil {
+                Note("La réponse n'existe qu'à l'écran : ce module l'affiche en grand, "
+                     + "et ce choix ne se règle pas. Il se libérera le jour où le module "
+                     + "fera lire la réponse à haute voix — on peut écouter sans regarder.")
+            }
             if !manquantes.isEmpty {
                 Note("Indisponible : il manque « "
                      + manquantes.map(\.libelle).joined(separator: " », « ")
@@ -54,13 +59,17 @@ struct RelaisModuleCard: View {
             Spacer(minLength: 0)
             PillPicker(options: RelaisAffichage.allCases.map { ($0, $0.libelleCourt) },
                        selection: Binding(
-                           get: { module.affichage },
+                           get: { module.affichageEffectif },
                            set: { choisi in
                                var maj = module
                                maj.affichage = choisi
                                RelaisCatalogue.remplacer(maj)
                                surChangement()
-                           }))
+                           }),
+                       // Grisé quand le module impose son affichage : laisser
+                       // choisir une valeur sans effet est pire que ne pas la
+                       // proposer.
+                       disabled: module.affichageImpose != nil)
         }
     }
 

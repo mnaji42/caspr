@@ -286,6 +286,13 @@ final class RelaisPage: NSObject {
         fenetre.setFrame(Self.enVue, display: true)
         fenetre.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        // Et la vue web reçoit les touches.
+        //
+        // Rendre la fenêtre active ne suffit pas : sans premier répondant, le
+        // curseur clignote dans la page — WebKit le dessine — mais chaque
+        // frappe est refusée par la chaîne de réponse, et macOS émet un bip.
+        // On voyait donc un champ qui semblait prêt et qui ne l'était pas.
+        fenetre.makeFirstResponder(webView)
         Task { await rafraichirEtiquette() }
     }
 
@@ -300,8 +307,23 @@ final class RelaisPage: NSObject {
     /// diffère les rendus d'une fenêtre qu'il croit cachée, ce qui retardait
     /// l'apparition du bouton d'arrêt.
     func afficherBarre() {
+        // Une discussion garde sa grande fenêtre pendant la dictée.
+        //
+        // Déplacer la vue vers la barre puis la ramener à chaque tour ferait
+        // clignoter la conversation et lui ferait perdre le clavier — or c'est
+        // ce clavier qui permet de répondre par écrit entre deux dictées. La
+        // grande fenêtre peut le prendre, la barre jamais : c'est la séparation
+        // des deux fenêtres qui règle la question, sans drapeau à tenir.
+        if RelaisCatalogue.courant.sortieParDefaut == .aucune {
+            montrer()
+            return
+        }
+        // La grande fenêtre se retire : sans cela elle restait à l'écran,
+        // vidée de sa vue web par `rendreLaVueALaBarre`, et l'on voyait un
+        // rectangle gris là où l'on attendait sa disparition.
+        fenetre.orderOut(nil)
         rendreLaVueALaBarre()
-        let affichage = RelaisCatalogue.courant.affichage
+        let affichage = RelaisCatalogue.courant.affichageEffectif
         let compact = affichage == .barre
 
         // La page doit être **rendue**, même quand on ne veut rien voir.
@@ -334,6 +356,9 @@ final class RelaisPage: NSObject {
         barre.ignoresMouseEvents = affichage == .rien
         barre.orderFrontRegardless()
     }
+
+    /// La grande fenêtre est-elle sous les yeux de l'utilisateur ?
+    var estVisible: Bool { fenetre.isVisible }
 
     /// Range tout : la grande fenêtre disparaît, la barre repart hors champ.
     ///
@@ -649,6 +674,29 @@ final class RelaisPage: NSObject {
     /// Le fil neuf, lui, est ouvert **après** — quand la réponse est lue et que
     /// plus rien n'est en jeu. La page est alors prête pour la dictée suivante,
     /// et le contexte ne s'accumule pas d'une note à l'autre.
+    /// Envoie sans rien rapatrier, et **sans ouvrir de fil neuf**.
+    ///
+    /// Le pendant de `reorganiserSurPlace` pour une sortie qui n'écrit nulle
+    /// part. Deux différences, et toutes deux découlent de la sortie : on ne
+    /// clique pas « copier » puisque rien n'est à insérer, et on ne recharge
+    /// pas puisque le contexte de la conversation est précisément ce qu'on veut
+    /// garder. Recharger ici détruirait ce que le module existe pour offrir.
+    func envoyerSansAttendre(_ encadrement: (avant: String, apres: String)) async throws {
+        if !encadrement.avant.isEmpty || !encadrement.apres.isEmpty {
+            let r = try await appeler("return window.__relais.encadrer(sel, avant, apres);",
+                                      ["sel": selecteurs.composeur,
+                                       "avant": encadrement.avant,
+                                       "apres": encadrement.apres])
+            guard r["ok"] as? Bool == true else { throw Erreur.introuvable(.composeur) }
+            guard await attendreEncadrement(empreinte(encadrement.avant)) else {
+                throw Erreur.consigneNonPosee
+            }
+        }
+        guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, secondes: 10) else {
+            throw Erreur.introuvable(.envoi)
+        }
+    }
+
     func reorganiserSurPlace(_ encadrement: (avant: String, apres: String),
                              patienceSecondes: Double) async throws -> String {
         let r = try await appeler("return window.__relais.encadrer(sel, avant, apres);",

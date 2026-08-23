@@ -62,6 +62,22 @@ enum RelaisCatalogue {
         sorties: [.curseur, .note], sortieParDefaut: .curseur,
         affichage: .barre)
 
+    /// Poser une question, et rester dans la conversation.
+    ///
+    /// Le premier module dont la sortie n'écrit nulle part, et c'est ce qui le
+    /// distingue : rien n'est inséré, la page reste ouverte et prend le
+    /// clavier, et la touche de dictée relance une dictée **dans le même fil**
+    /// au lieu d'ouvrir une conversation neuve. Fermer et rouvrir détruirait
+    /// justement ce qu'on veut garder.
+    ///
+    /// Aucune consigne : ce qui est dit part tel quel. En ajouter une le
+    /// rapprocherait d'un module de rédaction, qui est un autre besoin.
+    static let discuter = RelaisModule(
+        identifiant: "discuter", nom: "Discuter", integre: true,
+        actions: [.demanderUneReponse],
+        sorties: [.aucune], sortieParDefaut: .aucune,
+        affichage: .page)
+
     /// Ceux que l'application livre.
     static var livres: [RelaisModule] {
         // L'affichage était un réglage unique pour toute la fonctionnalité ; il
@@ -72,11 +88,13 @@ enum RelaisCatalogue {
         // où le ranger.
         let ancien = UserDefaults.standard.string(forKey: "relais.affichage")
             .flatMap(RelaisAffichage.init(rawValue:))
-        guard let ancien else { return [brut, reorganiser] }
+        guard let ancien else { return [brut, reorganiser, discuter] }
         var b = brut, r = reorganiser
         b.affichage = ancien
         r.affichage = ancien
-        return [b, r]
+        var d = discuter
+        d.affichage = .page
+        return [b, r, d]
     }
 
     private static let cleModules = "relais.modules"

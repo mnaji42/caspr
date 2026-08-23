@@ -143,6 +143,12 @@ final class Relais: ObservableObject {
     }
 
     var estCalibre: Bool { RelaisSelecteurs.charger().estCalibre }
+
+    /// Où doit atterrir ce que le module courant produit.
+    ///
+    /// Lue au moment de livrer, comme le module lui-même : changer d'avis en
+    /// pleine phrase doit valoir pour la destination aussi.
+    var sortieCourante: RelaisSortie { RelaisCatalogue.courant.sortieParDefaut }
     /// Les deux sélecteurs supplémentaires de l'aller-retour sont-ils connus ?
     var saitDialoguer: Bool { RelaisSelecteurs.charger().saitDialoguer }
     /// Vrai quand la réponse est récupérée par le bouton de ChatGPT.
@@ -170,6 +176,26 @@ final class Relais: ObservableObject {
 
     func demarrer() async throws {
         debut = Date()
+        // Un fil neuf **avant** de parler, et seulement au premier appui.
+        //
+        // Il était ouvert après la transcription, et c'était l'ordre inverse
+        // du bon : on rechargeait la page où le texte venait d'être transcrit,
+        // donc on le perdait, et l'on envoyait une conversation vide. Le
+        // deuxième appui semblait marcher — il partait du fil que le premier
+        // avait créé pour rien.
+        //
+        // Ici, la conversation naît avant l'écoute. Les appuis suivants la
+        // poursuivent : c'est ce que la touche veut dire quand une discussion
+        // est déjà ouverte.
+        if RelaisCatalogue.courant.sortieParDefaut == .aucune, !enDiscussion {
+            let page = pageActive()
+            page.charger()
+            guard await page.attendreComposeurPret(secondes: 30) else {
+                throw RelaisPage.Erreur.zoneJamaisRevenue
+            }
+            enDiscussion = true
+            page.montrer()
+        }
         try await pageActive().demarrer()
     }
 
@@ -232,6 +258,47 @@ final class Relais: ObservableObject {
     /// tout redire, et ce n'est pas ici qu'elle commencerait. La raison part
     /// dans le journal, et la conversation reste ouverte dans la fenêtre du
     /// relais pour qu'on puisse voir ce qui s'est passé.
+    /// Une conversation est-elle ouverte, en attente d'une suite ?
+    ///
+    /// Publiée : la barre des menus et les réglages doivent pouvoir le dire, et
+    /// c'est un état qui se termine par un geste de l'utilisateur, pas par la
+    /// fin d'un cycle.
+    @Published private(set) var enDiscussion = false
+
+    /// La conversation reste sous les yeux, et prend le clavier.
+    ///
+    /// `enDiscussion` est déjà vrai — il l'est depuis l'ouverture du fil, avant
+    /// même qu'on parle. C'est ce qui distingue le premier appui des suivants,
+    /// et cette distinction se prend au début, pas à la fin.
+    func entrerEnDiscussion() {
+        enDiscussion = true
+        pageActive().montrer()
+    }
+
+    func terminerDiscussion() {
+        guard enDiscussion else { return }
+        enDiscussion = false
+        page?.cacher()
+        NSApp.hide(nil)
+        Log.info("relais : discussion terminée")
+    }
+
+    /// Rend le clavier à l'application où l'on travaille.
+    ///
+    /// À appeler avant toute insertion au curseur. L'insertion par
+    /// accessibilité vise l'élément focalisé de l'application au premier plan :
+    /// si c'est la fenêtre du relais — ce qui arrive après une discussion, ou
+    /// si l'on bascule vers un module qui écrit en pleine dictée — le texte
+    /// partirait dans ChatGPT. Se retirer est le seul geste qui rende la main.
+    func rendreLeClavier() async {
+        guard page?.estVisible == true else { return }
+        page?.cacher()
+        NSApp.hide(nil)
+        // Le temps que le système redonne le premier plan à l'application
+        // précédente : insérer avant qu'elle l'ait repris viserait encore nous.
+        try? await Task.sleep(for: .milliseconds(180))
+    }
+
     func transformer(_ brut: String, module: RelaisModule) async throws -> String {
         // Ce que le module exige, et non un drapeau global : c'est lui qui
         // sait de quoi il a besoin, et lui seul.
@@ -242,6 +309,22 @@ final class Relais: ObservableObject {
         // La patience suit la longueur du texte : une page se réorganise en
         // quelques secondes, dix minutes de monologue demandent bien plus.
         // Trois minutes de plancher, une seconde par vingt caractères.
+        // Une sortie qui n'écrit nulle part n'a rien à rapatrier : on envoie,
+        // et l'on s'arrête là. La réponse s'affichera dans la page, que
+        // l'utilisateur a sous les yeux.
+        if module.sortieParDefaut == .aucune {
+            do {
+                try await pageActive()
+                    .envoyerSansAttendre((avant: module.avant, apres: module.apres))
+                Log.info("relais : \(module.identifiant) — envoyé, réponse à l'écran")
+            } catch is CancellationError { throw CancellationError() }
+            catch {
+                Log.error("relais : \(module.identifiant) n'a pas pu envoyer "
+                          + "(\(error.localizedDescription))")
+            }
+            return ""
+        }
+
         let patience = max(180.0, Double(brut.count) / 20)
         do {
             let texte = try await pageActive()

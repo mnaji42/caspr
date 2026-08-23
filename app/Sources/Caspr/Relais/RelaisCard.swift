@@ -30,14 +30,44 @@ struct RelaisCard<Moteurs: View>: View {
     @State private var affichage = RelaisAffichage.courant
 
     var body: some View {
-        SettingsToggleRow(
-            title: "ChatGPT Web Preview",
-            description: "Dicter par le transcripteur de ChatGPT, dans une page "
-                       + "que Caspr héberge. La touche de dictée ne change pas.",
-            note: note,
-            noteIsWarning: actif && !calibre,
-            isOn: Binding(get: { actif }, set: basculer))
-            .onAppear(perform: relire)
+        // Une seule carte pour la fonctionnalité : la bascule, ce qu'on montre
+        // pendant la dictée, et les actions sur la session. Les trois choix
+        // d'affichage tenaient auparavant dans trois cartes de choix hautes —
+        // le composant fait pour un arbitrage qui mérite une explication, comme
+        // le choix d'un moteur. Montrer ou non une fenêtre n'est pas de cet
+        // ordre : une ligne et trois pastilles suffisent, et rendent la page
+        // lisible.
+        Card {
+            SettingsToggleRow(
+                title: "ChatGPT Web Preview",
+                description: "Dicter par le transcripteur de ChatGPT, dans une page "
+                           + "que Caspr héberge. La touche de dictée ne change pas.",
+                note: note,
+                noteIsWarning: actif && !calibre,
+                isOn: Binding(get: { actif }, set: basculer),
+                isCard: false)
+                .onAppear(perform: relire)
+
+            if actif {
+                Divider().opacity(0.25)
+
+                Row(label: "Montrer pendant la dictée") {
+                    PillPicker(options: RelaisAffichage.allCases.map {
+                                   ($0, $0.libelleCourt)
+                               },
+                               selection: Binding(get: { affichage },
+                                                  set: { RelaisAffichage.courant = $0
+                                                         affichage = $0 }))
+                }
+                Note(affichage.explication)
+
+                ButtonRow {
+                    Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
+                    Button("Diagnostic…") { Relais.partage.diagnostic() }
+                    Button("Se déconnecter…") { deconnecter() }
+                }
+            }
+        }
 
         if actif {
             // Un bloc par mode, dans l'ordre où ils se débloquent.
@@ -45,59 +75,32 @@ struct RelaisCard<Moteurs: View>: View {
             // Ils ne sont pas trois variantes d'un même réglage : chacun exige
             // ce que le précédent a obtenu, **plus** une chose de son cru — le
             // deuxième deux boutons supplémentaires, le troisième une
-            // autorisation système. Les empiler dans une seule carte, comme
-            // c'était le cas, cachait cette progression et laissait croire
-            // qu'on pouvait commencer par le milieu.
-            Card {
-                Text("Ce qu'on voit pendant la dictée")
-                    .font(.system(size: 13, weight: .semibold))
-                Note("La page ChatGPT travaille dans tous les cas ; ce réglage décide "
-                     + "seulement de ce qu'elle montre. Quelle que soit la taille, elle "
-                     + "ne prend jamais le clavier : le texte dicté va à votre curseur, "
-                     + "pas dans la page.")
-                ForEach(RelaisAffichage.allCases, id: \.rawValue) { choix in
-                    ChoiceCard(title: choix.libelle,
-                               subtitle: choix.explication,
-                               selected: affichage == choix,
-                               recommended: false,
-                               action: {
-                                   RelaisAffichage.courant = choix
-                                   affichage = choix
-                               }) { EmptyView() }
-                }
-            }
-
+            // autorisation système.
             etape(numero: 1,
-                  titre: "Dicter — session ChatGPT",
+                  titre: "Dicter",
                   faite: calibre,
                   explication: calibre
-                    ? "Votre compte, votre session : Caspr ne fait que l'héberger, aucun "
-                      + "identifiant ne lui est confié. En mode « Brut », rien n'est jamais "
+                    ? "Votre compte, votre session. En mode « Brut », rien n'est jamais "
                       + "envoyé dans une conversation."
-                    : "Connectez-vous à ChatGPT, puis montrez à Caspr trois boutons de la "
-                      + "page : le micro, l'arrêt, et la zone de texte.") {
+                    : "Connectez-vous, puis montrez trois boutons de la page : le micro, "
+                      + "l'arrêt et la zone de texte.") {
                 Button(calibre ? "Recalibrer les boutons…" : "Terminer la configuration…") {
                     Relais.partage.configurer(relire)
                 }
-                Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
-                Button("Diagnostic…") { Relais.partage.diagnostic() }
-                Button("Se déconnecter…") { deconnecter() }
             }
 
             etape(numero: 2,
-                  titre: "Réorganiser — remettre en ordre ce qui a été dit",
+                  titre: "Réorganiser",
                   faite: dialogue,
                   disponible: calibre,
                   explication: dialogue
-                    ? "Ce que vous venez de dicter repart à ChatGPT pour être remis en "
-                      + "ordre : hésitations, redites et faux départs disparaissent, toutes "
-                      + "les idées restent. Le mode se choisit sur la barre de dictée, à "
-                      + "côté de « Brut ».\n\nComptez une trentaine de secondes de plus, et "
-                      + "sachez que le texte part alors dans votre historique ChatGPT — ce "
-                      + "qui n'arrive jamais en mode « Brut »."
-                    : "Deux boutons de plus à montrer : l'envoi, et la réponse. La "
-                      + "calibration enverra un message d'essai — c'est le seul moyen de "
-                      + "faire exister une réponse à désigner.") {
+                    ? "Ce que vous dictez repart à ChatGPT pour être remis en ordre. "
+                      + "Le mode se choisit sur la barre de dictée. Comptez une trentaine "
+                      + "de secondes de plus, et sachez que le texte entre alors dans "
+                      + "votre historique ChatGPT."
+                    : "Deux boutons de plus à montrer : l'envoi et la réponse. Un message "
+                      + "d'essai sera envoyé — c'est le seul moyen de faire exister une "
+                      + "réponse à désigner.") {
                 Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer « Réorganiser »…") {
                     Relais.partage.calibrerDialogue(relire)
                 }
@@ -105,18 +108,16 @@ struct RelaisCard<Moteurs: View>: View {
 
             if dialogue {
                 Card {
-                    Text("Où atterrissent les conversations")
-                        .font(.system(size: 13, weight: .semibold))
-                    Note("Chaque dictée « Réorganiser » ouvre une conversation neuve — "
-                         + "sans quoi la note précédente orienterait la suivante. Elles "
-                         + "s'accumulent donc dans votre historique ChatGPT.\n\nPour les "
-                         + "tenir à l'écart : créez un projet dédié dans ChatGPT, ouvrez-le "
-                         + "dans la fenêtre du relais, puis adoptez-le ci-dessous. Vous "
-                         + "retrouverez toutes vos dictées au même endroit, sans qu'elles "
-                         + "se mêlent à vos vraies conversations."
-                         + (depart ? "\n\nUn point de départ est enregistré." : ""))
-                    HStack(spacing: 8) {
-                        Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
+                    Row(label: "Conversations créées par Caspr") {
+                        Text(depart ? "dans un projet dédié" : "dans l'historique général")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Style.textSecondary)
+                    }
+                    Note("Chaque dictée « Réorganiser » ouvre une conversation neuve, sans "
+                         + "quoi la précédente orienterait la suivante. Pour les tenir à "
+                         + "l'écart : créez un projet dans ChatGPT, ouvrez-le dans la "
+                         + "fenêtre du relais, puis adoptez-le.")
+                    ButtonRow {
                         Button("Adopter la page ouverte…") {
                             Relais.partage.adopterPageDeDepart()
                             relire()
@@ -128,7 +129,6 @@ struct RelaisCard<Moteurs: View>: View {
                             }
                         }
                     }
-                    .buttonStyle(CasprSecondaryButtonStyle())
                 }
             }
         } else {
@@ -166,8 +166,12 @@ struct RelaisCard<Moteurs: View>: View {
                             : "Terminez l'étape précédente pour débloquer celle-ci.",
                  warning: !disponible)
             if disponible {
-                HStack(spacing: 8) { actions() }
-                    .buttonStyle(CasprSecondaryButtonStyle())
+                // `ButtonRow` et non un empilement à la main : il impose la
+                // taille et le style communs, et surtout il laisse les boutons
+                // sur une seule ligne. Le style secondaire, plus large, les
+                // faisait passer à la ligne à trois — le libellé se coupait au
+                // milieu d'un mot.
+                ButtonRow { actions() }
             }
         }
     }

@@ -715,7 +715,14 @@ final class RelaisPage: NSObject {
             let r = try? await appeler(
                 "return window.__relais.copierLaReponse(selReponse, selCopier);",
                 ["selReponse": selecteurs.reponse, "selCopier": selecteurs.copier])
-            if r?["ok"] as? Bool == true { clique = true; break }
+            if r?["ok"] as? Bool == true {
+                // Le niveau et le nombre de candidats, pour que le prochain
+                // défaut se lise dans le journal plutôt que dans une capture.
+                Log.info("relais : copier cliqué (niveau \(r?["niveau"] ?? "?"), "
+                         + "\(r?["candidats"] ?? "?") candidat(s))")
+                clique = true
+                break
+            }
             if let message = await erreurAffichee() { throw Erreur.refusParChatGPT(message) }
         }
         guard clique else { throw Erreur.pasDeReponse }

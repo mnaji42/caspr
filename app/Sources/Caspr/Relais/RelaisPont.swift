@@ -227,15 +227,22 @@ extension RelaisPage {
 
         // Clique le bouton « copier » **de la réponse**, et non le premier venu.
         //
-        // ChatGPT en pose un sous chaque message, le vôtre compris. Chercher
-        // dans toute la page revenait donc à copier sa propre demande : le
-        // prompt et la transcription atterrissaient au curseur, sans que rien
-        // ne signale l'erreur puisqu'un texte arrivait bien.
+        // ChatGPT en pose un sous chaque message, celui de l'utilisateur
+        // compris. Chercher dans toute la page revenait à copier sa propre
+        // demande : le prompt et la transcription atterrissaient au curseur,
+        // sans que rien ne signale l'erreur puisqu'un texte arrivait bien.
         //
-        // On part donc de la dernière réponse, on remonte jusqu'au bloc qui la
-        // porte, et on ne cherche le bouton que là-dedans. Remonter est
-        // nécessaire : la barre d'actions n'est pas dans le corps du message
-        // mais à côté, dans le même tour de conversation.
+        // Deux précautions, et la seconde manquait.
+        //
+        // On part de la dernière réponse et on remonte, en s'arrêtant au
+        // premier niveau qui contient un bouton : le plus proche est le plus
+        // sûr. Mais surtout, on prend le **dernier** bouton de ce niveau et non
+        // le premier — un conteneur un peu large englobe le message précédent,
+        // et l'ordre du document y place le bouton de l'utilisateur devant.
+        //
+        // La visibilité est préférée, pas exigée : ChatGPT masque parfois la
+        // barre d'actions jusqu'au survol, et un bouton présent répond au clic
+        // qu'on le voie ou non.
         copierLaReponse(selReponse, selCopier) {
           let reponses = [];
           if (selReponse) {
@@ -253,17 +260,15 @@ extension RelaisPage {
           const selecteurs = selCopier ? [selCopier, ...HEURISTIQUES.copier]
                                        : HEURISTIQUES.copier;
           let noeud = visibles[visibles.length - 1];
-          // Quatre niveaux : assez pour sortir du corps du message et atteindre
-          // le tour de conversation, pas assez pour ressortir dans la page et
-          // retrouver le bouton du message précédent.
-          for (let i = 0; i < 4 && noeud; i++) {
+          for (let niveau = 0; niveau < 6 && noeud; niveau++) {
             for (const s of selecteurs) {
-              let bouton = null;
-              try { bouton = noeud.querySelector(s); } catch (e) {}
-              if (bouton && bouton.getClientRects().length > 0) {
-                bouton.click();
-                return { ok: true };
-              }
+              let trouves = [];
+              try { trouves = [...noeud.querySelectorAll(s)]; } catch (e) { continue; }
+              if (!trouves.length) continue;
+              const vus = trouves.filter((b) => b.getClientRects().length > 0);
+              const cible = (vus.length ? vus : trouves).pop();
+              cible.click();
+              return { ok: true, niveau, candidats: trouves.length };
             }
             noeud = noeud.parentElement;
           }

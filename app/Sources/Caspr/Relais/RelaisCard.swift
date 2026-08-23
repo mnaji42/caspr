@@ -38,44 +38,47 @@ struct RelaisCard<Moteurs: View>: View {
             .onAppear(perform: relire)
 
         if actif {
-            Card {
-                Text("Session ChatGPT")
-                    .font(.system(size: 13, weight: .semibold))
-                Note("Votre compte, votre session. Caspr ne fait que l'héberger : "
-                     + "aucun identifiant ne lui est confié, et rien n'est envoyé "
-                     + "dans une conversation — le message n'est jamais expédié.")
-                HStack(spacing: 8) {
-                    Button(calibre ? "Recalibrer les boutons…" : "Terminer la configuration…") {
-                        Relais.partage.configurer(relire)
-                    }
-                    Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
-                    Button("Diagnostic…") { Relais.partage.diagnostic() }
-                    Button("Se déconnecter…") { deconnecter() }
+            // Un bloc par mode, dans l'ordre où ils se débloquent.
+            //
+            // Ils ne sont pas trois variantes d'un même réglage : chacun exige
+            // ce que le précédent a obtenu, **plus** une chose de son cru — le
+            // deuxième deux boutons supplémentaires, le troisième une
+            // autorisation système. Les empiler dans une seule carte, comme
+            // c'était le cas, cachait cette progression et laissait croire
+            // qu'on pouvait commencer par le milieu.
+            etape(numero: 1,
+                  titre: "Dicter — session ChatGPT",
+                  faite: calibre,
+                  explication: calibre
+                    ? "Votre compte, votre session : Caspr ne fait que l'héberger, aucun "
+                      + "identifiant ne lui est confié. En mode « Brut », rien n'est jamais "
+                      + "envoyé dans une conversation."
+                    : "Connectez-vous à ChatGPT, puis montrez à Caspr trois boutons de la "
+                      + "page : le micro, l'arrêt, et la zone de texte.") {
+                Button(calibre ? "Recalibrer les boutons…" : "Terminer la configuration…") {
+                    Relais.partage.configurer(relire)
                 }
-                .buttonStyle(CasprSecondaryButtonStyle())
+                Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
+                Button("Diagnostic…") { Relais.partage.diagnostic() }
+                Button("Se déconnecter…") { deconnecter() }
             }
 
-            if calibre {
-                Card {
-                    Text("Reformulation par ChatGPT")
-                        .font(.system(size: 13, weight: .semibold))
-                    Note(dialogue
-                         ? "Le mode « Au propre » renvoie ce que vous venez de dicter à "
-                           + "ChatGPT pour qu'il le remette en ordre : les hésitations, les "
-                           + "redites et les faux départs disparaissent, les idées restent "
-                           + "toutes. Il se choisit sur la barre de dictée, à côté de "
-                           + "« Brut ».\n\nComptez une trentaine de secondes de plus, et "
-                           + "sachez que le texte part alors dans votre historique ChatGPT — "
-                           + "ce qui n'est jamais le cas en mode « Brut »."
-                         : "Deux boutons de plus à montrer — l'envoi et la réponse — et vous "
-                           + "pourrez faire réorganiser vos dictées par ChatGPT. La "
-                           + "calibration enverra un message d'essai : c'est le seul moyen "
-                           + "de faire exister une réponse à désigner.")
-                    ButtonRow {
-                        Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer la reformulation…") {
-                            Relais.partage.calibrerDialogue(relire)
-                        }
-                    }
+            etape(numero: 2,
+                  titre: "Au propre — réorganiser ce qui a été dit",
+                  faite: dialogue,
+                  disponible: calibre,
+                  explication: dialogue
+                    ? "Ce que vous venez de dicter repart à ChatGPT pour être remis en "
+                      + "ordre : hésitations, redites et faux départs disparaissent, toutes "
+                      + "les idées restent. Le mode se choisit sur la barre de dictée, à "
+                      + "côté de « Brut ».\n\nComptez une trentaine de secondes de plus, et "
+                      + "sachez que le texte part alors dans votre historique ChatGPT — ce "
+                      + "qui n'arrive jamais en mode « Brut »."
+                    : "Deux boutons de plus à montrer : l'envoi, et la réponse. La "
+                      + "calibration enverra un message d'essai — c'est le seul moyen de "
+                      + "faire exister une réponse à désigner.") {
+                Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer « Au propre »…") {
+                    Relais.partage.calibrerDialogue(relire)
                 }
             }
         } else {
@@ -83,6 +86,39 @@ struct RelaisCard<Moteurs: View>: View {
             // laisser visibles sous un interrupteur qui les neutralise invite
             // à y cliquer, puis à chercher pourquoi rien ne change.
             moteurs
+        }
+    }
+
+    /// Une étape de configuration : son rang, son état, ses actions.
+    ///
+    /// `disponible` grise l'étape tant que la précédente n'est pas faite,
+    /// plutôt que de la masquer : on doit pouvoir lire d'avance ce qui attend,
+    /// et comprendre pourquoi ce n'est pas encore accessible.
+    @ViewBuilder
+    private func etape(numero: Int, titre: String, faite: Bool, disponible: Bool = true,
+                       explication: String,
+                       @ViewBuilder actions: () -> some View) -> some View {
+        Card {
+            HStack(spacing: 8) {
+                Text("\(numero).")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Style.textSecondary)
+                Text(titre)
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if faite {
+                    Text("configuré")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Style.textSecondary)
+                }
+            }
+            Note(disponible ? explication
+                            : "Terminez l'étape précédente pour débloquer celle-ci.",
+                 warning: !disponible)
+            if disponible {
+                HStack(spacing: 8) { actions() }
+                    .buttonStyle(CasprSecondaryButtonStyle())
+            }
         }
     }
 

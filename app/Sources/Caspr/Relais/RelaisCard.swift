@@ -26,6 +26,7 @@ struct RelaisCard<Moteurs: View>: View {
     @State private var actif = Relais.partage.actif
     @State private var calibre = Relais.partage.estCalibre
     @State private var dialogue = Relais.partage.saitDialoguer
+    @State private var depart = Relais.partage.departPersonnalise
 
     var body: some View {
         SettingsToggleRow(
@@ -79,6 +80,35 @@ struct RelaisCard<Moteurs: View>: View {
                       + "faire exister une réponse à désigner.") {
                 Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer « Réorganiser »…") {
                     Relais.partage.calibrerDialogue(relire)
+                }
+            }
+
+            if dialogue {
+                Card {
+                    Text("Où atterrissent les conversations")
+                        .font(.system(size: 13, weight: .semibold))
+                    Note("Chaque dictée « Réorganiser » ouvre une conversation neuve — "
+                         + "sans quoi la note précédente orienterait la suivante. Elles "
+                         + "s'accumulent donc dans votre historique ChatGPT.\n\nPour les "
+                         + "tenir à l'écart : créez un projet dédié dans ChatGPT, ouvrez-le "
+                         + "dans la fenêtre du relais, puis adoptez-le ci-dessous. Vous "
+                         + "retrouverez toutes vos dictées au même endroit, sans qu'elles "
+                         + "se mêlent à vos vraies conversations."
+                         + (depart ? "\n\nUn point de départ est enregistré." : ""))
+                    HStack(spacing: 8) {
+                        Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
+                        Button("Adopter la page ouverte…") {
+                            Relais.partage.adopterPageDeDepart()
+                            relire()
+                        }
+                        if depart {
+                            Button("Revenir à l'accueil") {
+                                Relais.partage.oublierPageDeDepart()
+                                relire()
+                            }
+                        }
+                    }
+                    .buttonStyle(CasprSecondaryButtonStyle())
                 }
             }
         } else {
@@ -148,6 +178,7 @@ struct RelaisCard<Moteurs: View>: View {
         actif = Relais.partage.actif
         calibre = Relais.partage.estCalibre
         dialogue = Relais.partage.saitDialoguer
+        depart = Relais.partage.departPersonnalise
     }
 
     private var note: String? {

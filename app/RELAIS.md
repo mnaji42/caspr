@@ -69,6 +69,13 @@ La consigne se **dit**, elle ne se configure pas : « traduis ça en anglais » 
 tient pas dans un réglage. Caspr n'ajoute qu'un emballage, dont le seul rôle
 est d'obtenir un résultat utilisable sans « Bien sûr ! Voici… » devant.
 
+Chaque passe ouvre une **conversation neuve**, par rechargement de la page de
+départ. Sans cela, la note précédente oriente la suivante — et le contexte
+finirait par déborder. Cette page de départ est réglable : pointée sur un
+projet ChatGPT dédié, elle y range toutes les conversations créées par Caspr,
+à l'écart des vraies. C'est une URL et non un sélecteur, donc rien qui casse au
+prochain remaniement de la page.
+
 Une transformation qui échoue rend la **transcription brute**. Une dictée de
 dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
 

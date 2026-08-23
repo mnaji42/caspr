@@ -177,6 +177,39 @@ final class Relais {
         }
     }
 
+    /// Adopte la page ouverte dans la fenêtre comme point de départ.
+    ///
+    /// On lit l'adresse plutôt que de la faire saisir : personne ne recopie à
+    /// la main l'URL d'un projet ChatGPT sans se tromper, et elle est sous les
+    /// yeux de qui vient d'y naviguer.
+    func adopterPageDeDepart() {
+        guard let page, let url = page.adresseCourante, RelaisPage.estChatGPT(url) else {
+            Self.alerter("Point de départ",
+                         "Ouvrez d'abord la fenêtre du relais et allez sur la page "
+                         + "ChatGPT que vous voulez utiliser — un projet dédié, par "
+                         + "exemple.")
+            return
+        }
+        RelaisPage.depart = url
+        Self.alerter("Point de départ enregistré", """
+            Les conversations créées par Caspr partiront désormais de cette page :
+
+            \(url.absoluteString)
+
+            Une dictée « Réorganiser » ouvre une conversation neuve à chaque fois — \
+            sans quoi la note précédente orienterait la suivante. Les regrouper dans un \
+            projet dédié évite qu'elles se mêlent à vos vraies conversations.
+            """)
+    }
+
+    func oublierPageDeDepart() {
+        RelaisPage.reinitialiserDepart()
+        Self.alerter("Point de départ",
+                     "Retour à la page d'accueil de ChatGPT.")
+    }
+
+    var departPersonnalise: Bool { RelaisPage.departEstPersonnalise }
+
     // MARK: - Réglages
 
     func ouvrirFenetre() { pageActive().montrer() }

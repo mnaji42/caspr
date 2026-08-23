@@ -52,6 +52,46 @@ final class RelaisPage: NSObject {
     /// Ce que le relais sait de la session, à un instant donné.
     enum Connexion { case connecte, deconnecte, inconnu }
 
+    private static let cleDepart = "relais.pointDeDepart"
+
+    /// La page d'où part chaque conversation.
+    ///
+    /// Par défaut chatgpt.com, qui ouvre un fil neuf. Mais on peut lui
+    /// substituer n'importe quelle page de ChatGPT — typiquement un projet
+    /// dédié : les conversations qu'y crée Caspr s'y rangent alors, groupées et
+    /// à l'écart des vraies. Une dictée par conversation, c'est vite un
+    /// historique noyé.
+    ///
+    /// Une URL et non un bouton à calibrer, et c'est ce qui la rend solide :
+    /// elle ne dépend d'aucun élément de la page, donc rien ne casse au
+    /// prochain remaniement de ChatGPT.
+    ///
+    /// L'hôte est vérifié à la lecture comme à l'écriture. Une adresse
+    /// enregistrée est rechargée à chaque dictée sans que personne ne la
+    /// relise : elle doit rester ce qu'elle prétend être.
+    static var depart: URL {
+        get {
+            guard let s = UserDefaults.standard.string(forKey: cleDepart),
+                  let url = URL(string: s), estChatGPT(url) else { return accueil }
+            return url
+        }
+        set {
+            guard estChatGPT(newValue) else { return }
+            UserDefaults.standard.set(newValue.absoluteString, forKey: cleDepart)
+        }
+    }
+
+    static var departEstPersonnalise: Bool { depart != accueil }
+
+    static func reinitialiserDepart() {
+        UserDefaults.standard.removeObject(forKey: cleDepart)
+    }
+
+    static func estChatGPT(_ url: URL) -> Bool {
+        guard let hote = url.host() else { return false }
+        return hote == "chatgpt.com" || hote.hasSuffix(".chatgpt.com")
+    }
+
     static let accueil = URL(string: "https://chatgpt.com/")!
 
     private var webView: WKWebView!
@@ -192,11 +232,14 @@ final class RelaisPage: NSObject {
     @objc private func retour() { webView.goBack() }
     @objc private func suivant() { webView.goForward() }
     @objc private func recharger() { webView.reload() }
-    @objc private func revenirAccueil() { charger() }
+    @objc private func revenirAccueil() { webView.load(URLRequest(url: Self.accueil)) }
 
     func charger() {
-        webView.load(URLRequest(url: Self.accueil))
+        webView.load(URLRequest(url: Self.depart))
     }
+
+    /// L'adresse affichée, pour que les réglages puissent l'adopter.
+    var adresseCourante: URL? { webView.url }
 
     // MARK: - Fenêtre
 

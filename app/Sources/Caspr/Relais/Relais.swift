@@ -148,6 +148,11 @@ final class Relais {
 
     /// Renvoie le texte à ChatGPT et rend ce qu'il répond.
     ///
+    /// Le mode est lu **ici**, une fois la transcription obtenue, et non au
+    /// début de la dictée. C'est ce que la pastille promet : comme pour
+    /// « Curseur | Notes », le choix qui compte est le dernier fait, y compris
+    /// pendant qu'on parle.
+    ///
     /// **En cas d'échec, la transcription brute est rendue telle quelle.** Une
     /// dictée de dix minutes ne doit pas se perdre parce que la seconde passe
     /// n'a pas abouti : cette application s'interdit partout ailleurs de faire
@@ -162,8 +167,8 @@ final class Relais {
         let patience = max(180.0, Double(brut.count) / 20)
         do {
             let texte = try await pageActive()
-                .demanderA(RelaisPrompt.envelopper(brut, mode: mode),
-                           patienceSecondes: patience)
+                .reorganiserSurPlace(RelaisPrompt.encadrement(mode),
+                                     patienceSecondes: patience)
             guard !texte.isEmpty else {
                 Log.error("relais : réponse vide, transcription brute conservée")
                 return brut

@@ -185,6 +185,25 @@ enum RelaisPrompt {
         sont.
         """
 
+    /// Ce qu'on ajoute **autour** du texte déjà présent.
+    ///
+    /// Un délimiteur en toutes lettres plutôt que des accents graves : dans un
+    /// éditeur ProseMirror, trois accents graves déclenchent la création d'un
+    /// bloc de code, qui capture ensuite la touche d'envoi. Le but — dire sans
+    /// ambiguïté où commence et où finit la matière — est atteint aussi bien.
+    static func encadrement(_ mode: RelaisMode) -> (avant: String, apres: String) {
+        switch mode {
+        case .brut:
+            ("", "")
+        case .reorganiser:
+            (reorganiser + "\n\n=== DÉBUT DE LA TRANSCRIPTION ===\n",
+             "\n=== FIN DE LA TRANSCRIPTION ===")
+        case .rediger:
+            ("=== DÉBUT DE LA DEMANDE ===\n",
+             "\n=== FIN DE LA DEMANDE ===\n\n" + rediger)
+        }
+    }
+
     /// Le message complet à déposer dans la zone de saisie.
     ///
     /// L'emballage vient **avant** le texte pour `reorganiser` : la consigne doit

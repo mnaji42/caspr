@@ -121,6 +121,14 @@ final class RelaisPage: NSObject {
     /// Les fenêtres de connexion ouvertes par la page (OAuth, conditions).
     /// Retenues pour ne pas être libérées pendant que l'utilisateur s'en sert.
     private var annexes: [NSWindow] = []
+    /// Vrai entre l'ordre de chargement et la fin de la navigation.
+    ///
+    /// Sans ce drapeau, attendre « la zone de saisie » revenait à interroger la
+    /// **page précédente** : elle est encore là quelques centaines de
+    /// millisecondes après l'ordre de rechargement, et la réponse arrivait donc
+    /// tout de suite, sur le mauvais document. On écrivait le prompt dans une
+    /// page qui allait disparaître.
+    private var chargementEnCours = false
     var selecteurs = RelaisSelecteurs.charger()
 
     /// Position hors champ de la fenêtre quand le relais travaille en silence.
@@ -235,6 +243,7 @@ final class RelaisPage: NSObject {
     @objc private func revenirAccueil() { webView.load(URLRequest(url: Self.accueil)) }
 
     func charger() {
+        chargementEnCours = true
         webView.load(URLRequest(url: Self.depart))
     }
 
@@ -592,26 +601,35 @@ final class RelaisPage: NSObject {
         return false
     }
 
-    /// Envoie un texte et rend la réponse.
+    /// Encadre la transcription déjà présente, l'envoie, et rend la réponse.
     ///
-    /// Un fil neuf à chaque fois, par rechargement de la page plutôt que par un
-    /// clic sur « Nouveau chat ». Deux raisons : c'est un sélecteur de moins à
-    /// calibrer, et le rechargement garantit un état propre là où un bouton
-    /// laisse ce que la page avait en tête. Sans fil neuf, la note d'avant
-    /// oriente la suivante — on demanderait une réorganisation et on
-    /// obtiendrait une réponse tenant compte d'un monologue d'il y a une heure.
-    func demanderA(_ texte: String, patienceSecondes: Double) async throws -> String {
-        charger()
-        guard await attendreComposeur(secondes: 30) else { throw Erreur.zoneJamaisRevenue }
-
-        let ecrit = try await appeler("return window.__relais.ecrire(sel, texte);",
-                                      ["sel": selecteurs.composeur, "texte": texte])
-        guard ecrit["ok"] as? Bool == true else { throw Erreur.introuvable(.composeur) }
+    /// Aucun rechargement au milieu du chemin, et c'est le changement de fond.
+    /// La version précédente rechargeait la page pour ouvrir un fil neuf, puis
+    /// réécrivait la transcription entière avec la consigne devant. Trois
+    /// défauts d'un coup : on interrogeait la page qu'on était en train de
+    /// quitter, on demandait à un éditeur ProseMirror d'avaler dix minutes de
+    /// texte d'un coup, et le moindre accroc laissait la zone dans un état
+    /// qu'on ne savait plus nommer.
+    ///
+    /// Le texte est déjà là. On n'ajoute que la consigne, à ses deux bouts.
+    ///
+    /// Le fil neuf, lui, est ouvert **après** — quand la réponse est lue et que
+    /// plus rien n'est en jeu. La page est alors prête pour la dictée suivante,
+    /// et le contexte ne s'accumule pas d'une note à l'autre.
+    func reorganiserSurPlace(_ encadrement: (avant: String, apres: String),
+                             patienceSecondes: Double) async throws -> String {
+        let r = try await appeler("return window.__relais.encadrer(sel, avant, apres);",
+                                  ["sel": selecteurs.composeur,
+                                   "avant": encadrement.avant,
+                                   "apres": encadrement.apres])
+        guard r["ok"] as? Bool == true else { throw Erreur.introuvable(.composeur) }
 
         guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, secondes: 10) else {
             throw Erreur.introuvable(.envoi)
         }
-        return try await attendreReponse(patienceSecondes: patienceSecondes)
+        let reponse = try await attendreReponse(patienceSecondes: patienceSecondes)
+        charger()          // fil neuf pour la prochaine dictée
+        return reponse
     }
 
     /// Attend que la zone de saisie soit là et lisible.
@@ -619,6 +637,9 @@ final class RelaisPage: NSObject {
         for _ in 0..<Int(secondes * 4) {
             if Task.isCancelled { return false }
             try? await Task.sleep(for: .milliseconds(250))
+            // La navigation d'abord : une zone de saisie trouvée pendant le
+            // chargement est celle de la page qu'on est en train de quitter.
+            guard !chargementEnCours else { continue }
             let lu = try? await appeler("return window.__relais.lire(sel);",
                                         ["sel": selecteurs.composeur])
             if lu?["ok"] as? Bool == true { return true }
@@ -802,6 +823,7 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if webView === self.webView { chargementEnCours = false }
         guard webView === self.webView else {
             // Un popup a fini de naviguer : la connexion a pu aboutir dans la
             // fenêtre principale sans qu'elle en soit informée.

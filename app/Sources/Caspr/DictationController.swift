@@ -284,7 +284,19 @@ final class DictationController {
         case .recording:
             relaisTache = Task { await finishRecording() }        // RELAIS —
         case .processing:
-            break  // cycle en cours, on ignore
+            // RELAIS — la touche interrompt l'attente.
+            //
+            // Sur le chemin ordinaire, ignorer est juste : le traitement dure
+            // une seconde, et réappuyer n'est qu'un geste nerveux. Ici il peut
+            // durer des minutes, et il faut une sortie. Échap ne peut pas la
+            // fournir — c'est un raccourci global, une pression dans une autre
+            // application annulerait sans qu'on l'ait voulu, ce qui est
+            // précisément le défaut qu'on vient de corriger.
+            //
+            // La touche de dictée, elle, est un geste délibéré et propre à
+            // Caspr : personne ne la presse par distraction, et celui qui la
+            // presse pendant l'attente veut bien dire qu'il abandonne.
+            if relaisEnCours { cancel() }
         }
     }
 

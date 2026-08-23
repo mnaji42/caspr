@@ -180,6 +180,46 @@ extension RelaisPage {
           return { ok: true };
         },
 
+        // Encadre le texte déjà présent, sans le réécrire.
+        //
+        // C'est le point de conception qui manquait. La transcription est déjà
+        // dans la zone de saisie : la relire, recharger la page, puis la
+        // repousser caractère par caractère avec la consigne devant, c'était
+        // demander à un éditeur ProseMirror d'avaler dix minutes de texte d'un
+        // coup — d'où les à-coups, et un prompt qui apparaissait puis
+        // disparaissait. On n'insère plus que la consigne, aux deux bouts.
+        //
+        // L'insertion passe par la sélection : on la replie sur la fin, on
+        // écrit, on la replie sur le début, on écrit. `insertText` respecte
+        // l'état interne de l'éditeur là où une écriture directe dans le DOM le
+        // désynchronise.
+        encadrer(selecteur, avant, apres) {
+          const el = trouver('composeur', selecteur);
+          if (!el) return { ok: false, raison: 'introuvable' };
+          el.focus();
+          const sel = window.getSelection();
+
+          const placer = (auDebut) => {
+            const r = document.createRange();
+            r.selectNodeContents(el);
+            r.collapse(auDebut);
+            sel.removeAllRanges();
+            sel.addRange(r);
+          };
+
+          try {
+            if (apres) { placer(false); document.execCommand('insertText', false, apres); }
+            if (avant) { placer(true); document.execCommand('insertText', false, avant); }
+          } catch (e) {
+            return { ok: false, raison: String(e) };
+          }
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          // Rendre le focus : le garder ferait de cette page le champ focalisé
+          // du système, et l'insertion au curseur écrirait ici.
+          el.blur();
+          return { ok: true };
+        },
+
         // La **dernière** réponse de la conversation.
         //
         // La dernière et non la première : un fil neuf n'en contient qu'une,

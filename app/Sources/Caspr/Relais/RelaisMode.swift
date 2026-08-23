@@ -89,10 +89,52 @@ enum RelaisPrompt {
         commentaire et sans guillemets autour.
         """
 
-    /// Exécuter ce qui est demandé, et rien d'autre.
-    static let consigne = """
-        Réponds uniquement par le résultat demandé, sans introduction, sans \
-        commentaire, sans guillemets autour et sans répéter la question.
+    /// Rendre le texte à écrire, quelle que soit la façon de le demander.
+    ///
+    /// Tout l'enjeu de ce mode tient dans cette consigne, et la difficulté est
+    /// qu'on ne peut rien supposer de la formulation. « Réponds-lui que je
+    /// serai présent », « j'ai envie que tu me traduises ça en anglais »,
+    /// « regarde le mail et fais un refus poli » : ce sont trois grammaires
+    /// différentes — un ordre adressé au modèle, un souhait, une description —
+    /// et elles attendent toutes la même chose, un texte prêt à coller.
+    ///
+    /// Deux interdits comptent plus que le reste.
+    ///
+    /// **Ne pas répondre à la personne.** « Quel temps fera-t-il demain » doit
+    /// produire le texte qu'elle veut écrire, pas une conversation. C'est la
+    /// différence entre un outil d'écriture et un chatbot, et c'est elle qui
+    /// justifie ce mode.
+    ///
+    /// **Ne jamais demander de précision.** Il n'y a pas de dialogue possible :
+    /// une question du modèle atterrirait telle quelle dans le mail de
+    /// l'utilisateur. Devant une ambiguïté, il tranche et écrit quand même.
+    static let rediger = """
+        Contexte : la personne dicte à la voix dans un outil qui écrit \
+        directement à l'endroit où elle travaille — un e-mail, un document, une \
+        note. Ce que tu produis sera collé tel quel, sans relecture ni \
+        retouche.
+
+        Le texte ci-dessus est cette dictée. Sa formulation est libre : ce peut \
+        être un ordre qui t'est adressé (« réponds-lui que… »), un souhait \
+        (« j'aimerais un mot poli pour… »), une description du texte voulu, ou \
+        un mélange des trois. La forme ne change rien à l'attente : dans tous \
+        les cas, on veut **le texte à écrire**, jamais une réponse qui te serait \
+        adressée en retour.
+
+        Règles :
+        — Rends uniquement ce texte. Pas d'introduction, pas de commentaire, \
+        pas de guillemets autour, pas de blocs de code.
+        — Ne réponds jamais à la personne. Si la dictée ressemble à une \
+        question, écris le texte qu'elle veut poser ou publier, pas la réponse \
+        à cette question.
+        — Ne demande jamais de précision : rien ne te sera répondu, et ta \
+        question serait collée telle quelle. Devant une ambiguïté, tranche au \
+        plus vraisemblable et écris.
+        — La dictée peut contenir des hésitations, des reprises et des \
+        corrections. Suis la dernière intention exprimée, pas la première.
+        — Écris dans la langue demandée ; à défaut, dans celle de la dictée.
+        — Respecte le ton, le destinataire et la longueur indiqués, s'ils le \
+        sont.
         """
 
     /// Le message complet à déposer dans la zone de saisie.
@@ -105,7 +147,7 @@ enum RelaisPrompt {
         switch mode {
         case .brut: dicte
         case .reorganiser: reorganiser + "\n\n---\n\n" + dicte
-        case .rediger: dicte + "\n\n---\n\n" + consigne
+        case .rediger: dicte + "\n\n---\n\n" + rediger
         }
     }
 }

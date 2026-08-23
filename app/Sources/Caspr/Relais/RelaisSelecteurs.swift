@@ -67,6 +67,30 @@ struct RelaisSelecteurs: Codable, Equatable {
     /// Vrai quand l'aller-retour avec ChatGPT est possible.
     var saitDialoguer: Bool { estCalibre && !envoi.isEmpty && !reponse.isEmpty }
 
+    // MARK: - Décodage tolérant aux champs qui n'existaient pas encore
+    //
+    // Le décodage synthétisé par Swift échoue sur une clé absente : il
+    // n'utilise **pas** les valeurs par défaut des propriétés. Ajouter `envoi`
+    // et `reponse` a donc rendu illisibles les calibrages déjà enregistrés, et
+    // tous les utilisateurs ont perdu le leur en installant la mise à jour —
+    // avec, en cascade, le mode relais qui refuse de démarrer et un écran de
+    // réglages annonçant « configuration inachevée » à qui venait de la
+    // terminer.
+    //
+    // `decodeIfPresent` rend chaque champ facultatif. Tout champ ajouté plus
+    // tard doit suivre la même règle, sans exception : la sanction n'est pas
+    // une erreur visible mais un réglage effacé.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        micro = try c.decodeIfPresent(String.self, forKey: .micro) ?? ""
+        stop = try c.decodeIfPresent(String.self, forKey: .stop) ?? ""
+        composeur = try c.decodeIfPresent(String.self, forKey: .composeur) ?? ""
+        envoi = try c.decodeIfPresent(String.self, forKey: .envoi) ?? ""
+        reponse = try c.decodeIfPresent(String.self, forKey: .reponse) ?? ""
+    }
+
+    init() {}
+
     // MARK: - Persistance
 
     private static let cle = "relais.selecteurs"

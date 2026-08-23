@@ -35,6 +35,7 @@ struct RelaisCard<Moteurs: View>: View {
             note: note,
             noteIsWarning: actif && !calibre,
             isOn: Binding(get: { actif }, set: basculer))
+            .onAppear(perform: relire)
 
         if actif {
             Card {
@@ -45,7 +46,7 @@ struct RelaisCard<Moteurs: View>: View {
                      + "dans une conversation — le message n'est jamais expédié.")
                 HStack(spacing: 8) {
                     Button(calibre ? "Recalibrer les boutons…" : "Terminer la configuration…") {
-                        Relais.partage.configurer()
+                        Relais.partage.configurer(relire)
                     }
                     Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
                     Button("Diagnostic…") { Relais.partage.diagnostic() }
@@ -72,7 +73,7 @@ struct RelaisCard<Moteurs: View>: View {
                            + "de faire exister une réponse à désigner.")
                     ButtonRow {
                         Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer la reformulation…") {
-                            Relais.partage.calibrerDialogue { dialogue = Relais.partage.saitDialoguer }
+                            Relais.partage.calibrerDialogue(relire)
                         }
                     }
                 }
@@ -101,6 +102,18 @@ struct RelaisCard<Moteurs: View>: View {
         Task { await Relais.partage.deconnecter() }
     }
 
+    /// Relire l'état à chaque apparition de l'écran.
+    ///
+    /// `@State` ne s'initialise qu'à la création de la vue. Une calibration
+    /// menée depuis un autre chemin — ou avant que cet écran n'existe — la
+    /// laissait donc périmée : les réglages annonçaient « configuration
+    /// inachevée » à quelqu'un qui venait de la terminer.
+    private func relire() {
+        actif = Relais.partage.actif
+        calibre = Relais.partage.estCalibre
+        dialogue = Relais.partage.saitDialoguer
+    }
+
     private var note: String? {
         if actif && !calibre {
             return "Configuration inachevée : la dictée ne partira pas tant que les "
@@ -119,7 +132,7 @@ struct RelaisCard<Moteurs: View>: View {
         Relais.partage.actif = nouveau
         actif = nouveau
         if nouveau, !Relais.partage.estCalibre {
-            Relais.partage.configurer { calibre = Relais.partage.estCalibre }
+            Relais.partage.configurer(relire)
         }
         // Le moteur local s'arrête ou repart selon la bascule : garder trois
         // gigaoctets de poids chargés pour un moteur qu'on ne peut plus appeler

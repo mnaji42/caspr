@@ -98,6 +98,16 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
   `RelaisEngine` plutôt que le moteur configuré, et trois exclusions (collecte,
   gestionnaire de repli, réglages de barre sans objet).
 
+## Une règle à ne jamais oublier
+
+Tout champ ajouté à `RelaisSelecteurs` **doit** être décodé avec
+`decodeIfPresent`. Le décodage synthétisé par Swift échoue sur une clé absente
+— il n'utilise pas les valeurs par défaut des propriétés — et une structure
+enrichie rend d'un coup illisibles tous les calibrages déjà enregistrés. La
+sanction n'est pas une erreur visible : c'est un réglage effacé chez chaque
+utilisateur à la mise à jour, et un écran qui annonce « configuration
+inachevée » à qui vient de la terminer. C'est arrivé en 0.13.0.
+
 ## Les règles tenues
 
 **Rien n'entre dans `CasprCore`.** Un cas `.relais` dans `EngineChoice` aurait

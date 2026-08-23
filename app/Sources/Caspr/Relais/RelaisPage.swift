@@ -28,6 +28,7 @@ final class RelaisPage: NSObject {
         case zoneJamaisRevenue
         case pasConnecte
         case pasDeReponse
+        case consigneNonPosee
         case refusParChatGPT(String)
 
         var errorDescription: String? {
@@ -43,6 +44,8 @@ final class RelaisPage: NSObject {
                 "Pas connecté à ChatGPT. Ouvrez la fenêtre du relais et connectez-vous."
             case .pasDeReponse:
                 "ChatGPT n'a pas répondu. La transcription brute est dans l'historique."
+            case .consigneNonPosee:
+                "La consigne de reformulation n'a pas pu être ajoutée au texte."
             case .refusParChatGPT(let message):
                 "ChatGPT a refusé la dictée : \(message)"
             }
@@ -624,12 +627,44 @@ final class RelaisPage: NSObject {
                                    "apres": encadrement.apres])
         guard r["ok"] as? Bool == true else { throw Erreur.introuvable(.composeur) }
 
+        // Attendre que l'insertion ait pris, et non une demi-seconde décidée
+        // d'avance. L'envoi partait avant que l'éditeur n'ait validé le texte
+        // ajouté : seule la transcription brute était expédiée, sans la
+        // consigne qui lui donne son sens. Un délai fixe marcherait jusqu'au
+        // jour où la machine rame ; une relecture, non.
+        guard await attendreEncadrement(empreinte(encadrement.avant)) else {
+            throw Erreur.consigneNonPosee
+        }
+
         guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, secondes: 10) else {
             throw Erreur.introuvable(.envoi)
         }
         let reponse = try await attendreReponse(patienceSecondes: patienceSecondes)
         charger()          // fil neuf pour la prochaine dictée
         return reponse
+    }
+
+    /// La dernière ligne non vide de la consigne — le délimiteur.
+    ///
+    /// Meilleure empreinte que le début du texte : elle est courte, très
+    /// distinctive, et elle ne souffre pas de la façon dont la page replie les
+    /// espaces d'un long paragraphe.
+    private func empreinte(_ avant: String) -> String {
+        avant.split(separator: "\n").last.map(String.init) ?? avant
+    }
+
+    /// Attend que la consigne soit réellement dans la zone de saisie.
+    private func attendreEncadrement(_ empreinte: String) async -> Bool {
+        guard !empreinte.isEmpty else { return true }
+        for _ in 0..<24 {                                       // jusqu'à 6 s
+            if Task.isCancelled { return false }
+            try? await Task.sleep(for: .milliseconds(250))
+            let lu = try? await appeler("return window.__relais.lire(sel);",
+                                        ["sel": selecteurs.composeur])
+            if let texte = lu?["texte"] as? String, texte.contains(empreinte) { return true }
+        }
+        Log.error("relais : la consigne n'a pas tenu dans la zone de saisie")
+        return false
     }
 
     /// Attend que la zone de saisie soit là et lisible.

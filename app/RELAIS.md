@@ -24,7 +24,26 @@ Tout tient dans `app/Sources/Caspr/Relais/`, un fichier par responsabilité :
 | Fichier | Responsabilité |
 |---|---|
 | `Relais.swift` | La façade et le cycle de vie. Contient aussi `RelaisEngine`, l'adaptateur vers `SpeechEngine`. |
-| `RelaisPage.swift` | La `WKWebView`, sa fenêtre, le micro, les popups de connexion. |
+| `RelaisPage.swift` | La `WKWebView`, ses **deux** fenêtres, le micro, les popups de connexion. |
+
+### Les deux fenêtres
+
+Leurs exigences sont opposées, et une seule fenêtre qui change de costume ne
+peut pas les satisfaire toutes deux.
+
+| | Grande fenêtre | Barre |
+|---|---|---|
+| Sert à | se connecter, calibrer, récupérer un texte | regarder une dictée |
+| Clavier | oui — sans quoi ni saisie ni copier-coller | jamais |
+| Active l'application | oui | jamais |
+| Suit les bureaux | non | oui |
+| Niveau | normal | `.statusBar` |
+
+`.nonactivatingPanel`, nécessaire à la barre, rend le copier-coller impossible
+dans l'autre rôle : cliquer une telle fenêtre n'active pas l'application, et ⌘C
+part vers celle qui l'est. La vue web passe de l'une à l'autre ; elle vit dans
+la barre par défaut, rangée hors champ — jamais retirée de l'écran, le système
+suspendant une fenêtre qu'il croit cachée.
 | `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
 | `RelaisSelecteurs.swift` | Les sélecteurs CSS appris, et leur persistance. |
 | `RelaisCard.swift` | La bascule dans Réglages › Moteur IA. |

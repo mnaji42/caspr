@@ -1,47 +1,25 @@
 import AppKit
 import WebKit
 
-/// La fenêtre du relais, incapable de prendre le clavier hors des moments où
-/// l'utilisateur s'en sert lui-même.
+/// La barre : la fenêtre qui héberge la page hors des moments de réglage.
 ///
-/// Une fenêtre ordinaire peut devenir la fenêtre clé dès qu'un élément
-/// réclame le focus — et le pont en réclame un à chaque dictée, pour vider la
-/// zone de saisie. Le curseur système partait alors dans la page ChatGPT :
-/// l'insertion par accessibilité écrivait dans son composeur au lieu de
-/// l'application de l'utilisateur, et le texte disparaissait sans erreur. La
-/// même bascule expliquait les insertions manquées depuis l'historique.
-final class RelaisFenetre: NSPanel {
-    /// La fenêtre accepte-t-elle le clavier ?
-    ///
-    /// C'est **la** question dont tout dépendait sans qu'on le voie. L'insertion
-    /// par accessibilité vise l'élément focalisé de l'application au premier
-    /// plan. Or le pont focalise la zone de saisie de ChatGPT pour la vider :
-    /// si cette fenêtre peut prendre le clavier, Caspr devient l'application qui
-    /// détient le champ focalisé, et le texte dicté s'écrit dans la page au lieu
-    /// de l'éditeur. L'insertion depuis l'historique tombait dans le même piège,
-    /// non parce qu'elle aurait un lien avec ChatGPT, mais parce qu'elle emprunte
-    /// le même chemin système.
-    ///
-    /// Trois états, trois endroits seulement : `montrer()` l'ouvre pour la
-    /// connexion, la calibration ou la récupération après un échec ;
-    /// `afficherBarre()` et `cacher()` le referment. Le faux est le défaut.
-    var accepteLeClavier = false
-    override var canBecomeKey: Bool { accepteLeClavier }
-    override var canBecomeMain: Bool { accepteLeClavier }
+/// Elle ne prend **jamais** le clavier, et c'est structurel. L'insertion par
+/// accessibilité vise l'élément focalisé de l'application au premier plan ; or
+/// le pont focalise la zone de saisie de ChatGPT pour la vider. Une barre
+/// capable de devenir fenêtre clé ferait donc écrire la dictée dans la page au
+/// lieu de l'éditeur — c'est ce qui est arrivé, et l'insertion depuis
+/// l'historique tombait dans le même piège.
+///
+/// Elle suit les bureaux, pour la raison inverse : sans `canJoinAllSpaces`,
+/// changer d'écran en pleine dictée la laissait derrière, macOS la comptait
+/// alors comme invisible, et WebKit suspendait la page — capture micro
+/// comprise.
+final class BarreRelais: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
 }
 
-/// La page ChatGPT, hébergée par le relais plutôt que par un navigateur.
-///
-/// Piloter le Chrome de l'utilisateur était l'autre option. Elle a été écartée
-/// pour trois raisons concrètes : il faut activer « Autoriser JavaScript depuis
-/// les Apple Events » dans le menu Développement, il faut qu'un onglet ChatGPT
-/// reste ouvert en permanence, et le texte dicté transiterait par la vraie
-/// session de navigation de l'utilisateur — donc dans son historique et dans
-/// ses brouillons. Une WKWebView à nous n'a aucun de ces défauts : session
-/// isolée, fenêtre invisible, rien à configurer dans Chrome.
-///
-/// Le prix : il faut se connecter une fois à ChatGPT dedans. Les cookies sont
-/// persistés par `WKWebsiteDataStore.default()`, donc une seule fois.
+
 @MainActor
 final class RelaisPage: NSObject {
     enum Erreur: LocalizedError {
@@ -74,7 +52,26 @@ final class RelaisPage: NSObject {
     static let accueil = URL(string: "https://chatgpt.com/")!
 
     private var webView: WKWebView!
-    private var fenetre: RelaisFenetre!
+    /// Les deux fenêtres, et pourquoi elles ne peuvent pas n'en faire qu'une.
+    ///
+    /// Leurs exigences sont opposées, point par point. La grande sert à se
+    /// connecter et à calibrer : elle doit prendre le clavier — sans quoi ni
+    /// saisie ni copier-coller — activer l'application, et rester sur le bureau
+    /// où on l'a ouverte. La barre sert à regarder une dictée : elle ne doit
+    /// jamais prendre le clavier, ne jamais activer l'application, et suivre
+    /// les bureaux.
+    ///
+    /// Une seule fenêtre qui changeait de costume ne pouvait pas satisfaire les
+    /// deux. En particulier `.nonactivatingPanel`, nécessaire à la barre, rend
+    /// le copier-coller impossible dans l'autre rôle : cliquer une telle
+    /// fenêtre ne rend pas l'application active, et ⌘C part alors vers celle
+    /// qui l'est.
+    ///
+    /// La vue web passe de l'une à l'autre. Elle vit dans la barre par défaut,
+    /// rangée hors champ quand personne ne dicte — jamais retirée de l'écran,
+    /// puisque le système suspend une fenêtre qu'il croit cachée.
+    private var fenetre: NSWindow!
+    private var barre: BarreRelais!
     private var etiquette: NSTextField!
     /// La rangée de navigation, masquée quand la fenêtre se réduit à sa barre.
     private var barreNav: NSStackView!
@@ -128,25 +125,24 @@ final class RelaisPage: NSObject {
         // Safari. En inventer un attirerait exactement l'attention qu'on ne
         // veut pas.
 
-        fenetre = RelaisFenetre(contentRect: Self.enVue,
-                                styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
-                                backing: .buffered,
-                                defer: false)
+        fenetre = NSWindow(contentRect: Self.enVue,
+                           styleMask: [.titled, .closable, .resizable],
+                           backing: .buffered, defer: false)
         fenetre.title = "Relais — ChatGPT"
-        fenetre.contentView = pileAvecBarre()
         fenetre.isReleasedWhenClosed = false
-        fenetre.hidesOnDeactivate = false
-        // Le même comportement que la barre de Caspr, et pour une raison plus
-        // forte que la symétrie : sans `canJoinAllSpaces`, la fenêtre reste sur
-        // le bureau où elle est née. Changer de bureau la laissait derrière,
-        // macOS la comptait alors comme invisible, et WebKit suspendait la page
-        // — capture micro comprise. ChatGPT répondait « je n'ai pas compris »,
-        // et plus aucun de nos clics n'aboutissait.
-        //
-        // C'est exactement la différence qui faisait que Caspr suivait d'un
-        // écran à l'autre et que le relais non.
-        fenetre.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         fenetre.delegate = self
+        // Pas de `canJoinAllSpaces` ici, délibérément : une fenêtre de réglage
+        // qui suit l'utilisateur d'un bureau à l'autre est une fenêtre dont on
+        // ne se débarrasse pas.
+
+        barre = BarreRelais(contentRect: NSRect(origin: Self.horsChamp, size: Self.tailleBarre),
+                            styleMask: [.borderless, .nonactivatingPanel],
+                            backing: .buffered, defer: false)
+        barre.isReleasedWhenClosed = false
+        barre.hidesOnDeactivate = false
+        barre.level = .statusBar
+        barre.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+
         cacher()
         charger()
     }
@@ -201,40 +197,64 @@ final class RelaisPage: NSObject {
 
     // MARK: - Fenêtre
 
-    /// Montre la fenêtre en grand, et lui rend le clavier — pour se connecter,
-    /// calibrer, ou récupérer à la main un texte qu'on n'a pas su lire.
+    /// La grande fenêtre : se connecter, calibrer, récupérer un texte à la main.
+    ///
+    /// Elle active l'application et devient fenêtre clé, sans quoi ni la saisie
+    /// d'un mot de passe ni le copier-coller ne fonctionnent.
     func montrer() {
-        fenetre.accepteLeClavier = true
-        fenetre.level = .normal
-        barreNav.isHidden = false
-        fenetre.styleMask = [.titled, .closable, .resizable, .nonactivatingPanel]
-        fenetre.title = "Relais — ChatGPT"
-        // La page reprend sa taille et son décor : c'est ici qu'on se connecte,
-        // qu'on calibre, et qu'on récupère un texte à la main.
+        webView.removeFromSuperview()
         webView.pageZoom = 1
         Task { _ = try? await appeler("return window.__relais.compacter(false, sel);",
                                       ["sel": selecteurs.composeur]) }
+        fenetre.contentView = pileAvecBarre()
+        barre.orderOut(nil)
         fenetre.setFrame(Self.enVue, display: true)
         fenetre.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         Task { await rafraichirEtiquette() }
     }
 
-    /// Repousse la fenêtre hors champ sans la retirer de l'écran.
+    /// La barre pendant la dictée : la pastille de ChatGPT, et rien d'autre.
+    ///
+    /// L'afficher règle aussi un défaut ancien : le système diffère les rendus
+    /// d'une fenêtre qu'il croit cachée, ce qui retardait l'apparition du bouton
+    /// d'arrêt et faisait échouer la première dictée de chaque session.
+    func afficherBarre() {
+        rendreLaVueALaBarre()
+        webView.pageZoom = Self.zoomBarre
+        Task { _ = try? await appeler("return window.__relais.compacter(true, sel);",
+                                      ["sel": selecteurs.composeur]) }
+        guard let ecran = NSScreen.main else { return }
+        let cadre = ecran.visibleFrame
+        barre.setFrame(NSRect(x: cadre.midX - Self.tailleBarre.width / 2,
+                              y: cadre.minY + Self.hauteurBarre,
+                              width: Self.tailleBarre.width,
+                              height: Self.tailleBarre.height),
+                       display: true)
+        barre.orderFrontRegardless()
+    }
+
+    /// Range tout : la grande fenêtre disparaît, la barre repart hors champ.
+    ///
+    /// Hors champ, et non retirée de l'écran : le système suspend le JavaScript
+    /// d'une fenêtre qu'il croit cachée, ce qui suffirait à faire échouer
+    /// l'attente d'une transcription.
     func cacher() {
-        fenetre.accepteLeClavier = false
-        fenetre.level = .normal
-        // Rendue à son état complet avant d'être rangée : la prochaine
-        // ouverture en grand part d'une fenêtre normale, pas d'une barre sans
-        // bord qu'il faudrait penser à rhabiller.
-        barreNav.isHidden = false
-        fenetre.styleMask = [.titled, .closable, .resizable, .nonactivatingPanel]
-        fenetre.title = "Relais — ChatGPT"
-        webView.pageZoom = 1
         for annexe in annexes { annexe.close() }
         annexes.removeAll()
-        fenetre.setFrameOrigin(Self.horsChamp)
-        fenetre.orderFrontRegardless()
+        fenetre.orderOut(nil)
+        rendreLaVueALaBarre()
+        barre.setFrameOrigin(Self.horsChamp)
+        barre.orderFrontRegardless()
+    }
+
+    private func rendreLaVueALaBarre() {
+        guard webView.superview !== barre.contentView || barre.contentView !== webView else {
+            return
+        }
+        webView.removeFromSuperview()
+        fenetre.contentView = nil
+        barre.contentView = webView
     }
 
     // MARK: - État de la session
@@ -432,36 +452,6 @@ final class RelaisPage: NSObject {
         return false
     }
 
-    /// La barre : juste assez de page pour voir ChatGPT écouter, posée
-    /// au-dessus de celle de Caspr.
-    ///
-    /// Elle ne prend jamais le clavier — c'est sa raison d'être autant que son
-    /// utilité. Et l'afficher pendant la dictée règle au passage un défaut
-    /// ancien : le système diffère les rendus d'une fenêtre qu'il croit cachée,
-    /// ce qui retardait l'apparition du bouton d'arrêt et faisait échouer la
-    /// première dictée de chaque session.
-    func afficherBarre() {
-        fenetre.accepteLeClavier = false
-        fenetre.level = .statusBar
-        // Ni titre ni navigation : ils servent à se connecter et à se dépanner,
-        // pas à regarder une dictée en cours, et ils faisaient à eux seuls la
-        // moitié de la hauteur.
-        barreNav.isHidden = true
-        fenetre.styleMask = [.borderless, .nonactivatingPanel]
-        webView.pageZoom = Self.zoomBarre
-        Task { _ = try? await appeler("return window.__relais.compacter(true, sel);",
-                                      ["sel": selecteurs.composeur]) }
-        guard let ecran = NSScreen.main else { return }
-        let cadre = ecran.visibleFrame
-        // Juste au-dessus de la barre de Caspr, qui vit à +90 du bas.
-        fenetre.setFrame(NSRect(x: cadre.midX - Self.tailleBarre.width / 2,
-                                y: cadre.minY + Self.hauteurBarre,
-                                width: Self.tailleBarre.width,
-                                height: Self.tailleBarre.height),
-                         display: true)
-        fenetre.orderFrontRegardless()
-    }
-
     /// Ferme tout : la vue, ses fenêtres annexes, et le processus de contenu
     /// qui va avec. C'est lui qui garde le micro de la machine.
     func detruire() {
@@ -475,6 +465,8 @@ final class RelaisPage: NSObject {
         fenetre.delegate = nil
         fenetre.contentView = nil
         fenetre.close()
+        barre.contentView = nil
+        barre.close()
     }
 
     /// Le message d'échec que ChatGPT affiche, s'il y en a un.
@@ -545,6 +537,8 @@ extension RelaisPage: NSWindowDelegate {
     /// une panne d'autant plus déroutante que fermer une fenêtre est le geste
     /// le plus banal qui soit.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // Fermer la fenêtre de réglage la range et rend la vue à la barre ;
+        // elle ne détruit ni la page ni la session.
         if sender === fenetre {
             cacher()
             NSApp.hide(nil)

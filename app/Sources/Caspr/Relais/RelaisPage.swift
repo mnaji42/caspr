@@ -472,20 +472,41 @@ final class RelaisPage: NSObject {
         barre.close()
     }
 
+    /// Le message d'essai de la calibration.
+    ///
+    /// Court et explicite : il part réellement dans la conversation de
+    /// l'utilisateur, et il vaut mieux qu'on comprenne pourquoi en le relisant
+    /// six mois plus tard.
+    static let essai = "Bonjour — message d'essai envoyé par Caspr pour repérer les "
+                     + "boutons de la page. Réponds simplement « c'est noté »."
+
     /// Écrit un message d'essai, pour que le bouton d'envoi apparaisse.
     ///
     /// Il n'existe pas tant que la zone est vide — ChatGPT y met son bouton de
     /// dictée à la place. On ne peut donc pas le désigner sans lui donner une
     /// raison d'être là.
+    ///
+    /// L'écriture est **vérifiée**, et c'est tout l'objet de cette méthode. La
+    /// version précédente écrivait une fois et considérait l'affaire close.
+    /// Or la zone de saisie existe dans le DOM avant que ChatGPT n'en ait
+    /// repris le contrôle : le texte y était bien déposé, puis effacé par le
+    /// rendu qui suivait. L'utilisateur se retrouvait devant une zone vide,
+    /// sans bouton d'envoi à désigner, et sans rien qui explique pourquoi.
     func preparerCalibrationEnvoi() async -> Bool {
         charger()
         guard await attendreComposeur(secondes: 30) else { return false }
-        let r = try? await appeler(
-            "return window.__relais.ecrire(sel, texte);",
-            ["sel": selecteurs.composeur,
-             "texte": "Bonjour — message d'essai envoyé par Caspr pour repérer les "
-                    + "boutons de la page. Réponds simplement « c'est noté »."])
-        return r?["ok"] as? Bool == true
+        for essai in 0..<12 {                                   // jusqu'à 6 s
+            _ = try? await appeler("return window.__relais.ecrire(sel, texte);",
+                                   ["sel": selecteurs.composeur, "texte": Self.essai])
+            try? await Task.sleep(for: .milliseconds(500))
+            let lu = try? await appeler("return window.__relais.lire(sel);",
+                                        ["sel": selecteurs.composeur])
+            if let texte = lu?["texte"] as? String, !texte.isEmpty {
+                if essai > 0 { Log.info("relais : message d'essai écrit au \(essai + 1)e essai") }
+                return true
+            }
+        }
+        return false
     }
 
     /// Envoie un texte et rend la réponse.

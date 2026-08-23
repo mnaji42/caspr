@@ -304,16 +304,25 @@ final class Relais {
                              "Connectez-vous à ChatGPT avant de calibrer l'aller-retour.")
                 return
             }
-            guard await page.preparerCalibrationEnvoi() else {
-                Self.alerter("Relais", "Impossible d'écrire dans la zone de saisie.")
-                return
-            }
-            Self.alerter("Bouton 1 sur 2 — l'envoi", """
+            // Les trois boutons de l'étape 1 ne sont pas redemandés : ils sont
+            // déjà connus, et refaire ce qui est fait n'apprend rien.
+            let ecrit = await page.preparerCalibrationEnvoi()
+            Self.alerter("Bouton 1 sur 2 — l'envoi", ecrit ? """
                 Un message d'essai vient d'être écrit dans la page. Après avoir fermé \
-                ce message, cliquez le bouton d'envoi — la flèche bleue.
+                ce message, cliquez le bouton d'envoi — la flèche bleue, à droite de la \
+                zone de texte.
 
-                Il partira réellement : c'est nécessaire pour que la réponse existe et \
-                qu'on puisse la désigner ensuite.
+                Il partira réellement dans votre conversation : c'est nécessaire pour \
+                qu'une réponse existe et qu'on puisse la désigner à l'étape suivante.
+                """ : """
+                Le message d'essai n'a pas pu être écrit tout seul dans la page.
+
+                Tapez donc n'importe quoi dans la zone de texte — un simple « bonjour » \
+                suffit — puis cliquez le bouton d'envoi, la flèche bleue à droite.
+
+                Le bouton d'envoi n'apparaît qu'une fois la zone remplie : c'est pour \
+                ça qu'il faut écrire quelque chose. Le message partira réellement, afin \
+                qu'une réponse existe et qu'on puisse la désigner ensuite.
                 """)
             do { _ = try await page.calibrer(.envoi) }
             catch { Self.alerter("Relais", error.localizedDescription); return }

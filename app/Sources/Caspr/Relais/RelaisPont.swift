@@ -233,14 +233,37 @@ extension RelaisPage {
             || /^\/(login|log-in)\b/.test(chemin)
             || location.hostname.startsWith('auth.');
 
+          // La preuve de non-connexion, et non la preuve de connexion.
+          //
+          // Le critère était la présence de la zone de saisie, du micro ou du
+          // bouton d'arrêt. Or ChatGPT affiche une zone de saisie **et** un
+          // micro à qui n'est pas connecté : la page d'accueil déconnectée
+          // satisfaisait donc le test, et l'application sautait droit au
+          // calibrage en annonçant « vous êtes connecté » devant un écran qui
+          // proposait « Se connecter ».
+          //
+          // Un bouton de connexion, lui, ne s'affiche jamais une fois la
+          // session ouverte. C'est une preuve négative, et c'est ce qui la rend
+          // fiable : on ne peut pas la confondre avec un état transitoire.
+          const invite = /^(se connecter|connexion|log ?in|sign ?up|s'inscrire|inscription)/i;
+          let deconnecte = false;
+          for (const el of document.querySelectorAll('button, a')) {
+            if (el.getClientRects().length === 0) continue;
+            if (invite.test((el.innerText || '').trim())) { deconnecte = true; break; }
+          }
+
           return {
             ok: true,
             url: location.href,
-            connecte: !auth && (composeur || stop || micro),
+            connecte: !auth && !deconnecte && (composeur || stop || micro),
+            deconnecte,
             // La zone absente *et* l'arrêt présent : la page écoute.
             enregistrement: !composeur && stop,
             composeur,
-            authentification: auth && !composeur,
+            // Sans condition sur la zone de saisie : elle existe aussi pour
+            // qui n'est pas connecté, et l'exiger absente faisait attendre
+            // l'expiration du délai avant de conclure ce qu'on savait déjà.
+            authentification: auth || deconnecte,
           };
         },
 

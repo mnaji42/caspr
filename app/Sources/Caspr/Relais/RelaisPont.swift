@@ -1,0 +1,265 @@
+import Foundation
+
+extension RelaisPage {
+    /// Le pont injecté dans la page.
+    ///
+    /// Il ne fait rien qu'un utilisateur ne ferait à la souris : cliquer deux
+    /// boutons, lire la zone de texte, la vider. Il n'envoie aucun message, ne
+    /// touche à aucune conversation, n'appelle aucun point d'entrée réseau.
+    static let pont = #"""
+    (() => {
+      if (window.__relais) return;
+
+      const esc = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : s;
+
+      // Filet de secours tant que l'utilisateur n'a pas calibré, et rien de
+      // plus : ce sont des paris sur des libellés d'accessibilité, pas un
+      // contrat. Le chemin normal est le sélecteur appris.
+      //
+      // `voice` est volontairement absent de la liste du micro : c'est le
+      // libellé du mode vocal — la pastille bleue — qui ouvre une conversation
+      // parlée au lieu de dicter dans la zone de texte.
+      const HEURISTIQUES = {
+        micro: [
+          '[data-testid="composer-speech-button"]',
+          'button[aria-label*="dict" i]',
+          'button[aria-label*="dicté" i]',
+          'button[aria-label*="micro" i]',
+        ],
+        stop: [
+          '[data-testid="composer-speech-button-stop"]',
+          'button[aria-label*="stop" i]',
+          'button[aria-label*="arrêt" i]',
+          'button[aria-label*="arret" i]',
+          'button[aria-label*="termin" i]',
+        ],
+        composeur: [
+          '#prompt-textarea',
+          'div[contenteditable="true"]',
+          'textarea',
+        ],
+      };
+
+      const visible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
+
+      function trouver(cible, selecteur) {
+        if (selecteur) {
+          try {
+            const el = document.querySelector(selecteur);
+            // Présence, et non visibilité, pour un sélecteur calibré.
+            //
+            // WebKit ne dispose pas la page tant que sa fenêtre n'a jamais été
+            // affichée, et la nôtre naît hors champ : `getClientRects()` rend
+            // alors une liste vide pour des éléments pourtant bien là. Le
+            // bouton micro y survivait — il existe au chargement, donc il a été
+            // disposé une fois — mais le bouton d'arrêt, créé au clic, restait
+            // invisible au sens de cette fonction. D'où l'échec systématique à
+            // la première dictée, et la réussite de toutes les suivantes :
+            // cliquer soi-même le carré affiche la fenêtre, ce qui force la
+            // mise en page pour de bon.
+            //
+            // Un sélecteur calibré désigne un élément que l'utilisateur a
+            // cliqué lui-même : rien ne justifie de lui redemander ses
+            // dimensions.
+            if (el && el.isConnected) return el;
+          } catch (e) { /* sélecteur devenu invalide : on tente les heuristiques */ }
+        }
+        for (const s of (HEURISTIQUES[cible] || [])) {
+          for (const el of document.querySelectorAll(s)) {
+            if (visible(el)) return el;
+          }
+        }
+        return null;
+      }
+
+      // Un sélecteur qui a une chance de survivre au prochain déploiement.
+      // Par ordre de solidité : identifiant, data-testid, aria-label. Le
+      // chemin structurel n'est qu'un dernier recours — il casse au moindre
+      // remaniement, mais recalibrer coûte trois clics.
+      function selecteurStable(el) {
+        if (el.id) return '#' + esc(el.id);
+        const testid = el.getAttribute('data-testid');
+        if (testid) return '[data-testid="' + testid.replace(/"/g, '\\"') + '"]';
+        const aria = el.getAttribute('aria-label');
+        if (aria) return '[aria-label="' + aria.replace(/"/g, '\\"') + '"]';
+
+        const parts = [];
+        let n = el;
+        while (n && n.nodeType === 1 && parts.length < 6) {
+          if (n.id) { parts.unshift('#' + esc(n.id)); break; }
+          let part = n.tagName.toLowerCase();
+          const p = n.parentElement;
+          if (p) {
+            const memes = [...p.children].filter((c) => c.tagName === n.tagName);
+            if (memes.length > 1) part += ':nth-of-type(' + (memes.indexOf(n) + 1) + ')';
+          }
+          parts.unshift(part);
+          n = p;
+        }
+        return parts.join(' > ');
+      }
+
+      window.__relais = {
+        cliquer(cible, selecteur) {
+          const el = trouver(cible, selecteur);
+          if (!el) return { ok: false, raison: 'introuvable' };
+          el.click();
+          return { ok: true };
+        },
+
+        lire(selecteur) {
+          const el = trouver('composeur', selecteur);
+          if (!el) return { ok: false, raison: 'introuvable' };
+          const t = (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')
+            ? el.value : el.innerText;
+          // L'espace insécable vient du rendu, pas de la dictée : le laisser
+          // ferait arriver des U+00A0 dans le code et les terminaux.
+          return { ok: true, texte: (t || '').replace(/ /g, ' ').trim() };
+        },
+
+        vider(selecteur) {
+          const el = trouver('composeur', selecteur);
+          if (!el) return { ok: false, raison: 'introuvable' };
+          el.focus();
+          // Passer par execCommand plutôt qu'écraser textContent : le composeur
+          // est un éditeur ProseMirror, dont l'état interne se désynchronise si
+          // on modifie le DOM dans son dos. Le symptôme serait un brouillon qui
+          // réapparaît à la frappe suivante.
+          let fait = false;
+          try {
+            document.execCommand('selectAll', false, null);
+            fait = document.execCommand('delete', false, null);
+          } catch (e) { fait = false; }
+          if (!fait) {
+            if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') el.value = '';
+            else el.textContent = '';
+          }
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          // Rendre le focus. Le prendre était nécessaire — ProseMirror ne se
+          // vide pas autrement — mais le garder faisait de cette page le champ
+          // focalisé du système, et la dictée s'écrivait ici au lieu de
+          // l'éditeur de l'utilisateur.
+          el.blur();
+          return { ok: true };
+        },
+
+        // L'erreur que ChatGPT affiche lui-même.
+        //
+        // Sans la lire, un échec annoncé en toutes lettres dans la page se
+        // traduisait par une attente muette de plusieurs minutes, la barre
+        // bloquée sur « Transcription… », sans autre issue que de quitter
+        // l'application.
+        //
+        // On vise `role="alert"`, qui est un rôle d'accessibilité normalisé et
+        // non une classe générée, et on se rabat sur le texte pour les langues
+        // où il ne serait pas posé.
+        erreur() {
+          const motifs = /n'a pas compris|pas compris|didn.t catch|try again|réessayer/i;
+          // Le motif s'applique aussi aux `role="alert"`, et c'est le point.
+          // Accepter n'importe quelle alerte visible faisait prendre pour un
+          // échec de dictée la bannière « Limite d'utilisation hebdomadaire
+          // bientôt atteinte », qui porte le même rôle et reste affichée des
+          // jours durant : chaque dictée aurait été interrompue.
+          for (const el of document.querySelectorAll('[role="alert"]')) {
+            const t = (el.innerText || '').trim();
+            if (t && motifs.test(t) && el.getClientRects().length > 0) {
+              return { ok: true, message: t };
+            }
+          }
+          for (const el of document.querySelectorAll('div, span, p')) {
+            const t = (el.innerText || '').trim();
+            if (t && t.length < 120 && motifs.test(t) && el.getClientRects().length > 0) {
+              return { ok: true, message: t };
+            }
+          }
+          return { ok: true, message: '' };
+        },
+
+        // Réduire la page à sa seule pastille d'enregistrement.
+        //
+        // La barre ne doit montrer que ce qui se passe : ChatGPT écoute, puis
+        // transcrit. Tout le reste — la colonne des conversations, l'en-tête,
+        // les suggestions sous le champ — n'a rien à y faire et prenait
+        // l'essentiel de la place.
+        //
+        // Les sélecteurs sont des noms de balises, pas des classes : celles de
+        // ChatGPT sont générées et changent à chaque déploiement, `nav` et
+        // `header` non. Un décor qui résisterait au masquage serait laid, pas
+        // cassé — c'est la dégradation qu'on veut.
+        compacter(actif, selecteur) {
+          const ID = 'relais-compact';
+          document.getElementById(ID)?.remove();
+          if (!actif) return { ok: true };
+          const style = document.createElement('style');
+          style.id = ID;
+          style.textContent = `
+            nav, aside, header { display: none !important; }
+            main { padding: 0 !important; }
+            form { margin: 0 !important; }
+            body { overflow: hidden !important; }
+          `;
+          document.head.appendChild(style);
+          const el = trouver('composeur', selecteur);
+          // La pastille remplace la zone de saisie pendant l'écoute : on vise
+          // le bloc qui les porte l'une et l'autre, pour que le cadrage tienne
+          // dans les deux états.
+          const bloc = el ? (el.closest('form') || el.parentElement || el) : null;
+          if (bloc) bloc.scrollIntoView({ block: 'center' });
+          return { ok: true };
+        },
+
+        // Connecté ou non, et enregistrement en cours ou non.
+        //
+        // Le point qui avait été manqué : pendant la dictée, ChatGPT retire la
+        // zone de saisie du DOM et la remplace par la barre d'onde. Se fier à
+        // sa seule présence faisait donc conclure « déconnecté » exactement
+        // pendant qu'on dictait.
+        //
+        // Le critère est donc élargi : on est dans l'application dès qu'un de
+        // ses éléments est là — zone de saisie, micro, ou bouton d'arrêt —
+        // et qu'on n'est pas sur un écran d'authentification. Un cookie serait
+        // plus direct mais son nom est un détail d'implémentation d'OpenAI,
+        // qui n'a rien promis à personne à son sujet.
+        etat(selMicro, selStop) {
+          const zone = document.querySelector(
+            '#prompt-textarea, div[contenteditable="true"]'
+          );
+          const composeur = !!zone && zone.getClientRects().length > 0;
+          const stop = !!trouver('stop', selStop);
+          const micro = !!trouver('micro', selMicro);
+
+          const chemin = location.pathname || '';
+          const auth = /^\/auth\b/.test(chemin)
+            || /^\/(login|log-in)\b/.test(chemin)
+            || location.hostname.startsWith('auth.');
+
+          return {
+            ok: true,
+            url: location.href,
+            connecte: !auth && (composeur || stop || micro),
+            // La zone absente *et* l'arrêt présent : la page écoute.
+            enregistrement: !composeur && stop,
+            composeur,
+            authentification: auth && !composeur,
+          };
+        },
+
+        // Le clic n'est pas intercepté : il atteint la page. Sans quoi
+        // désigner le bouton d'arrêt serait impossible, puisqu'il n'existe
+        // qu'une fois l'enregistrement démarré.
+        calibrer() {
+          return new Promise((resolve) => {
+            const surClic = (ev) => {
+              document.removeEventListener('click', surClic, true);
+              const el = ev.target.closest(
+                'button, [role="button"], [contenteditable="true"], textarea, input'
+              ) || ev.target;
+              resolve({ ok: true, selecteur: selecteurStable(el) });
+            };
+            document.addEventListener('click', surClic, true);
+          });
+        },
+      };
+    })();
+    """#
+}

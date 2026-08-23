@@ -211,7 +211,15 @@ private struct UninstallView: View {
                 Button("Annuler", action: onCancel)
                     .keyboardShortcut(.cancelAction)
                 Button(scope.removesApp ? "Désinstaller" : "Retirer") {
-                    report = Uninstall.perform(selected, removingApp: scope.removesApp)
+                    // RELAIS — la session ChatGPT s'efface par l'API de
+                    // WebKit, avant le balayage des fichiers : c'est la seule
+                    // voie qu'Apple garantisse, et elle demande d'attendre.
+                    Task {
+                        if selected.contains(.settings) {
+                            await Relais.partage.deconnecter()
+                        }
+                        report = Uninstall.perform(selected, removingApp: scope.removesApp)
+                    }
                 }
                     .buttonStyle(.borderedProminent)
                     // Rouge, et non l'ambre de la collecte : « ceci est

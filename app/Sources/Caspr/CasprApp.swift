@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // local ne tourne que s'il écrit ou s'il est coché dans une collecte
         // active. Réconcilié au lancement, puis à chaque changement.
         EngineService.reconcile(needed: prefs.needsLocalEngine)
+        Relais.partage.prechauffer()          // RELAIS —
         // Le service met jusqu'à une minute à lire ses poids, pendant lesquelles
         // la dictée part sur macOS sans que rien ne le dise.
         engineNotice.openSettings = { [weak self] in self?.openPreferences() }

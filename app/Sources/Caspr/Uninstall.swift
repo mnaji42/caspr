@@ -270,6 +270,22 @@ enum Uninstall {
          home.appending(path: "Library/Caches/\(bundleIdentifier)"),
          home.appending(path: "Library/HTTPStorages/\(bundleIdentifier)")]
     }
+    /// RELAIS — la session ChatGPT du relais.
+    ///
+    /// WebKit range les cookies d'une `WKWebView` sous l'identifiant de bundle,
+    /// hors du bundle lui-même : retirer l'application laissait donc derrière
+    /// elle une session **connectée** au compte de l'utilisateur. C'est
+    /// précisément ce que ce désinstalleur existe pour éviter, et ça ne se
+    /// voyait nulle part — le dossier ne porte pas le mot « Caspr » et aucun
+    /// écran ne le mentionne.
+    ///
+    /// Retirée avec les réglages plutôt que sous un élément à elle : c'est de
+    /// l'état applicatif, et lui donner sa propre case exposerait dans le
+    /// désinstalleur une fonctionnalité qui doit rester facile à retrancher.
+    private static var relaisSession: URL {
+        home.appending(path: "Library/WebKit/\(bundleIdentifier)")
+    }
+
     private static var launchAgent: URL {
         home.appending(path: "Library/LaunchAgents/\(serviceLabel).plist")
     }
@@ -293,7 +309,17 @@ enum Uninstall {
         switch item {
         case .settings:
             let entries = TranscriptionHistory.storedCount
-            return entries > 0 ? "\(entries) transcription(s) récente(s)" : "réglages seuls"
+            let base = entries > 0 ? "\(entries) transcription(s) récente(s)" : "réglages seuls"
+            // RELAIS — la session est dite, pas seulement retirée.
+            //
+            // Elle partait déjà avec les réglages, mais en silence : personne
+            // ne devine qu'une case « Réglages et historique » décide aussi
+            // d'une session ouverte sur un service tiers. Or c'est
+            // l'information qui compte le plus dans cet écran — laisser
+            // derrière soi un compte connecté est précisément ce qu'on vient y
+            // éviter, et une suppression qu'on ne voit pas ne rassure personne.
+            guard FileManager.default.fileExists(atPath: relaisSession.path) else { return base }
+            return base + ", session ChatGPT connectée"
         case .permissions:
             return Permissions.allGranted ? "accordées" : "partiellement accordées"
         case .service:
@@ -408,6 +434,17 @@ enum Uninstall {
         // Après le corpus : les réglages disent où il se trouvait.
         if items.contains(.settings) {
             report.append(trash(preferencesFile, "réglages et historique"))
+            // RELAIS — la session ChatGPT part avec les réglages.
+            //
+            // L'effacement par l'API de WebKit a déjà eu lieu, avant l'appel
+            // (cf. `UninstallWindow`) : le magasin d'une WKWebsiteDataStore n'a
+            // pas d'emplacement contractuel, une partie vit dans des processus
+            // annexes, et supprimer les fichiers sous un WebKit encore vivant
+            // laisse la session revenir. Ce balayage-ci ne ramasse que ce qui
+            // pourrait rester derrière.
+            if FileManager.default.fileExists(atPath: relaisSession.path) {
+                report.append(trash(relaisSession, "session ChatGPT du relais"))
+            }
             // Le démon de préférences en garde une copie en mémoire et
             // réécrirait le fichier qu'on vient de retirer.
             runTool("/usr/bin/killall", ["cfprefsd"])

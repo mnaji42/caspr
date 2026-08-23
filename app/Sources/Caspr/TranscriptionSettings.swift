@@ -24,7 +24,10 @@ import SwiftUI
 /// onglet choisit le moteur, celui-là choisit la langue.
 struct TranscriptionSettings: View {
     var body: some View {
-        FinalEngineCard()
+        // RELAIS — la carte enveloppe la liste des moteurs, dont elle décide
+        // l'affichage : les deux s'excluent à l'écran comme en fonctionnement.
+        // Retrait : remplacer cette ligne par `FinalEngineCard()`.
+        RelaisCard { FinalEngineCard() }
         // Le même constat qu'ailleurs, à l'endroit où on le provoque : changer
         // de moteur, arrêter le service ou retirer des poids fait basculer la
         // dictée sur autre chose que ce qui est coché, et c'est ici que ça se

@@ -597,6 +597,11 @@ final class Preferences {
     /// chargé « au cas où » : il faut qu'il écrive, ou qu'il soit coché dans
     /// une collecte réellement active.
     var needsLocalEngine: Bool {
+        // RELAIS — corrigé ici plutôt qu'aux appelants : trois changements de
+        // réglages relancent le service via cette propriété, et il n'a rien à
+        // charger tant que ChatGPT écrit. Un oubli sur l'un des trois aurait
+        // remis trois gigaoctets en mémoire pour un moteur inatteignable.
+        if Relais.partage.actif { return false }
         if engine.isLocalService { return true }
         return corpusEnabled && corpusEngines.contains(where: \.isLocalService)
     }

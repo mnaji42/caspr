@@ -196,8 +196,29 @@ final class DictationController {
     }
 
     /// État courant de la barre.
+    ///
+    /// RELAIS — trois réglages n'ont aucun sens quand la dictée passe par
+    /// ChatGPT, et les afficher quand même laisse croire qu'ils agissent : les
+    /// modes appartiennent à CrisperWhisper, la langue est détectée par le
+    /// service lui-même, et rien n'est collecté. Le badge de langue sert alors
+    /// à nommer le moteur réellement à l'œuvre — sans quoi la barre est
+    /// indiscernable d'une dictée ordinaire.
     private var overlayStatus: RecordingOverlay.Status {
-        RecordingOverlay.Status(
+        if relaisEnCours {
+            return RecordingOverlay.Status(
+                mode: mode,
+                target: target,
+                noteName: noteFile?.lastPathComponent,
+                canPickNote: state != .recording,
+                previewEnabled: Preferences.shared.livePreviewEnabled,
+                modesAvailable: false,
+                corpusEnabled: false,
+                corpusKeepsAudio: false,
+                languageBadge: "ChatGPT",
+                switchableLanguages: [],
+                languageCode: Preferences.shared.primaryLanguage)
+        }
+        return RecordingOverlay.Status(
             mode: mode,
             target: target,
             noteName: noteFile?.lastPathComponent,
@@ -223,19 +244,63 @@ final class DictationController {
     }
 
     /// Appelé par le raccourci global : démarre ou termine la dictée.
+    // RELAIS — vrai quand le cycle en cours passe par ChatGPT plutôt que par
+    // le moteur choisi. Positionné à l'appui, lu jusqu'à la livraison : le
+    // geste d'arrêt n'a pas à redire par où l'on était parti.
+    private var relaisEnCours = false
+    // RELAIS — début de la dictée, faute d'enregistrement pour en déduire la
+    // durée. Elle sert à dimensionner l'attente de la transcription.
+    private var relaisDebut = Date()
+    // RELAIS — le cycle en cours, retenu pour qu'Échap puisse l'interrompre.
+    // L'attente d'une transcription ChatGPT dure des minutes : sans prise
+    // dessus, la barre restait sur « Transcription… » sans autre issue que de
+    // quitter l'application.
+    private var relaisTache: Task<Void, Never>?
+
     func toggle() {
         switch state {
         case .idle, .failed:
+            // RELAIS — c'est le mode qui décide, pas la touche : les deux
+            // s'excluent, et il n'y a qu'un seul déclencheur.
+            relaisEnCours = Relais.partage.actif
+            guard !relaisEnCours || Relais.partage.estCalibre else {
+                state = .failed("ChatGPT Web Preview est actif mais pas configuré — "
+                                + "voir Réglages › Moteur IA.")
+                return
+            }
             Task { await startRecording() }
         case .recording:
-            Task { await finishRecording() }
+            relaisTache = Task { await finishRecording() }        // RELAIS —
         case .processing:
             break  // cycle en cours, on ignore
         }
     }
 
     func cancel() {
+        // RELAIS — deux différences avec le chemin ordinaire, et la seconde
+        // avait été manquée.
+        //
+        // L'annulation vaut d'abord pendant l'attente de la transcription, qui
+        // n'a pas de fin prévisible — c'est même là qu'elle sert le plus.
+        //
+        // Et surtout, dans les deux états, il faut arrêter la page et refermer
+        // sa barre. Le chemin ordinaire ne connaît que le magnétophone de
+        // Caspr : Échap pendant l'enregistrement rendait donc la main, mais
+        // laissait ChatGPT écouter derrière une barre restée à l'écran.
+        if relaisEnCours, state == .recording || state == .processing {
+            relaisTache?.cancel()
+            relaisTache = nil
+            relaisEnCours = false
+            releaseEscape()
+            Task { await Relais.partage.interrompre() }
+            overlay.hide()
+            Feedback.cancelled()
+            state = .idle
+            return
+        }
         guard state == .recording else { return }
+        if relaisEnCours { Task { await Relais.partage.annuler() } }   // RELAIS —
+        relaisEnCours = false                                          // RELAIS —
         recorder.cancel()
         stopPreview()
         releaseEscape()
@@ -270,7 +335,28 @@ final class DictationController {
             return
         }
         do {
-            try recorder.start()
+            // RELAIS — Caspr n'enregistre pas pendant une dictée relais.
+            //
+            // Il l'a fait, et c'était nuisible sans être utile. Sans utilité,
+            // parce que la transcription vient du micro ouvert par la page :
+            // l'audio capté ici n'aurait servi qu'à l'aperçu en direct. Et
+            // nuisible, parce que les deux captures ne cohabitent pas — mesuré
+            // au niveau crête, 0.000 sur toutes les dictées dès qu'une page
+            // ChatGPT existe. Ne pas ouvrir le micro du tout est la seule façon
+            // de garantir que la dictée principale reste intacte.
+            //
+            // L'aperçu en direct est donc impossible ici, et c'est définitif :
+            // il faudrait un second flux micro, celui-là même qui casse tout.
+            if relaisEnCours {
+                relaisDebut = Date()
+                // La barre s'ouvre avant l'écoute : on voit ChatGPT démarrer,
+                // et la page, enfin à l'écran, cesse d'être différée par le
+                // système.
+                Relais.partage.afficherBarre()
+                try await Relais.partage.demarrer()
+            } else {
+                try recorder.start()
+            }
             Log.info("enregistrement démarré")
             captureEscape()
             // Une collecte encore en cours cède la place : le moteur ne traite
@@ -283,7 +369,11 @@ final class DictationController {
             // qu'un sélecteur serait impossible, et lit l'état pour le savoir.
             state = .recording
             overlay.showRecording(overlayStatus)
-            startPreview()
+            if relaisEnCours {                                     // RELAIS —
+                overlay.setPreviewNotice("ChatGPT transcrit à la fin de la dictée")
+            } else {
+                startPreview()
+            }
             Feedback.recordingStarted()
         } catch {
             state = .failed(error.localizedDescription)
@@ -291,6 +381,19 @@ final class DictationController {
     }
 
     private func finishRecording() async {
+        // RELAIS — rien n'a été enregistré de notre côté : ni durée minimale à
+        // vérifier, ni audio à conserver pour un « Réessayer » qui n'aurait
+        // rien à rejouer. La page a le son, elle seule.
+        if relaisEnCours {
+            // Échap reste armé, contrairement au chemin ordinaire : là, le
+            // traitement dure une seconde, ici il peut durer trois minutes.
+            Feedback.recordingStopped()
+            overlay.showProcessing()
+            Log.info("fin de dictée relais : "
+                     + "\(String(format: "%.1f", Date().timeIntervalSince(relaisDebut))) s")
+            await transcribeAndInject([])
+            return
+        }
         let samples = recorder.stop()
         stopPreview()
         releaseEscape()
@@ -298,7 +401,14 @@ final class DictationController {
         overlay.showProcessing()
 
         let seconds = Double(samples.count) / AudioRecorder.targetSampleRate
-        Log.info("fin d'enregistrement : \(String(format: "%.1f", seconds)) s capturées, moteur \(Preferences.shared.engine.rawValue)")
+        // Le niveau crête, et pas seulement la durée. Un compte
+        // d'échantillons ne dit pas si l'on a enregistré du son ou du silence,
+        // et les deux pannes ne se réparent pas au même endroit : un micro
+        // muet se voit ici, une transcription vide se voit plus loin.
+        let crete = samples.reduce(Float(0)) { max($0, abs($1)) }
+        Log.info("fin d'enregistrement : \(String(format: "%.1f", seconds)) s capturées, "
+                 + "crête \(String(format: "%.3f", crete)), "
+                 + "moteur \(Preferences.shared.engine.rawValue)")
 
         // Un appui-relâché trop bref ne contient rien d'exploitable ; inutile
         // de réveiller le moteur. Un vrai VAD reste à faire (cf. README).
@@ -321,8 +431,13 @@ final class DictationController {
     private func transcribeAndInject(_ samples: [Float]) async {
         state = .processing
         let used = mode
+        // RELAIS — le relais se conforme au protocole des moteurs, donc tout ce
+        // qui suit (insertion, historique, échecs, barre) marche sans le savoir.
+        let parRelais = relaisEnCours
+        defer { relaisEnCours = false }
+        let moteur: any SpeechEngine = parRelais ? RelaisEngine() : writer
         do {
-            let result = try await writer.transcribe(
+            let result = try await moteur.transcribe(
                 TranscriptionRequest(samples: samples, mode: used,
                                      language: language, lexicon: lexicon))
 
@@ -363,7 +478,18 @@ final class DictationController {
                         outcome: .empty)
                 return
             }
+            if parRelais {                                     // RELAIS —
+                releaseEscape()
+                Relais.partage.masquerBarre()
+            }
             overlay.hide()
+            // L'application au premier plan au moment d'insérer. L'insertion
+            // par accessibilité vise l'élément focalisé de cette
+            // application-là : si c'est Caspr, le texte part dans une de nos
+            // propres fenêtres et disparaît sans qu'aucune erreur ne soit
+            // levée. C'était indiagnosticable de l'extérieur.
+            let devant = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
+            Log.info("insertion vers \(devant)")
             try await deliver(text)
             history.add(text, mode: used)
             pendingAudio = nil
@@ -374,30 +500,61 @@ final class DictationController {
             // preuve est l'insertion réussie, pas la disponibilité annoncée —
             // un moteur qui répond « disponible » peut encore échouer à la
             // première phrase.
-            EngineSafetyManager.shared.confirmWorking(writerChoice)
+            // RELAIS — le repli ne doit rien apprendre d'un moteur qui n'est
+            // pas un choix de l'utilisateur, et le corpus ne collecte pas ce
+            // qu'un service tiers a transcrit.
+            if !parRelais { EngineSafetyManager.shared.confirmWorking(writerChoice) }
             Log.info("transcrit en \(Int(result.latency.wallMs)) ms, \(text.count) caractères")
             state = .idle
             // Après l'insertion, jamais avant : la collecte ne doit rien
             // coûter au temps que l'utilisateur attend.
-            collect(samples: samples, primary: result, mode: used,
-                    outcome: .inserted)
+            if !parRelais {                                        // RELAIS —
+                collect(samples: samples, primary: result, mode: used,
+                        outcome: .inserted)
+            }
+        } catch is CancellationError {                             // RELAIS —
+            releaseEscape()
+            return
         } catch {
-            pendingAudio = samples
-            pendingPreview = previewText
+            // RELAIS — pas d'audio conservé : il n'y en a pas. « Réessayer »
+            // rejouerait un enregistrement vide sur une page qui est passée à
+            // autre chose, donc échouerait à coup sûr. Proposer un recours qui
+            // ne peut pas marcher est pire que de n'en proposer aucun : le
+            // texte, lui, est resté dans la fenêtre du relais, et c'est ce
+            // qu'il faut aller chercher.
+            if !parRelais {
+                pendingAudio = samples
+                pendingPreview = previewText
+            }
             let minutes = Double(samples.count) / AudioRecorder.targetSampleRate / 60
-            Log.error("échec de transcription : \(error.localizedDescription) — \(String(format: "%.1f", minutes)) min conservées")
+            Log.error("échec de transcription : \(error.localizedDescription)"
+                      + (parRelais ? "" : " — \(String(format: "%.1f", minutes)) min conservées"))
             // Dit là où l'utilisateur regarde. La barre des menus recevait déjà
             // le détail, mais on ne consulte pas un menu qu'on n'a pas de
             // raison d'ouvrir : sans ça, un échec se lit comme « je m'y suis
             // mal pris ».
             overlay.showFailure(Self.shortReason(for: error),
                                 hint: Self.rescueHint(preview: previewText))
-            state = .failed("\(error.localizedDescription) — audio conservé, « Réessayer » dans le menu.")
+            state = .failed(parRelais
+                ? "\(error.localizedDescription) — le texte est peut-être encore "
+                  + "dans la fenêtre du relais."
+                : "\(error.localizedDescription) — audio conservé, « Réessayer » dans le menu.")
             // Les autres moteurs tournent quand même : savoir que macOS a
             // écrit la phrase pendant que CrisperWhisper échouait est
             // exactement ce qu'on vient chercher dans le corpus.
-            collect(samples: samples, primary: nil, mode: used,
-                    outcome: .failed, failure: error.localizedDescription)
+            // RELAIS — la barre reste, et s'agrandit : quand la lecture
+            // échoue, le texte est encore dans la page, et c'est le seul moyen
+            // de le récupérer. Elle redevient donc utilisable au clavier, pour
+            // qu'un ⌘C y soit possible. Rien n'est rechargé, et rien ne se
+            // collera à la dictée suivante — celle-ci vide la zone avant
+            // d'écouter.
+            if parRelais {
+                releaseEscape()
+                Relais.partage.ouvrirFenetre()
+            } else {
+                collect(samples: samples, primary: nil, mode: used,
+                        outcome: .failed, failure: error.localizedDescription)
+            }
         }
     }
 
@@ -688,12 +845,19 @@ final class DictationController {
         guard let made = SpeechPreview.make(
             using: Preferences.shared.liveEngineTechnology, for: language,
             onText: { [weak self] text in
+                guard let self else { return }
+                if previewText.isEmpty, !text.isEmpty {
+                    Log.info("aperçu : premier texte reçu")
+                }
                 // Retenu pour la collecte : c'est la transcription d'un moteur
                 // de macOS sur exactement le même audio.
-                self?.previewText = text
-                self?.overlay.setPreviewText(text)
+                self.previewText = text
+                self.overlay.setPreviewText(text)
             },
-            onFailure: { [weak self] reason in self?.overlay.setPreviewNotice(reason) })
+            onFailure: { [weak self] reason in
+                Log.error("aperçu indisponible : \(reason)")
+                self?.overlay.setPreviewNotice(reason)
+            })
         else {
             overlay.setPreviewNotice("aperçu indisponible sur cette machine")
             return

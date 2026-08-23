@@ -18,6 +18,9 @@ final class EngineStartupNoticeController {
     /// À appeler au lancement, une fois les réglages appliqués.
     func showIfNeeded() {
         let prefs = Preferences.shared
+        // RELAIS — le service local n'est pas démarré quand ChatGPT écrit, donc
+        // annoncer son chargement promet une attente qui ne finira jamais.
+        guard !Relais.partage.actif else { return }
         guard prefs.finalEngine.isLocalService,
               EngineInstall.selectedModel.isDownloaded,
               !EngineService.isAnswering,

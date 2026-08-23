@@ -154,7 +154,7 @@ final class Relais {
     /// tout redire, et ce n'est pas ici qu'elle commencerait. La raison part
     /// dans le journal, et la conversation reste ouverte dans la fenêtre du
     /// relais pour qu'on puisse voir ce qui s'est passé.
-    func transformer(_ brut: String, mode: RelaisMode) async -> String {
+    func transformer(_ brut: String, mode: RelaisMode) async throws -> String {
         guard mode.demandeUnAllerRetour, saitDialoguer, !brut.isEmpty else { return brut }
         // La patience suit la longueur du texte : une page se réorganise en
         // quelques secondes, dix minutes de monologue demandent bien plus.
@@ -170,6 +170,10 @@ final class Relais {
             }
             Log.info("relais : \(mode.rawValue) — \(brut.count) → \(texte.count) caractères")
             return texte
+        } catch is CancellationError {
+            // Annuler veut dire annuler. Rendre le brut ici insérerait un texte
+            // dont on vient de demander l'abandon.
+            throw CancellationError()
         } catch {
             Log.error("relais : \(mode.rawValue) a échoué (\(error.localizedDescription)) "
                       + "— transcription brute conservée")
@@ -447,7 +451,7 @@ struct RelaisEngine: SpeechEngine {
         texte = try await Relais.partage.arreterEtLire(secondesDictees: secondes)
         // La seconde passe, quand le mode la demande. Elle rend le brut si
         // elle échoue : rien de ce qui a été dit ne se perd.
-        let rendu = await Relais.partage.transformer(texte, mode: RelaisMode.courant)
+        let rendu = try await Relais.partage.transformer(texte, mode: RelaisMode.courant)
         let ms = Date().timeIntervalSince(debut) * 1000
         return TranscriptionResult(
             text: rendu,

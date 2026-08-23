@@ -397,8 +397,20 @@ final class DictationController {
         // vérifier, ni audio à conserver pour un « Réessayer » qui n'aurait
         // rien à rejouer. La page a le son, elle seule.
         if relaisEnCours {
-            // Échap reste armé, contrairement au chemin ordinaire : là, le
-            // traitement dure une seconde, ici il peut durer trois minutes.
+            // Échap est rendu, contrairement à ce qui avait été fait ici.
+            //
+            // Le raisonnement de départ était juste — l'attente peut durer des
+            // minutes, il faut pouvoir en sortir — mais la conclusion était
+            // fausse. Échap est un raccourci **global** : il répond quelle que
+            // soit l'application au premier plan. Le garder armé une minute
+            // pendant que quelqu'un travaille ailleurs, c'est faire d'une
+            // touche parmi les plus pressées du clavier une annulation
+            // silencieuse. Mesuré : deux réorganisations annulées coup sur
+            // coup, sans que personne n'ait voulu annuler quoi que ce soit.
+            //
+            // La sortie de secours reste la croix de la barre, qui demande un
+            // clic délibéré au bon endroit.
+            releaseEscape()
             Feedback.recordingStopped()
             overlay.showProcessing()
             Log.info("fin de dictée relais : "

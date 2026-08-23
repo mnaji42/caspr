@@ -25,6 +25,7 @@ struct RelaisCard<Moteurs: View>: View {
 
     @State private var actif = Relais.partage.actif
     @State private var calibre = Relais.partage.estCalibre
+    @State private var dialogue = Relais.partage.saitDialoguer
 
     var body: some View {
         SettingsToggleRow(
@@ -51,6 +52,30 @@ struct RelaisCard<Moteurs: View>: View {
                     Button("Se déconnecter…") { deconnecter() }
                 }
                 .buttonStyle(CasprSecondaryButtonStyle())
+            }
+
+            if calibre {
+                Card {
+                    Text("Reformulation par ChatGPT")
+                        .font(.system(size: 13, weight: .semibold))
+                    Note(dialogue
+                         ? "Le mode « Au propre » renvoie ce que vous venez de dicter à "
+                           + "ChatGPT pour qu'il le remette en ordre : les hésitations, les "
+                           + "redites et les faux départs disparaissent, les idées restent "
+                           + "toutes. Il se choisit sur la barre de dictée, à côté de "
+                           + "« Brut ».\n\nComptez une trentaine de secondes de plus, et "
+                           + "sachez que le texte part alors dans votre historique ChatGPT — "
+                           + "ce qui n'est jamais le cas en mode « Brut »."
+                         : "Deux boutons de plus à montrer — l'envoi et la réponse — et vous "
+                           + "pourrez faire réorganiser vos dictées par ChatGPT. La "
+                           + "calibration enverra un message d'essai : c'est le seul moyen "
+                           + "de faire exister une réponse à désigner.")
+                    ButtonRow {
+                        Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer la reformulation…") {
+                            Relais.partage.calibrerDialogue { dialogue = Relais.partage.saitDialoguer }
+                        }
+                    }
+                }
             }
         } else {
             // Les moteurs de Caspr n'apparaissent qu'à l'extinction. Les

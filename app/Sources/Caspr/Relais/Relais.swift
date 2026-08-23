@@ -72,6 +72,8 @@ final class Relais {
     }
 
     var estCalibre: Bool { RelaisSelecteurs.charger().estCalibre }
+    /// Les deux sélecteurs supplémentaires de l'aller-retour sont-ils connus ?
+    var saitDialoguer: Bool { RelaisSelecteurs.charger().saitDialoguer }
 
     /// Charge la page au lancement quand le mode est déjà actif.
     ///
@@ -142,6 +144,37 @@ final class Relais {
         await WKWebsiteDataStore.default().removeData(ofTypes: types,
                                                       modifiedSince: .distantPast)
         Log.info("relais : session ChatGPT effacée")
+    }
+
+    /// Renvoie le texte à ChatGPT et rend ce qu'il répond.
+    ///
+    /// **En cas d'échec, la transcription brute est rendue telle quelle.** Une
+    /// dictée de dix minutes ne doit pas se perdre parce que la seconde passe
+    /// n'a pas abouti : cette application s'interdit partout ailleurs de faire
+    /// tout redire, et ce n'est pas ici qu'elle commencerait. La raison part
+    /// dans le journal, et la conversation reste ouverte dans la fenêtre du
+    /// relais pour qu'on puisse voir ce qui s'est passé.
+    func transformer(_ brut: String, mode: RelaisMode) async -> String {
+        guard mode.demandeUnAllerRetour, saitDialoguer, !brut.isEmpty else { return brut }
+        // La patience suit la longueur du texte : une page se réorganise en
+        // quelques secondes, dix minutes de monologue demandent bien plus.
+        // Trois minutes de plancher, une seconde par vingt caractères.
+        let patience = max(180.0, Double(brut.count) / 20)
+        do {
+            let texte = try await pageActive()
+                .demanderA(RelaisPrompt.envelopper(brut, mode: mode),
+                           patienceSecondes: patience)
+            guard !texte.isEmpty else {
+                Log.error("relais : réponse vide, transcription brute conservée")
+                return brut
+            }
+            Log.info("relais : \(mode.rawValue) — \(brut.count) → \(texte.count) caractères")
+            return texte
+        } catch {
+            Log.error("relais : \(mode.rawValue) a échoué (\(error.localizedDescription)) "
+                      + "— transcription brute conservée")
+            return brut
+        }
     }
 
     // MARK: - Réglages
@@ -252,6 +285,56 @@ final class Relais {
                      + "« ChatGPT Web Preview » dans Réglages › Moteur IA.")
     }
 
+    /// Calibre les deux boutons de l'aller-retour, en deux temps guidés.
+    ///
+    /// Ils n'existent qu'après coup : le bouton d'envoi tant que la zone est
+    /// vide, la réponse tant que rien n'a été envoyé. La calibration les fait
+    /// donc apparaître — elle écrit un message d'essai, puis attend la réponse.
+    /// C'est plus long que trois clics, et c'est pourquoi elle n'est demandée
+    /// qu'à qui choisit un mode qui en a besoin.
+    func calibrerDialogue(_ termine: (() -> Void)? = nil) {
+        guard !configurationEnCours else { ouvrirFenetre(); termine?(); return }
+        configurationEnCours = true
+        let page = pageActive()
+        page.montrer()
+        Task {
+            defer { configurationEnCours = false; termine?() }
+            guard await page.etatConnexion() == .connecte else {
+                Self.alerter("Pas connecté",
+                             "Connectez-vous à ChatGPT avant de calibrer l'aller-retour.")
+                return
+            }
+            guard await page.preparerCalibrationEnvoi() else {
+                Self.alerter("Relais", "Impossible d'écrire dans la zone de saisie.")
+                return
+            }
+            Self.alerter("Bouton 1 sur 2 — l'envoi", """
+                Un message d'essai vient d'être écrit dans la page. Après avoir fermé \
+                ce message, cliquez le bouton d'envoi — la flèche bleue.
+
+                Il partira réellement : c'est nécessaire pour que la réponse existe et \
+                qu'on puisse la désigner ensuite.
+                """)
+            do { _ = try await page.calibrer(.envoi) }
+            catch { Self.alerter("Relais", error.localizedDescription); return }
+
+            Self.alerter("Bouton 2 sur 2 — la réponse", """
+                Attendez que ChatGPT ait fini de répondre, puis cliquez sur sa réponse.
+
+                Sur le texte lui-même, pas sur les icônes en dessous.
+                """)
+            do { _ = try await page.calibrer(.reponse) }
+            catch { Self.alerter("Relais", error.localizedDescription); return }
+
+            page.charger()
+            page.cacher()
+            NSApp.hide(nil)
+            Self.alerter("C'est prêt",
+                         "Le mode « Au propre » est utilisable. Il se choisit sur la "
+                         + "barre de dictée, à côté de « Brut ».")
+        }
+    }
+
     /// Ce que le relais voit de la page, en clair.
     ///
     /// Quand un clic ne prend pas, la seule question utile est « sur quoi
@@ -320,9 +403,12 @@ struct RelaisEngine: SpeechEngine {
         // bien lui rendre le micro. Les deux modes s'excluant désormais, plus
         // personne ne le lui dispute, et le raccourci redevient instantané.
         texte = try await Relais.partage.arreterEtLire(secondesDictees: secondes)
+        // La seconde passe, quand le mode la demande. Elle rend le brut si
+        // elle échoue : rien de ce qui a été dit ne se perd.
+        let rendu = await Relais.partage.transformer(texte, mode: RelaisMode.courant)
         let ms = Date().timeIntervalSince(debut) * 1000
         return TranscriptionResult(
-            text: texte,
+            text: rendu,
             mode: request.mode,
             windowSeconds: secondes,
             truncated: false,

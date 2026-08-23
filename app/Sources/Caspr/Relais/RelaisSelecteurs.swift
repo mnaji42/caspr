@@ -2,13 +2,15 @@ import Foundation
 
 /// Les trois éléments de la page ChatGPT dont le relais a besoin.
 enum RelaisCible: String, CaseIterable, Codable {
-    case micro, stop, composeur
+    case micro, stop, composeur, envoi, reponse
 
     var libelle: String {
         switch self {
         case .micro:     "le bouton micro"
         case .stop:      "le bouton d'arrêt (le carré, pas la flèche bleue)"
         case .composeur: "la zone de texte"
+        case .envoi:     "le bouton d'envoi (la flèche bleue)"
+        case .reponse:   "la réponse de ChatGPT"
         }
     }
 }
@@ -30,6 +32,12 @@ struct RelaisSelecteurs: Codable, Equatable {
     var micro = ""
     var stop = ""
     var composeur = ""
+    /// Les deux suivants ne servent qu'aux modes qui renvoient le texte à
+    /// ChatGPT. Ils sont calibrés à part, la première fois qu'on en a besoin :
+    /// imposer cinq clics à qui ne veut que transcrire serait payer d'avance
+    /// pour une fonctionnalité qu'on n'utilisera peut-être jamais.
+    var envoi = ""
+    var reponse = ""
 
     subscript(cible: RelaisCible) -> String {
         get {
@@ -37,6 +45,8 @@ struct RelaisSelecteurs: Codable, Equatable {
             case .micro: micro
             case .stop: stop
             case .composeur: composeur
+            case .envoi: envoi
+            case .reponse: reponse
             }
         }
         set {
@@ -44,6 +54,8 @@ struct RelaisSelecteurs: Codable, Equatable {
             case .micro: micro = newValue
             case .stop: stop = newValue
             case .composeur: composeur = newValue
+            case .envoi: envoi = newValue
+            case .reponse: reponse = newValue
             }
         }
     }
@@ -51,6 +63,9 @@ struct RelaisSelecteurs: Codable, Equatable {
     /// Vrai quand l'utilisateur a calibré au moins le micro et l'arrêt — les
     /// deux que les heuristiques ont le plus de mal à deviner.
     var estCalibre: Bool { !micro.isEmpty && !stop.isEmpty }
+
+    /// Vrai quand l'aller-retour avec ChatGPT est possible.
+    var saitDialoguer: Bool { estCalibre && !envoi.isEmpty && !reponse.isEmpty }
 
     // MARK: - Persistance
 

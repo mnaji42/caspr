@@ -55,6 +55,14 @@ final class RecordingOverlay {
         /// remontera. Le repli est un filet, pas un mode nominal ; c'est le
         /// bandeau des Réglages qui l'annonce, pas la barre.
         var modesAvailable: Bool = true
+        // RELAIS — libellés de rechange pour la pastille des modes.
+        //
+        // Le relais n'a ni « Texte nettoyé » ni « Mot à mot » : ces deux-là
+        // appartiennent à CrisperWhisper. Il a ses propres modes, et la
+        // pastille est l'endroit où on les choisit — au moment de parler, pas
+        // dans un écran de réglages qu'on n'ouvrira pas pour une phrase.
+        var modeLabels: [String]? = nil
+        var modeIndex: Int = 0
         var corpusEnabled: Bool
         var corpusKeepsAudio: Bool
         /// La langue en cours, « 🇫🇷 FR ».
@@ -131,6 +139,10 @@ final class RecordingOverlay {
 
     var levelProvider: (() -> Float)?
     var onSelectMode: ((TranscriptionMode) -> Void)?
+    /// RELAIS — appelé à la place du précédent quand `modeLabels` est posé.
+    var onSelectModeIndex: ((Int) -> Void)?
+    /// RELAIS — vrai quand la pastille porte les modes du relais.
+    private var modeLabelsActifs: Bool { status.modeLabels != nil }
     var onSelectTarget: ((Bool) -> Void)?
     var onSelectLanguage: ((String) -> Void)?
 
@@ -416,7 +428,15 @@ final class RecordingOverlay {
     func update(_ status: Status) {
         self.status = status
 
-        modeControl.select(TranscriptionMode.allCases.firstIndex(of: status.mode) ?? 0)
+        // RELAIS — les libellés de rechange l'emportent sur les modes de
+        // transcription, et pilotent aussi l'index sélectionné.
+        if let libelles = status.modeLabels {
+            modeControl.setLabels(libelles)
+            modeControl.select(min(status.modeIndex, max(libelles.count - 1, 0)))
+        } else {
+            modeControl.setLabels(TranscriptionMode.allCases.map(\.label))
+            modeControl.select(TranscriptionMode.allCases.firstIndex(of: status.mode) ?? 0)
+        }
         languageBadge.stringValue = status.languageBadge
 
         // Trois pastilles au plus, et la langue en cours toujours parmi
@@ -976,9 +996,17 @@ final class RecordingOverlay {
         corpusBadge.action = #selector(toggleCorpus)
 
         modeControl.onSelect = { [weak self] index in
+            guard let self else { return }
+            // RELAIS — des libellés de rechange veulent dire d'autres modes :
+            // traduire l'index en `TranscriptionMode` désignerait alors un
+            // réglage qui n'a rien à voir avec ce qui est écrit sur la pastille.
+            if modeLabelsActifs {
+                onSelectModeIndex?(index)
+                return
+            }
             let modes = TranscriptionMode.allCases
             guard modes.indices.contains(index) else { return }
-            self?.onSelectMode?(modes[index])
+            onSelectMode?(modes[index])
         }
         targetControl.onSelect = { [weak self] index in
             self?.onSelectTarget?(index == 1)

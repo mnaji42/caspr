@@ -47,6 +47,25 @@ suspendant une fenêtre qu'il croit cachée.
 | `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
 | `RelaisSelecteurs.swift` | Les sélecteurs CSS appris, et leur persistance. |
 | `RelaisCard.swift` | La bascule dans Réglages › Moteur IA. |
+| `RelaisMode.swift` | Les modes de dictée et l'emballage des prompts. |
+
+### Les modes
+
+Ce qui les sépare n'est pas la quantité de traitement, mais **le rôle que joue
+la parole**.
+
+| Mode | Ta voix est… | Envoyé à ChatGPT |
+|---|---|---|
+| **Brut** | le texte lui-même | rien |
+| **Au propre** | la matière à remettre en ordre | oui |
+| **Consigne** | l'instruction à exécuter, écran joint | pas encore construit |
+
+La consigne se **dit**, elle ne se configure pas : « traduis ça en anglais » ne
+tient pas dans un réglage. Caspr n'ajoute qu'un emballage, dont le seul rôle
+est d'obtenir un résultat utilisable sans « Bien sûr ! Voici… » devant.
+
+Une transformation qui échoue rend la **transcription brute**. Une dictée de
+dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
 
 ## Les points d'accroche
 
@@ -71,6 +90,9 @@ suspendant une fenêtre qu'il croit cachée.
   `~/Library/WebKit/<bundle>`, et **dit** dans la liste qu'une session ChatGPT
   est connectée. Sans cette mention, une case nommée « Réglages et historique »
   décidait en silence d'une session ouverte sur un service tiers.
+- **`RecordingOverlay.swift`** — la pastille des modes accepte des libellés de
+  rechange. Le relais n'a ni « Texte nettoyé » ni « Mot à mot », et le choix se
+  fait au moment de parler, pas dans un écran de réglages.
 - **`DictationController.swift`** — l'essentiel : un drapeau posé au début du
   cycle, une branche qui n'ouvre pas le micro, une autre qui choisit
   `RelaisEngine` plutôt que le moteur configuré, et trois exclusions (collecte,

@@ -27,6 +27,7 @@ final class RelaisPage: NSObject {
         case pasDeTexte
         case zoneJamaisRevenue
         case pasConnecte
+        case pasDeReponse
         case refusParChatGPT(String)
 
         var errorDescription: String? {
@@ -40,6 +41,8 @@ final class RelaisPage: NSObject {
                 + "encore dans la fenêtre du relais — rien n'a été rechargé."
             case .pasConnecte:
                 "Pas connecté à ChatGPT. Ouvrez la fenêtre du relais et connectez-vous."
+            case .pasDeReponse:
+                "ChatGPT n'a pas répondu. La transcription brute est dans l'historique."
             case .refusParChatGPT(let message):
                 "ChatGPT a refusé la dictée : \(message)"
             }
@@ -467,6 +470,86 @@ final class RelaisPage: NSObject {
         fenetre.close()
         barre.contentView = nil
         barre.close()
+    }
+
+    /// Écrit un message d'essai, pour que le bouton d'envoi apparaisse.
+    ///
+    /// Il n'existe pas tant que la zone est vide — ChatGPT y met son bouton de
+    /// dictée à la place. On ne peut donc pas le désigner sans lui donner une
+    /// raison d'être là.
+    func preparerCalibrationEnvoi() async -> Bool {
+        charger()
+        guard await attendreComposeur(secondes: 30) else { return false }
+        let r = try? await appeler(
+            "return window.__relais.ecrire(sel, texte);",
+            ["sel": selecteurs.composeur,
+             "texte": "Bonjour — message d'essai envoyé par Caspr pour repérer les "
+                    + "boutons de la page. Réponds simplement « c'est noté »."])
+        return r?["ok"] as? Bool == true
+    }
+
+    /// Envoie un texte et rend la réponse.
+    ///
+    /// Un fil neuf à chaque fois, par rechargement de la page plutôt que par un
+    /// clic sur « Nouveau chat ». Deux raisons : c'est un sélecteur de moins à
+    /// calibrer, et le rechargement garantit un état propre là où un bouton
+    /// laisse ce que la page avait en tête. Sans fil neuf, la note d'avant
+    /// oriente la suivante — on demanderait une réorganisation et on
+    /// obtiendrait une réponse tenant compte d'un monologue d'il y a une heure.
+    func demanderA(_ texte: String, patienceSecondes: Double) async throws -> String {
+        charger()
+        guard await attendreComposeur(secondes: 30) else { throw Erreur.zoneJamaisRevenue }
+
+        let ecrit = try await appeler("return window.__relais.ecrire(sel, texte);",
+                                      ["sel": selecteurs.composeur, "texte": texte])
+        guard ecrit["ok"] as? Bool == true else { throw Erreur.introuvable(.composeur) }
+
+        guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, secondes: 10) else {
+            throw Erreur.introuvable(.envoi)
+        }
+        return try await attendreReponse(patienceSecondes: patienceSecondes)
+    }
+
+    /// Attend que la zone de saisie soit là et lisible.
+    private func attendreComposeur(secondes: Double) async -> Bool {
+        for _ in 0..<Int(secondes * 4) {
+            if Task.isCancelled { return false }
+            try? await Task.sleep(for: .milliseconds(250))
+            let lu = try? await appeler("return window.__relais.lire(sel);",
+                                        ["sel": selecteurs.composeur])
+            if lu?["ok"] as? Bool == true { return true }
+        }
+        return false
+    }
+
+    /// Attend que la réponse apparaisse, puis cesse de grandir.
+    ///
+    /// ChatGPT écrit par flux : le texte s'allonge mot à mot. On attend donc
+    /// deux secondes et demie sans changement, et non une — les pauses entre
+    /// deux fragments d'une longue réponse dépassent régulièrement la seconde,
+    /// et un seuil trop court rendrait un texte coupé au milieu, ce qui est
+    /// pire que pas de texte du tout : rien ne signale la coupure.
+    private func attendreReponse(patienceSecondes: Double) async throws -> String {
+        var precedent = ""
+        var stable = 0
+        for tour in 0..<Int(patienceSecondes * 4) {
+            try Task.checkCancellation()
+            try? await Task.sleep(for: .milliseconds(250))
+            let lu = try? await appeler("return window.__relais.lireReponse(sel);",
+                                        ["sel": selecteurs.reponse])
+            let texte = (lu?["texte"] as? String) ?? ""
+            if !texte.isEmpty && texte == precedent {
+                stable += 1
+                if stable >= 10 { return texte }          // ~2,5 s sans changement
+            } else {
+                stable = 0
+            }
+            precedent = texte
+            if tour % 8 == 7, let message = await erreurAffichee() {
+                throw Erreur.refusParChatGPT(message)
+            }
+        }
+        throw Erreur.pasDeReponse
     }
 
     /// Le message d'échec que ChatGPT affiche, s'il y en a un.

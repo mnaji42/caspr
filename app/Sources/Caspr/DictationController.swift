@@ -156,6 +156,12 @@ final class DictationController {
         self.legacyEngine = LegacySpeechEngine()
         overlay.levelProvider = { [weak self] in self?.recorder.level ?? 0 }
         overlay.onCancel = { [weak self] in self?.cancel() }
+        // RELAIS — le choix se fait sur la barre, au moment de parler.
+        overlay.onSelectModeIndex = { [weak self] index in
+            guard let self, RelaisMode.proposes.indices.contains(index) else { return }
+            RelaisMode.courant = RelaisMode.proposes[index]
+            refreshOverlay()
+        }
         overlay.onSelectMode = { [weak self] mode in
             guard let self else { return }
             self.mode = mode
@@ -205,13 +211,19 @@ final class DictationController {
     /// indiscernable d'une dictée ordinaire.
     private var overlayStatus: RecordingOverlay.Status {
         if relaisEnCours {
+            // La pastille porte les modes du relais dès que l'aller-retour
+            // est calibré. Sans lui, un seul mode est possible : proposer un
+            // choix qui échouerait vaut moins que ne rien proposer.
+            let modes = Relais.partage.saitDialoguer ? RelaisMode.proposes : []
             return RecordingOverlay.Status(
                 mode: mode,
                 target: target,
                 noteName: noteFile?.lastPathComponent,
                 canPickNote: state != .recording,
                 previewEnabled: Preferences.shared.livePreviewEnabled,
-                modesAvailable: false,
+                modesAvailable: !modes.isEmpty,
+                modeLabels: modes.isEmpty ? nil : modes.map(\.libelle),
+                modeIndex: modes.firstIndex(of: RelaisMode.courant) ?? 0,
                 corpusEnabled: false,
                 corpusKeepsAudio: false,
                 languageBadge: "ChatGPT",

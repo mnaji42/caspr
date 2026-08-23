@@ -38,6 +38,15 @@ extension RelaisPage {
           'div[contenteditable="true"]',
           'textarea',
         ],
+        envoi: [
+          '[data-testid="send-button"]',
+          'button[aria-label*="envoy" i]',
+          'button[aria-label*="send" i]',
+        ],
+        reponse: [
+          '[data-message-author-role="assistant"]',
+          'article',
+        ],
       };
 
       const visible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
@@ -141,6 +150,57 @@ extension RelaisPage {
           // l'éditeur de l'utilisateur.
           el.blur();
           return { ok: true };
+        },
+
+        // Dépose un texte dans la zone de saisie, en remplaçant ce qui s'y
+        // trouve.
+        //
+        // `insertText` et non une écriture directe dans le DOM : le composeur
+        // est un éditeur ProseMirror, dont l'état interne se désynchronise si
+        // on le modifie dans son dos — le message partirait vide. Les retours
+        // à la ligne du texte n'envoient rien : seule une frappe sur Entrée le
+        // ferait, et on ne la simule pas.
+        ecrire(selecteur, texte) {
+          const el = trouver('composeur', selecteur);
+          if (!el) return { ok: false, raison: 'introuvable' };
+          el.focus();
+          let fait = false;
+          try {
+            document.execCommand('selectAll', false, null);
+            fait = document.execCommand('insertText', false, texte);
+          } catch (e) { fait = false; }
+          if (!fait) {
+            if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') el.value = texte;
+            else el.textContent = texte;
+          }
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          // Rendre le focus : le garder ferait de cette page le champ focalisé
+          // du système, et l'insertion au curseur écrirait ici.
+          el.blur();
+          return { ok: true };
+        },
+
+        // La **dernière** réponse de la conversation.
+        //
+        // La dernière et non la première : un fil neuf n'en contient qu'une,
+        // mais rien ne garantit qu'un rechargement ait abouti, et lire la
+        // première rendrait alors la réponse d'avant sans que rien ne le
+        // signale.
+        lireReponse(selecteur) {
+          let elements = [];
+          if (selecteur) {
+            try { elements = [...document.querySelectorAll(selecteur)]; } catch (e) {}
+          }
+          if (!elements.length) {
+            for (const s of HEURISTIQUES.reponse) {
+              elements = [...document.querySelectorAll(s)];
+              if (elements.length) break;
+            }
+          }
+          const visibles = elements.filter((el) => el.getClientRects().length > 0);
+          if (!visibles.length) return { ok: false, raison: 'introuvable' };
+          const t = visibles[visibles.length - 1].innerText || '';
+          return { ok: true, texte: t.replace(/ /g, ' ').trim() };
         },
 
         // L'erreur que ChatGPT affiche lui-même.

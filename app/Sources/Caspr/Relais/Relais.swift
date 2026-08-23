@@ -339,7 +339,7 @@ final class Relais {
             page.cacher()
             NSApp.hide(nil)
             Self.alerter("C'est prêt",
-                         "Le mode « Au propre » est utilisable. Il se choisit sur la "
+                         "Le mode « Réorganiser » est utilisable. Il se choisit sur la "
                          + "barre de dictée, à côté de « Brut ».")
         }
     }

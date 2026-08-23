@@ -10,17 +10,16 @@ import Foundation
 enum RelaisMode: String, CaseIterable, Codable {
     /// La transcription, telle quelle. Rien n'est envoyé à ChatGPT.
     case brut
-    /// La transcription est renvoyée à ChatGPT pour être réorganisée.
-    case auPropre
-    /// La transcription est une instruction. Réservé au mode avec capture
-    /// d'écran, pas encore construit.
-    case consigne
+    /// La transcription est renvoyée à ChatGPT pour être remise en ordre.
+    case reorganiser
+    /// La parole est la commande d'un texte à produire. Pas encore construit.
+    case rediger
 
     var libelle: String {
         switch self {
         case .brut: "Brut"
-        case .auPropre: "Au propre"
-        case .consigne: "Consigne"
+        case .reorganiser: "Réorganiser"
+        case .rediger: "Rédiger"
         }
     }
 
@@ -32,15 +31,27 @@ enum RelaisMode: String, CaseIterable, Codable {
     private static let cle = "relais.mode"
 
     static var courant: RelaisMode {
-        get { RelaisMode(rawValue: UserDefaults.standard.string(forKey: cle) ?? "") ?? .brut }
+        get {
+            let brut = UserDefaults.standard.string(forKey: cle) ?? ""
+            // Les anciens noms sont traduits plutôt qu'ignorés. Un `rawValue`
+            // qui change et un repli silencieux sur `.brut`, c'est le réglage
+            // de l'utilisateur qui disparaît à la mise à jour — la même faute
+            // que celle qui a effacé les calibrages en 0.13.0, sous une autre
+            // forme.
+            switch brut {
+            case "auPropre": return .reorganiser
+            case "consigne": return .rediger
+            default: return RelaisMode(rawValue: brut) ?? .brut
+            }
+        }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: cle) }
     }
 
     /// Les modes réellement proposés.
     ///
-    /// `consigne` en est absent tant que la capture d'écran n'existe pas :
-    /// afficher un choix qui ne fait rien est pire que de ne pas le proposer.
-    static var proposes: [RelaisMode] { [.brut, .auPropre] }
+    /// `rediger` en est absent tant qu'il n'est pas construit : afficher un
+    /// choix qui ne fait rien est pire que de ne pas le proposer.
+    static var proposes: [RelaisMode] { [.brut, .reorganiser] }
 }
 
 /// L'emballage que Caspr ajoute autour de ce qui a été dicté.
@@ -58,7 +69,7 @@ enum RelaisPrompt {
     /// tourne autour d'une idée pendant dix minutes veut la retrouver
     /// entière et lisible, pas en trois lignes. Ce qui disparaît, ce sont les
     /// hésitations et les redites — jamais le contenu.
-    static let auPropre = """
+    static let reorganiser = """
         Voici la transcription d'une personne qui réfléchit à voix haute.
 
         Réorganise-la en un texte clair et lisible :
@@ -86,15 +97,15 @@ enum RelaisPrompt {
 
     /// Le message complet à déposer dans la zone de saisie.
     ///
-    /// L'emballage vient **avant** le texte pour `auPropre` : la consigne doit
+    /// L'emballage vient **avant** le texte pour `reorganiser` : la consigne doit
     /// être lue avant la matière, sans quoi un long monologue la noie. Il vient
-    /// **après** pour `consigne`, où le texte est l'instruction et où le rappel
+    /// **après** pour `rediger`, où le texte est l'instruction et où le rappel
     /// de format se place naturellement en dernier.
     static func envelopper(_ dicte: String, mode: RelaisMode) -> String {
         switch mode {
         case .brut: dicte
-        case .auPropre: auPropre + "\n\n---\n\n" + dicte
-        case .consigne: dicte + "\n\n---\n\n" + consigne
+        case .reorganiser: reorganiser + "\n\n---\n\n" + dicte
+        case .rediger: dicte + "\n\n---\n\n" + consigne
         }
     }
 }

@@ -57,8 +57,13 @@ la parole**.
 | Mode | Ta voix est… | Envoyé à ChatGPT |
 |---|---|---|
 | **Brut** | le texte lui-même | rien |
-| **Au propre** | la matière à remettre en ordre | oui |
-| **Consigne** | l'instruction à exécuter, écran joint | pas encore construit |
+| **Réorganiser** | la matière à remettre en ordre | oui |
+| **Rédiger** | la commande d'un texte à produire | pas encore construit |
+
+Les trois sont des façons d'**écrire** : ce qui sort est toujours le texte
+qu'on voulait, jamais une réponse de conversation. Le screenshot n'est pas un
+quatrième mode mais une option de « Rédiger », qui apparaîtra sur une pastille
+à part quand ce mode existera.
 
 La consigne se **dit**, elle ne se configure pas : « traduis ça en anglais » ne
 tient pas dans un réglage. Caspr n'ajoute qu'un emballage, dont le seul rôle

@@ -64,7 +64,7 @@ struct RelaisCard<Moteurs: View>: View {
             }
 
             etape(numero: 2,
-                  titre: "Au propre — réorganiser ce qui a été dit",
+                  titre: "Réorganiser — remettre en ordre ce qui a été dit",
                   faite: dialogue,
                   disponible: calibre,
                   explication: dialogue
@@ -77,7 +77,7 @@ struct RelaisCard<Moteurs: View>: View {
                     : "Deux boutons de plus à montrer : l'envoi, et la réponse. La "
                       + "calibration enverra un message d'essai — c'est le seul moyen de "
                       + "faire exister une réponse à désigner.") {
-                Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer « Au propre »…") {
+                Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer « Réorganiser »…") {
                     Relais.partage.calibrerDialogue(relire)
                 }
             }

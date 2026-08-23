@@ -57,6 +57,7 @@ enum RelaisCatalogue {
         identifiant: "reorganiser", nom: "Réorganiser", integre: true,
         avant: RelaisPrompt.reorganiser + "\n\n=== DÉBUT DE LA TRANSCRIPTION ===\n",
         apres: "\n=== FIN DE LA TRANSCRIPTION ===",
+        consigneEssentielle: true,
         actions: [.demanderUneReponse],
         sorties: [.curseur, .note], sortieParDefaut: .curseur,
         affichage: .barre)
@@ -93,8 +94,17 @@ enum RelaisCatalogue {
               let enregistres = try? JSONDecoder().decode([RelaisModule].self, from: data),
               !enregistres.isEmpty
         else { return livres }
+        // Un module livré garde sa définition et reprend les réglages qu'on lui
+        // a faits ; un module écrit par l'utilisateur est repris tel quel ; un
+        // module livré absent de l'enregistrement est ajouté.
+        let parIdentifiant = Dictionary(uniqueKeysWithValues:
+            livres.map { ($0.identifiant, $0) })
+        let fusionnes = enregistres.map { enregistre in
+            parIdentifiant[enregistre.identifiant]?.avecLesReglagesDe(enregistre)
+                ?? enregistre
+        }
         let connus = Set(enregistres.map(\.identifiant))
-        return enregistres + livres.filter { !connus.contains($0.identifiant) }
+        return fusionnes + livres.filter { !connus.contains($0.identifiant) }
     }
 
     static func enregistrer(_ modules: [RelaisModule]) {

@@ -66,7 +66,7 @@ enum RelaisCapacite: String, CaseIterable, Codable {
         // Les deux dernières ne sont pas encore construites. Rendre `false`
         // n'est pas un oubli : c'est ce qui empêche un module qui les
         // réclamerait d'apparaître sur la barre avant qu'elles existent.
-        case .direAHauteVoix: false
+        case .direAHauteVoix: s.saitLire
         case .capturerEcran: false
         }
     }
@@ -103,8 +103,8 @@ enum RelaisAction: String, CaseIterable, Codable {
     var libelle: String {
         switch self {
         case .joindreEcran: "Joindre l'écran"
-        case .demanderUneReponse: "Demander une réponse"
-        case .direLaReponse: "Lire la réponse à haute voix"
+        case .demanderUneReponse: "Envoyer à ChatGPT"
+        case .direLaReponse: "Faire lire la réponse"
         }
     }
 

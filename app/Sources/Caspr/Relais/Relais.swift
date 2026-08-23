@@ -1,5 +1,6 @@
 import AppKit
 import CasprCore
+import SwiftUI
 import WebKit
 
 /// Le relais : dicter par le transcripteur de ChatGPT, sur la touche de dictée
@@ -29,7 +30,7 @@ import WebKit
 /// 3. **Rien n'est construit tant que ce n'est pas activé.** La WKWebView et la
 ///    session ChatGPT n'existent pas pour qui n'a jamais coché la case.
 @MainActor
-final class Relais {
+final class Relais: ObservableObject {
     static let partage = Relais()
 
     private static let cleActif = "relais.actif"
@@ -58,8 +59,77 @@ final class Relais {
         }
     }
 
-    /// Vrai pendant le parcours de configuration, pour ne pas en lancer deux.
-    private var configurationEnCours = false
+    /// Ce que le relais est en train de faire — la seule source de vérité.
+    ///
+    /// Deux flux pilotent la même page : la dictée et la calibration. Rien ne
+    /// les empêchait de tourner ensemble, et c'était une bombe à retardement.
+    /// Appuyer sur la touche de dictée pendant une calibration lançait un cycle
+    /// qui cliquait le micro par programme — et le guetteur de la calibration
+    /// interceptait ce clic-là, prenant la commande de Caspr pour un geste de
+    /// l'utilisateur. Tout ce qui suivait était faux.
+    ///
+    /// Une occupation unique, consultée aux quelques endroits qui commencent
+    /// quelque chose, vaut mieux qu'une forêt de conditions dispersées : elle
+    /// dit *ce qui a lieu*, et chaque action en déduit si elle a le droit de
+    /// commencer.
+    enum Occupation: Equatable {
+        case libre
+        case calibration
+        case dictee
+
+        var raison: String? {
+            switch self {
+            case .libre: nil
+            case .calibration: "Une calibration est en cours."
+            case .dictee: "Une dictée est en cours."
+            }
+        }
+    }
+
+    /// Publiée, pour que l'écran de réglages ne montre jamais un état périmé.
+    ///
+    /// Il lisait l'occupation une fois, à sa création, et gardait ce qu'il avait
+    /// vu : le message « une dictée est en cours » restait affiché après la fin
+    /// de la dictée, et seul un aller-retour vers un autre onglet le remettait
+    /// d'aplomb. C'est la troisième fois que cet écran affiche un état figé —
+    /// le publier supprime la classe entière plutôt que le symptôme.
+    @Published private(set) var occupation: Occupation = .libre
+
+    /// Marque le début d'une dictée, ou refuse si la place est prise.
+    func prendreLaMainPourDictee() -> Bool {
+        guard occupation == .libre else { return false }
+        occupation = .dictee
+        return true
+    }
+
+    /// Rend la main à la fin d'un cycle de dictée, quelle qu'en soit l'issue.
+    func rendreLaMain() {
+        guard occupation == .dictee else { return }
+        occupation = .libre
+    }
+
+    /// Le parcours de calibration en cours, retenu pour pouvoir y renoncer.
+    ///
+    /// Un drapeau ne suffisait pas : fermer la fenêtre en pleine calibration
+    /// laissait la tâche attendre un clic qui ne viendrait jamais, le drapeau
+    /// restait levé, et plus rien ne repartait jusqu'au redémarrage de
+    /// l'application. Une étape d'accueil doit toujours pouvoir être
+    /// abandonnée — c'est même là qu'on en a le plus besoin.
+    private var calibration: Task<Void, Never>?
+    var calibrationEnCours: Bool { occupation == .calibration }
+
+    /// Met fin à la calibration, d'où qu'on le demande.
+    func abandonnerCalibration() {
+        guard calibration != nil else { return }
+        calibration?.cancel()
+        calibration = nil
+        occupation = .libre
+        Task {
+            await page?.abandonnerCalibration()
+            page?.cacher()
+        }
+        Log.info("relais : calibration abandonnée")
+    }
 
     /// Construite à la première utilisation, jamais avant.
     private var page: RelaisPage?
@@ -67,6 +137,7 @@ final class Relais {
     private func pageActive() -> RelaisPage {
         if let page { return page }
         let neuve = RelaisPage()
+        neuve.surFermeture = { [weak self] in self?.abandonnerCalibration() }
         page = neuve
         return neuve
     }
@@ -162,7 +233,12 @@ final class Relais {
     /// dans le journal, et la conversation reste ouverte dans la fenêtre du
     /// relais pour qu'on puisse voir ce qui s'est passé.
     func transformer(_ brut: String, module: RelaisModule) async throws -> String {
-        guard module.demandeUnAllerRetour, saitDialoguer, !brut.isEmpty else { return brut }
+        // Ce que le module exige, et non un drapeau global : c'est lui qui
+        // sait de quoi il a besoin, et lui seul.
+        guard module.demandeUnAllerRetour,
+              module.estUtilisable(RelaisSelecteurs.charger()),
+              !brut.isEmpty
+        else { return brut }
         // La patience suit la longueur du texte : une page se réorganise en
         // quelques secondes, dix minutes de monologue demandent bien plus.
         // Trois minutes de plancher, une seconde par vingt caractères.
@@ -239,163 +315,175 @@ final class Relais {
         masquerBarre()
     }
 
-    /// Le parcours complet : se connecter, puis calibrer.
+    /// Apprendre à Caspr tout ce que la page sait faire, d'un seul parcours.
     ///
-    /// Les deux étapes ne sont pas de même rang et l'ordre n'est pas
-    /// négociable : les trois boutons à désigner n'existent que dans une
-    /// conversation, donc calibrer sans session revient à montrer des boutons
-    /// absents. La première version sautait pourtant droit au calibrage et
-    /// laissait l'utilisateur devant un refus, là où il attendait une consigne.
+    /// Une seule calibration, et non plus une par fonctionnalité. Les
+    /// découper en étapes numérotées suggérait un escalier, alors que ce sont
+    /// des capacités indépendantes : « Discuter » exige d'envoyer sans jamais
+    /// récupérer, donc moins que « Réorganiser » qui venait pourtant avant lui.
+    /// Et pour l'utilisateur, apprendre six boutons d'affilée coûte une minute
+    /// une fois, là où revenir trois fois coûte la surprise à chaque fois.
     ///
-    /// L'attente de la connexion est active plutôt que de rendre la main :
-    /// personne ne devrait avoir à rouvrir un menu pour signaler qu'il vient de
-    /// se connecter.
-    func configurer(_ termine: (() -> Void)? = nil) {
-        guard !configurationEnCours else { ouvrirFenetre(); termine?(); return }
-        configurationEnCours = true
+    /// Les boutons n'existent pas tous au même moment : celui d'envoi réclame
+    /// un texte dans la zone, ceux de la barre d'actions réclament une réponse.
+    /// Le parcours les fait donc apparaître, en écrivant puis en envoyant un
+    /// message d'essai.
+    func calibrerTout(_ termine: (() -> Void)? = nil) {
+        guard occupation == .libre else {
+            Self.alerter("Pas maintenant",
+                         (occupation.raison ?? "") + " Terminez-la avant de calibrer.")
+            termine?()
+            return
+        }
+        occupation = .calibration
         let page = pageActive()
         page.montrer()
-        Task {
-            // `termine` dans le `defer` : elle rafraîchit l'écran de réglages,
-            // qui doit refléter l'état réel même quand la configuration est
-            // abandonnée — attente de connexion expirée, calibration
-            // interrompue par une erreur.
-            defer { configurationEnCours = false; termine?() }
+        calibration = Task {
+            defer { calibration = nil; occupation = .libre; termine?() }
 
-            if await page.etatConnexion() != .connecte {
-                Self.alerter("Étape 1 sur 2 — se connecter à ChatGPT", """
-                    La fenêtre ChatGPT est ouverte derrière ce message. Créez un compte \
-                    ou connectez-vous : c'est votre session, Caspr ne fait que l'héberger.
+            guard await attendreConnexion(page) else { return }
 
-                    À savoir : « Continuer avec Google » ne fonctionne pas ici. Google \
-                    refuse volontairement ses connexions dans une fenêtre embarquée, \
-                    quelle que soit l'application. Une adresse e-mail et un mot de passe \
-                    fonctionnent — un compte dédié convient très bien.
-
-                    Le calibrage démarrera tout seul dès que la conversation s'affichera. \
-                    Rien d'autre à faire.
-                    """)
-
-                // Dix minutes : le temps d'une création de compte, vérification
-                // de l'adresse comprise. Passé ce délai on renonce en silence
-                // plutôt que d'interrompre quelqu'un qui est passé à autre
-                // chose ; « Terminer la configuration… » reste dans le menu.
-                var connecte = false
-                for _ in 0..<600 {
-                    try? await Task.sleep(for: .seconds(1))
-                    guard actif else { return }
-                    if await page.etatConnexion(patience: 1) == .connecte {
-                        connecte = true
-                        break
-                    }
-                }
-                guard connecte else { return }
-            }
-
-            Self.alerter("Étape 2 sur 2 — montrer les boutons", """
-                Vous êtes connecté. Il reste à montrer à Caspr où sont les trois \
-                boutons de la dictée, en les cliquant une fois chacun.
-
-                Ils ne sont pas devinés une fois pour toutes : ChatGPT remanie sa page \
-                sans prévenir, et les redésigner prend dix secondes là où un réglage \
-                figé demanderait une mise à jour de l'application.
-                """)
-            await calibrationGuidee(page)
-        }
-    }
-
-    /// Les trois clics.
-    private func calibrationGuidee(_ page: RelaisPage) async {
-        let etapes: [(RelaisCible, String)] = [
-            (.micro, "Bouton 1 sur 3 — après avoir fermé ce message, cliquez le bouton "
-                   + "micro dans la page. L'enregistrement va démarrer, c'est normal : "
-                   + "il faut qu'il tourne pour que le bouton d'arrêt existe."),
-            (.stop, "Bouton 2 sur 3 — cliquez maintenant le bouton d'arrêt, le carré, "
-                  + "pas la flèche bleue d'envoi."),
-            (.composeur, "Bouton 3 sur 3 — cliquez la zone de texte, celle où le texte "
-                       + "transcrit vient d'apparaître."),
-        ]
-        for (cible, consigne) in etapes {
-            Self.alerter("Calibration du relais", consigne)
-            do { _ = try await page.calibrer(cible) }
-            catch { Self.alerter("Relais", error.localizedDescription); return }
-        }
-        await page.annuler()
-        page.cacher()
-        NSApp.hide(nil)
-        Self.alerter("C'est prêt",
-                     "La touche de dictée écrit maintenant par ChatGPT. "
-                     + "Pour revenir aux moteurs de Caspr, éteignez "
-                     + "« ChatGPT Web Preview » dans Réglages › Moteur IA.")
-    }
-
-    /// Calibre les deux boutons de l'aller-retour, en deux temps guidés.
-    ///
-    /// Ils n'existent qu'après coup : le bouton d'envoi tant que la zone est
-    /// vide, la réponse tant que rien n'a été envoyé. La calibration les fait
-    /// donc apparaître — elle écrit un message d'essai, puis attend la réponse.
-    /// C'est plus long que trois clics, et c'est pourquoi elle n'est demandée
-    /// qu'à qui choisit un mode qui en a besoin.
-    func calibrerDialogue(_ termine: (() -> Void)? = nil) {
-        guard !configurationEnCours else { ouvrirFenetre(); termine?(); return }
-        configurationEnCours = true
-        let page = pageActive()
-        page.montrer()
-        Task {
-            defer { configurationEnCours = false; termine?() }
-            guard await page.etatConnexion() == .connecte else {
-                Self.alerter("Pas connecté",
-                             "Connectez-vous à ChatGPT avant de calibrer l'aller-retour.")
+            // Une conversation neuve pour calibrer.
+            //
+            // La page ouverte porte peut-être une discussion en cours, et son
+            // texte dans la zone de saisie : on désignerait alors des boutons
+            // dans un état qui n'est pas celui d'un départ, et le message
+            // d'essai s'ajouterait à ce qui traînait. Recharger coûte deux
+            // secondes et supprime toute la classe de surprises.
+            page.charger()
+            guard await page.attendreComposeurPret(secondes: 30) else {
+                Self.alerter("Relais", "La page ChatGPT n'a pas fini de se charger.")
                 return
             }
-            // Les trois boutons de l'étape 1 ne sont pas redemandés : ils sont
-            // déjà connus, et refaire ce qui est fait n'apprend rien.
+            // Vider la zone avant de commencer.
+            //
+            // ChatGPT conserve le brouillon non envoyé et le réinstalle au
+            // rechargement : on demandait donc de cliquer le micro devant un
+            // texte laissé là par une tentative précédente, que la dictée
+            // serait venue rallonger.
+            // Par les heuristiques, sans se fier au calibrage en place : il est
+            // peut-être absent, et s'il est là c'est peut-être lui qu'on
+            // remplace parce qu'il est faux.
+            await page.viderComposeur(selecteur: "")
+
+            // 1 — la dictée. Les trois repères du socle.
+            let socle: [(RelaisCible, String)] = [
+                (.micro, "Cliquez le bouton micro dans la page. L'enregistrement va "
+                       + "démarrer, c'est normal : il faut qu'il tourne pour que le "
+                       + "bouton d'arrêt existe."),
+                (.stop, "Cliquez maintenant le bouton d'arrêt — le carré, pas la flèche "
+                      + "bleue d'envoi."),
+                (.composeur, "Cliquez la zone de texte, celle où le texte transcrit vient "
+                           + "d'apparaître."),
+            ]
+            for (rang, (cible, consigne)) in socle.enumerated() {
+                guard Self.demander("Repère \(rang + 1) sur 6 — \(cible.libelle)", consigne)
+                else { abandonnerCalibration(); return }
+                guard await calibrerUn(page, cible) else { return }
+            }
+
+            // 2 — l'envoi. Le bouton n'existe qu'une fois la zone remplie.
             let ecrit = await page.preparerCalibrationEnvoi()
-            Self.alerter("Bouton 1 sur 2 — l'envoi", ecrit ? """
-                Un message d'essai vient d'être écrit dans la page. Après avoir fermé \
-                ce message, cliquez le bouton d'envoi — la flèche bleue, à droite de la \
-                zone de texte.
+            let suite = Self.demander("Repère 4 sur 6 — le bouton d'envoi", ecrit ? """
+                Un message d'essai vient d'être écrit dans la page. Cliquez le bouton \
+                d'envoi — la flèche bleue, à droite de la zone de texte.
 
                 Il partira réellement dans votre conversation : c'est nécessaire pour \
-                qu'une réponse existe et qu'on puisse la désigner à l'étape suivante.
+                qu'une réponse existe et qu'on puisse désigner ses boutons ensuite.
                 """ : """
-                Le message d'essai n'a pas pu être écrit tout seul dans la page.
+                Le message d'essai n'a pas pu être écrit tout seul.
 
-                Tapez donc n'importe quoi dans la zone de texte — un simple « bonjour » \
-                suffit — puis cliquez le bouton d'envoi, la flèche bleue à droite.
-
-                Le bouton d'envoi n'apparaît qu'une fois la zone remplie : c'est pour \
-                ça qu'il faut écrire quelque chose. Le message partira réellement, afin \
-                qu'une réponse existe et qu'on puisse la désigner ensuite.
+                Tapez n'importe quoi dans la zone de texte — un « bonjour » suffit — puis \
+                cliquez le bouton d'envoi, la flèche bleue à droite. Il n'apparaît qu'une \
+                fois la zone remplie, et le message doit partir pour qu'une réponse \
+                existe.
                 """)
-            do { _ = try await page.calibrer(.envoi) }
-            catch { Self.alerter("Relais", error.localizedDescription); return }
+            guard suite else { abandonnerCalibration(); return }
+            guard await calibrerUn(page, .envoi) else { return }
 
-            Self.alerter("Bouton 2 sur 2 — copier la réponse", """
+            // 3 — la barre d'actions de la réponse.
+            guard Self.demander("Repère 5 sur 6 — copier la réponse", """
                 Attendez que ChatGPT ait fini de répondre, puis cliquez l'icône \
-                « copier » sous sa réponse — deux carrés superposés.
+                « copier » sous **sa** réponse — deux carrés superposés.
 
-                Sous la **réponse**, pas sous votre propre message : la page en porte \
-                une par message, et Caspr retient au passage le bloc qui l'entoure pour \
-                ne jamais confondre les deux.
+                Sous la réponse, pas sous votre propre message : la page en porte une par \
+                message, et Caspr retient au passage le bloc qui l'entoure pour ne jamais \
+                confondre les deux.
+                """) else { abandonnerCalibration(); return }
+            guard await calibrerUn(page, .copier) else { return }
 
-                C'est par elle que le texte sera récupéré : elle rend la réponse entière \
-                et bien mise en forme, et comme elle n'apparaît qu'une fois la réponse \
-                finie, elle dit aussi quand l'attente est terminée.
-                """)
-            do { _ = try await page.calibrer(.copier) }
-            catch { Self.alerter("Relais", error.localizedDescription); return }
+            guard Self.demander("Repère 6 sur 6 — lire à haute voix", """
+                Cliquez « Lire à haute voix » sous la même réponse — le petit \
+                haut-parleur.
+
+                S'il n'apparaît pas directement, ouvrez d'abord le menu « … » : Caspr \
+                retient le chemin complet et le refera pour vous. Deux clics, donc, si \
+                votre interface les demande.
+
+                Cette capacité sert aux modules qui doivent parler — une traduction \
+                qu'on fait entendre à quelqu'un, par exemple. Elle est facultative : \
+                abandonnez maintenant si elle ne vous sert pas, le reste est déjà appris.
+                """) else { abandonnerCalibration(); return }
+            do { try await page.calibrerLecture() }
+            catch is CancellationError { return }
+            catch { Self.alerter("Relais", error.localizedDescription) }
 
             page.charger()
             page.cacher()
             NSApp.hide(nil)
-            Self.alerter("C'est prêt",
-                         "Le mode « Réorganiser » est utilisable. Il se choisit sur la "
-                         + "barre de dictée, à côté de « Brut ».")
+            Self.alerter("C'est appris",
+                         "Caspr sait dicter, envoyer, récupérer une réponse et la faire "
+                         + "lire à haute voix. Les modules qui en ont besoin sont "
+                         + "désormais utilisables.")
         }
     }
 
-    /// Ce que le relais voit de la page, en clair.
+    /// Attend la connexion, en l'expliquant si elle manque.
+    private func attendreConnexion(_ page: RelaisPage) async -> Bool {
+        if await page.etatConnexion() == .connecte { return true }
+        Self.alerter("D'abord, se connecter à ChatGPT", """
+            La fenêtre ChatGPT est ouverte derrière ce message. Créez un compte ou \
+            connectez-vous : c'est votre session, Caspr ne fait que l'héberger.
+
+            À savoir : « Continuer avec Google » ne fonctionne pas ici. Google refuse \
+            volontairement ses connexions dans une fenêtre embarquée, quelle que soit \
+            l'application. Une adresse e-mail et un mot de passe fonctionnent — un \
+            compte dédié convient très bien.
+
+            La suite démarrera toute seule dès que la conversation s'affichera.
+            """)
+        for _ in 0..<600 {                                  // dix minutes
+            try? await Task.sleep(for: .seconds(1))
+            guard actif else { return false }
+            if await page.etatConnexion(patience: 1) == .connecte { return true }
+        }
+        return false
+    }
+
+    private func calibrerUn(_ page: RelaisPage, _ cible: RelaisCible) async -> Bool {
+        do { _ = try await page.calibrer(cible); return true }
+        catch is CancellationError { return false }
+        catch { Self.alerter("Relais", error.localizedDescription); return false }
+    }
+
+    /// Une consigne, avec une porte de sortie.
+    ///
+    /// Un dialogue à un seul bouton force à aller au bout de ce qu'on a
+    /// commencé. Pour un parcours de six étapes qui pilote une page web, c'est
+    /// la garantie qu'un imprévu — une page qui ne réagit pas, un bouton
+    /// introuvable — laisse quelqu'un coincé.
+    @discardableResult
+    private static func demander(_ titre: String, _ texte: String) -> Bool {
+        NSApp.activate(ignoringOtherApps: true)
+        let a = NSAlert()
+        a.messageText = titre
+        a.informativeText = texte
+        a.addButton(withTitle: "Continuer")
+        a.addButton(withTitle: "Abandonner")
+        return a.runModal() == .alertFirstButtonReturn
+    }
+
+    /// Ce que le relais voit de la page, en clair.    /// Ce que le relais voit de la page, en clair.
     ///
     /// Quand un clic ne prend pas, la seule question utile est « sur quoi
     /// as-tu cliqué ? ». Sans cet écran, il n'y a aucun moyen de distinguer un

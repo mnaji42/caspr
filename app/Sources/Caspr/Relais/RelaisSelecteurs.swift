@@ -2,7 +2,7 @@ import Foundation
 
 /// Les trois éléments de la page ChatGPT dont le relais a besoin.
 enum RelaisCible: String, CaseIterable, Codable {
-    case micro, stop, composeur, envoi, reponse, copier
+    case micro, stop, composeur, envoi, reponse, copier, lecture
 
     var libelle: String {
         switch self {
@@ -12,6 +12,7 @@ enum RelaisCible: String, CaseIterable, Codable {
         case .envoi:     "le bouton d'envoi (la flèche bleue)"
         case .reponse:   "la réponse de ChatGPT"
         case .copier:    "le bouton copier sous la réponse"
+        case .lecture:   "le bouton « Lire à haute voix » sous la réponse"
         }
     }
 }
@@ -57,6 +58,21 @@ struct RelaisSelecteurs: Codable, Equatable {
     /// se sont trompées tour à tour. La paire ne devine rien.
     var copierParent = ""
 
+    /// Le bouton « Lire à haute voix » de ChatGPT, et le bloc qui le porte.
+    ///
+    /// Retenus ensemble, comme pour « copier » et pour la même raison : la page
+    /// pose une barre d'actions sous chaque message, et seul le couple dit de
+    /// laquelle il s'agit.
+    var lecture = ""
+    var lectureParent = ""
+    /// Le bouton qui ouvre le menu où « Lire à haute voix » se cache.
+    ///
+    /// Vide quand le bouton est directement visible sous la réponse — ChatGPT
+    /// fait les deux selon les cas, et l'on ne demande pas à l'utilisateur de
+    /// savoir lequel est le sien.
+    var lectureMenu = ""
+    var lectureMenuParent = ""
+
     subscript(cible: RelaisCible) -> String {
         get {
             switch cible {
@@ -66,6 +82,7 @@ struct RelaisSelecteurs: Codable, Equatable {
             case .envoi: envoi
             case .reponse: reponse
             case .copier: copier
+            case .lecture: lecture
             }
         }
         set {
@@ -76,6 +93,7 @@ struct RelaisSelecteurs: Codable, Equatable {
             case .envoi: envoi = newValue
             case .reponse: reponse = newValue
             case .copier: copier = newValue
+            case .lecture: lecture = newValue
             }
         }
     }
@@ -94,6 +112,9 @@ struct RelaisSelecteurs: Codable, Equatable {
 
     /// Sait-on récupérer la réponse par le bouton de ChatGPT ?
     var saitCopier: Bool { !copier.isEmpty }
+
+    /// Sait-on faire lire la réponse à haute voix ?
+    var saitLire: Bool { !lecture.isEmpty }
 
     // MARK: - Décodage tolérant aux champs qui n'existaient pas encore
     //
@@ -117,6 +138,10 @@ struct RelaisSelecteurs: Codable, Equatable {
         reponse = try c.decodeIfPresent(String.self, forKey: .reponse) ?? ""
         copier = try c.decodeIfPresent(String.self, forKey: .copier) ?? ""
         copierParent = try c.decodeIfPresent(String.self, forKey: .copierParent) ?? ""
+        lecture = try c.decodeIfPresent(String.self, forKey: .lecture) ?? ""
+        lectureParent = try c.decodeIfPresent(String.self, forKey: .lectureParent) ?? ""
+        lectureMenu = try c.decodeIfPresent(String.self, forKey: .lectureMenu) ?? ""
+        lectureMenuParent = try c.decodeIfPresent(String.self, forKey: .lectureMenuParent) ?? ""
     }
 
     init() {}

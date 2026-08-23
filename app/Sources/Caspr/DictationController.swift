@@ -282,7 +282,19 @@ final class DictationController {
             // RELAIS — c'est le mode qui décide, pas la touche : les deux
             // s'excluent, et il n'y a qu'un seul déclencheur.
             relaisEnCours = Relais.partage.actif
+            // RELAIS — une seule chose à la fois sur la page.
+            //
+            // La dictée et la calibration pilotent le même document. Les
+            // laisser tourner ensemble faisait intercepter par la calibration
+            // les clics que la dictée envoyait par programme : Caspr prenait
+            // ses propres commandes pour des gestes de l'utilisateur.
+            if relaisEnCours, !Relais.partage.prendreLaMainPourDictee() {
+                state = .failed(Relais.partage.occupation.raison ?? "Relais occupé.")
+                relaisEnCours = false
+                return
+            }
             guard !relaisEnCours || Relais.partage.estCalibre else {
+                Relais.partage.rendreLaMain()
                 state = .failed("ChatGPT Web Preview est actif mais pas configuré — "
                                 + "voir Réglages › Moteur IA.")
                 return
@@ -322,6 +334,7 @@ final class DictationController {
             relaisTache?.cancel()
             relaisTache = nil
             relaisEnCours = false
+            Relais.partage.rendreLaMain()          // RELAIS —
             releaseEscape()
             Task { await Relais.partage.interrompre() }
             overlay.hide()
@@ -407,6 +420,8 @@ final class DictationController {
             }
             Feedback.recordingStarted()
         } catch {
+            Relais.partage.rendreLaMain()          // RELAIS —
+            relaisEnCours = false
             state = .failed(error.localizedDescription)
         }
     }
@@ -477,7 +492,11 @@ final class DictationController {
         // RELAIS — le relais se conforme au protocole des moteurs, donc tout ce
         // qui suit (insertion, historique, échecs, barre) marche sans le savoir.
         let parRelais = relaisEnCours
-        defer { relaisEnCours = false }
+        // RELAIS — rendue ici parce que c'est la sortie commune à tous les
+        // chemins : réussite, texte vide, échec, annulation. La rendre à
+        // chaque endroit serait la promesse d'en oublier un, et un oubli
+        // condamne la page jusqu'au redémarrage.
+        defer { relaisEnCours = false; Relais.partage.rendreLaMain() }
         let moteur: any SpeechEngine = parRelais ? RelaisEngine() : writer
         do {
             let result = try await moteur.transcribe(

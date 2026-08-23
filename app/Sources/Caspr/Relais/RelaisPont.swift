@@ -52,6 +52,11 @@ extension RelaisPage {
           'button[aria-label*="copi" i]',
           'button[aria-label*="copy" i]',
         ],
+        lecture: [
+          '[data-testid="voice-play-turn-action-button"]',
+          'button[aria-label*="haute voix" i]',
+          'button[aria-label*="read aloud" i]',
+        ],
       };
 
       const visible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
@@ -485,7 +490,19 @@ extension RelaisPage {
         calibrer() {
           return new Promise((resolve) => {
             const surClic = (ev) => {
-              document.removeEventListener('click', surClic, true);
+              // Seuls les clics de la main comptent.
+              //
+              // `isTrusted` est faux pour tout événement produit par du code —
+              // et Caspr en produit : c'est ainsi qu'il pilote la page. Sans ce
+              // filtre, une dictée lancée pendant une calibration lui faisait
+              // enregistrer les boutons que Caspr venait de cliquer lui-même,
+              // décalés d'un cran, et la calibration devenait silencieusement
+              // fausse : le micro pointait sur la zone de texte.
+              //
+              // Une barrière logique empêche les deux flux de se croiser ;
+              // celle-ci rend l'accident impossible même si elle cédait.
+              if (!ev.isTrusted) return;
+              terminer();
               const el = ev.target.closest(
                 'button, [role="button"], [contenteditable="true"], textarea, input'
               ) || ev.target;
@@ -493,8 +510,90 @@ extension RelaisPage {
                         selecteur: selecteurStable(el),
                         parent: selecteurAncetre(el) });
             };
+            const terminer = () => {
+              document.removeEventListener('click', surClic, true);
+              window.__relaisAbandon = null;
+            };
+            // De quoi renoncer depuis Swift.
+            //
+            // Sans cela, une calibration qu'on abandonne — la fenêtre qu'on
+            // ferme, un imprévu — laissait cette promesse attendre un clic qui
+            // ne viendrait jamais. L'appel Swift restait suspendu, le parcours
+            // se croyait en cours, et l'application devenait inutilisable
+            // jusqu'à son redémarrage. Une attente sans issue n'est pas une
+            // attente, c'est un blocage.
+            window.__relaisAbandon = () => {
+              terminer();
+              resolve({ ok: false, raison: 'abandon' });
+            };
             document.addEventListener('click', surClic, true);
           });
+        },
+
+        // Efface le brouillon que ChatGPT garde en réserve.
+        //
+        // Vider la zone ne suffit pas : le texte non envoyé est conservé dans
+        // le stockage local de la page et réinstallé au rechargement, parfois
+        // même après qu'on l'a effacé à l'écran. On ne touche qu'aux clés qui
+        // le désignent — la session, elle, vit dans les cookies et n'est pas
+        // concernée.
+        oublierBrouillon() {
+          let retirees = 0;
+          try {
+            for (const cle of Object.keys(localStorage)) {
+              if (/draft|composer/i.test(cle)) { localStorage.removeItem(cle); retirees++; }
+            }
+          } catch (e) { /* stockage inaccessible : on s'en passe */ }
+          return { ok: true, retirees };
+        },
+
+        // Calibrer un bouton qui se cache peut-être dans un menu.
+        //
+        // « Lire à haute voix » est parfois directement sous la réponse, et
+        // parfois derrière les trois points. On ne demande donc pas à
+        // l'utilisateur de savoir lequel des deux cas est le sien : on écoute
+        // ses clics, et l'on reconnaît celui qui ouvre un menu à ce qu'il le
+        // déclare — `aria-haspopup` est posé par la page, pas deviné par nous.
+        //
+        // Le premier clic sur un ouvre-menu est retenu à part, et l'on continue
+        // d'écouter ; le suivant est le bouton cherché. S'il n'y a pas de menu,
+        // le premier clic est déjà le bon et l'on s'arrête là.
+        calibrerAvecMenu() {
+          return new Promise((resolve) => {
+            let menu = null;
+            const surClic = (ev) => {
+              if (!ev.isTrusted) return;
+              const el = ev.target.closest('button, [role="button"], [role="menuitem"]')
+                || ev.target;
+              const ouvreUnMenu = el.getAttribute('aria-haspopup')
+                || el.getAttribute('aria-expanded') !== null;
+              if (ouvreUnMenu && !menu) {
+                menu = { selecteur: selecteurStable(el), parent: selecteurAncetre(el) };
+                return;                      // on attend le vrai bouton
+              }
+              terminer();
+              resolve({ ok: true,
+                        selecteur: selecteurStable(el),
+                        parent: selecteurAncetre(el),
+                        menu: menu ? menu.selecteur : '',
+                        menuParent: menu ? menu.parent : '' });
+            };
+            const terminer = () => {
+              document.removeEventListener('click', surClic, true);
+              window.__relaisAbandon = null;
+            };
+            window.__relaisAbandon = () => {
+              terminer();
+              resolve({ ok: false, raison: 'abandon' });
+            };
+            document.addEventListener('click', surClic, true);
+          });
+        },
+
+        // Fait renoncer une calibration en cours, s'il y en a une.
+        abandonnerCalibration() {
+          if (window.__relaisAbandon) { window.__relaisAbandon(); return { ok: true }; }
+          return { ok: false };
         },
       };
     })();

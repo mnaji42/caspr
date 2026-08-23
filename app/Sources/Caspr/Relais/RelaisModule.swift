@@ -65,6 +65,17 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     var avant: String
     var apres: String
 
+    /// La consigne fait-elle l'identité du module ?
+    ///
+    /// « Réorganiser » sans consigne ne réorganise plus rien : ce serait un
+    /// autre module, portant un nom devenu faux. Proposer de la décocher
+    /// laisserait fabriquer cette contradiction, alors qu'un module écrit par
+    /// l'utilisateur peut très bien vouloir envoyer la dictée telle quelle.
+    ///
+    /// On ne cache donc pas la case par prudence : on la cache là où elle n'a
+    /// pas de sens.
+    var consigneEssentielle: Bool
+
     /// Les étapes que ce module demande, entre l'écoute et la sortie.
     ///
     /// Une liste et non des drapeaux : ajouter une étape au produit ne doit
@@ -106,6 +117,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
         integre = try c.decodeIfPresent(Bool.self, forKey: .integre) ?? false
         avant = try c.decodeIfPresent(String.self, forKey: .avant) ?? ""
         apres = try c.decodeIfPresent(String.self, forKey: .apres) ?? ""
+        consigneEssentielle = try c.decodeIfPresent(Bool.self, forKey: .consigneEssentielle) ?? false
         actions = try c.decodeIfPresent([RelaisAction].self, forKey: .actions) ?? []
         sorties = try c.decodeIfPresent([RelaisSortie].self, forKey: .sorties) ?? [.curseur, .note]
         sortieParDefaut = try c.decodeIfPresent(RelaisSortie.self, forKey: .sortieParDefaut) ?? .curseur
@@ -114,7 +126,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     }
 
     init(identifiant: String, nom: String, integre: Bool = false,
-         avant: String = "", apres: String = "",
+         avant: String = "", apres: String = "", consigneEssentielle: Bool = false,
          actions: [RelaisAction] = [],
          sorties: [RelaisSortie] = [.curseur, .note],
          sortieParDefaut: RelaisSortie = .curseur,
@@ -125,11 +137,35 @@ struct RelaisModule: Codable, Equatable, Identifiable {
         self.integre = integre
         self.avant = avant
         self.apres = apres
+        self.consigneEssentielle = consigneEssentielle
         self.actions = actions
         self.sorties = sorties
         self.sortieParDefaut = sortieParDefaut
         self.ecranParDefaut = ecranParDefaut
         self.affichage = affichage
+    }
+
+    /// Reprend les choix de l'utilisateur, sans reprendre la définition.
+    ///
+    /// Un module livré a deux moitiés. Sa **nature** — son nom, ses actions, ses
+    /// sorties, le fait que sa consigne lui soit essentielle — appartient à
+    /// l'application et doit suivre ses versions. Ses **réglages** — la consigne
+    /// elle-même, ce qu'il affiche — appartiennent à celui qui s'en sert.
+    ///
+    /// Tout reprendre de l'enregistré gelait la définition au jour où elle avait
+    /// été rangée : un attribut ajouté ensuite n'atteignait jamais les
+    /// installations existantes, et l'on croyait le code sans effet. Tout
+    /// reprendre du livré effacerait au contraire le travail de l'utilisateur à
+    /// chaque mise à jour. On prend donc la nature d'un côté, les réglages de
+    /// l'autre.
+    func avecLesReglagesDe(_ enregistre: RelaisModule) -> RelaisModule {
+        var fusion = self
+        fusion.avant = enregistre.avant
+        fusion.apres = enregistre.apres
+        fusion.affichage = enregistre.affichage
+        fusion.ecranParDefaut = enregistre.ecranParDefaut
+        fusion.sortieParDefaut = enregistre.sortieParDefaut
+        return fusion
     }
 
     // MARK: - Ce qu'il exige de la page

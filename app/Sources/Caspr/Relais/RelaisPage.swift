@@ -134,6 +134,13 @@ final class RelaisPage: NSObject {
     private var chargementEnCours = false
     var selecteurs = RelaisSelecteurs.charger()
 
+    /// Appelé quand l'utilisateur ferme la grande fenêtre.
+    ///
+    /// Fermer une fenêtre est le geste par lequel on dit « j'arrête ». Une
+    /// calibration qui continuerait derrière attendrait un clic dans une
+    /// fenêtre qu'on vient de faire disparaître.
+    var surFermeture: (() -> Void)?
+
     /// Position hors champ de la fenêtre quand le relais travaille en silence.
     ///
     /// La fenêtre reste « devant » du point de vue du serveur de fenêtres,
@@ -695,6 +702,68 @@ final class RelaisPage: NSObject {
         return false
     }
 
+    /// Attend que la page rechargée soit prête, zone de saisie comprise.
+    ///
+    /// **Sans se fier au calibrage.** C'est le point qui manquait : une
+    /// calibration s'appuyait sur les repères qu'elle allait remplacer, et
+    /// ceux-ci peuvent être absents — c'est le premier lancement — ou faux,
+    /// c'est-à-dire exactement la raison pour laquelle on recalibre. On a ainsi
+    /// « vidé » un bouton micro que le calibrage désignait comme la zone de
+    /// texte, avant de conclure que la zone était vide parce qu'un bouton n'a
+    /// pas de contenu. Les heuristiques du pont, elles, ne dépendent de rien.
+    func attendreComposeurPret(secondes: Double) async -> Bool {
+        for _ in 0..<Int(secondes * 4) {
+            if Task.isCancelled { return false }
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !chargementEnCours else { continue }
+            let lu = try? await appeler("return window.__relais.lire(sel);", ["sel": ""])
+            if lu?["ok"] as? Bool == true { return true }
+        }
+        return false
+    }
+
+    /// Calibre « Lire à haute voix », menu compris s'il y en a un.
+    func calibrerLecture() async throws {
+        let r = try await appeler("return await window.__relais.calibrerAvecMenu();")
+        guard r["ok"] as? Bool == true else { throw CancellationError() }
+        guard let sel = r["selecteur"] as? String, !sel.isEmpty else {
+            throw Erreur.introuvable(.lecture)
+        }
+        selecteurs.lecture = sel
+        selecteurs.lectureParent = (r["parent"] as? String) ?? ""
+        selecteurs.lectureMenu = (r["menu"] as? String) ?? ""
+        selecteurs.lectureMenuParent = (r["menuParent"] as? String) ?? ""
+        selecteurs.enregistrer()
+    }
+
+    /// Vide la zone de saisie, et s'assure qu'elle l'est restée.
+    ///
+    /// ChatGPT réinstalle le brouillon non envoyé après un rechargement, et
+    /// parfois après qu'on l'a effacé : vider une fois ne suffit pas. On relit
+    /// donc, et on recommence — la même précaution que pour l'écriture, et pour
+    /// la même raison.
+    @discardableResult
+    func viderComposeur(selecteur: String? = nil) async -> Bool {
+        let sel = selecteur ?? selecteurs.composeur
+        // Le brouillon vit aussi dans le stockage de la page : l'effacer de la
+        // zone ne suffit pas, ChatGPT le réinstalle depuis là.
+        _ = try? await appeler("return window.__relais.oublierBrouillon();")
+        for _ in 0..<12 {                                   // jusqu'à 6 s
+            if Task.isCancelled { return false }
+            _ = try? await appeler("return window.__relais.vider(sel);", ["sel": sel])
+            try? await Task.sleep(for: .milliseconds(500))
+            let lu = try? await appeler("return window.__relais.lire(sel);", ["sel": sel])
+            if let texte = lu?["texte"] as? String, texte.isEmpty { return true }
+        }
+        Log.error("relais : la zone de saisie n'a pas voulu se vider")
+        return false
+    }
+
+    /// Fait renoncer une calibration qui attend un clic.
+    func abandonnerCalibration() async {
+        _ = try? await appeler("return window.__relais.abandonnerCalibration();")
+    }
+
     /// Attend que la zone de saisie soit là et lisible.
     private func attendreComposeur(secondes: Double) async -> Bool {
         for _ in 0..<Int(secondes * 4) {
@@ -854,14 +923,20 @@ final class RelaisPage: NSObject {
     /// démarré l'écoute pour pouvoir désigner l'arrêt juste après.
     func calibrer(_ cible: RelaisCible) async throws -> String {
         let r = try await appeler("return await window.__relais.calibrer();")
+        guard r["ok"] as? Bool == true else { throw CancellationError() }
         guard let sel = r["selecteur"] as? String, !sel.isEmpty else {
             throw Erreur.introuvable(cible)
         }
         selecteurs[cible] = sel
         // Le bloc qui porte l'élément, retenu avec lui pour le bouton
         // « copier » : c'est la paire qui lève l'ambiguïté, pas le bouton seul.
-        if cible == .copier {
-            selecteurs.copierParent = (r["parent"] as? String) ?? ""
+        // Le bloc qui porte l'élément, retenu avec lui pour les boutons des
+        // barres d'actions : la page en pose une sous chaque message, et seul
+        // le couple dit de laquelle il s'agit.
+        switch cible {
+        case .copier: selecteurs.copierParent = (r["parent"] as? String) ?? ""
+        case .lecture: selecteurs.lectureParent = (r["parent"] as? String) ?? ""
+        default: break
         }
         selecteurs.enregistrer()
         return sel
@@ -881,6 +956,7 @@ extension RelaisPage: NSWindowDelegate {
         // Fermer la fenêtre de réglage la range et rend la vue à la barre ;
         // elle ne détruit ni la page ni la session.
         if sender === fenetre {
+            surFermeture?()
             cacher()
             NSApp.hide(nil)
             return false

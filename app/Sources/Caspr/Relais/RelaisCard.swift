@@ -25,18 +25,17 @@ struct RelaisCard<Moteurs: View>: View {
 
     @State private var actif = Relais.partage.actif
     @State private var calibre = Relais.partage.estCalibre
-    @State private var dialogue = Relais.partage.saitDialoguer
     @State private var depart = Relais.partage.departPersonnalise
     @State private var modules = RelaisCatalogue.tous
+    @State private var selecteurs = RelaisSelecteurs.charger()
+    @ObservedObject private var relais = Relais.partage
 
     var body: some View {
-        // Une seule carte pour la fonctionnalité : la bascule, ce qu'on montre
-        // pendant la dictée, et les actions sur la session. Les trois choix
-        // d'affichage tenaient auparavant dans trois cartes de choix hautes —
-        // le composant fait pour un arbitrage qui mérite une explication, comme
-        // le choix d'un moteur. Montrer ou non une fenêtre n'est pas de cet
-        // ordre : une ligne et trois pastilles suffisent, et rendent la page
-        // lisible.
+        // Une carte pour la fonctionnalité et ce que Caspr a appris, puis une
+        // carte par module. Les étapes numérotées ont disparu : elles
+        // suggéraient un escalier, alors que les capacités sont indépendantes —
+        // un module peut exiger d'envoyer sans jamais récupérer, donc moins
+        // qu'un autre qui venait pourtant avant lui.
         Card {
             SettingsToggleRow(
                 title: "ChatGPT Web Preview",
@@ -50,90 +49,42 @@ struct RelaisCard<Moteurs: View>: View {
 
             if actif {
                 Divider().opacity(0.25)
-
-                // Un affichage par module, et non un pour toute la
-                // fonctionnalité. « Brut » n'a rien à montrer — c'est du texte
-                // qui part au curseur ; un module qui ouvre une conversation
-                // veut au contraire la page en grand. Un réglage unique
-                // obligeait à choisir pour le pire des deux cas.
-                ForEach(modules) { module in
-                    Row(label: module.nom) {
-                        PillPicker(options: RelaisAffichage.allCases.map {
-                                       ($0, $0.libelleCourt)
-                                   },
-                                   selection: Binding(
-                                       get: { module.affichage },
-                                       set: { choisi in
-                                           var maj = module
-                                           maj.affichage = choisi
-                                           RelaisCatalogue.remplacer(maj)
-                                           relire()
-                                       }))
-                    }
-                }
-                Note("Ce que la page ChatGPT montre pendant que ce module travaille. "
-                     + "Elle travaille dans tous les cas ; le réglage ne décide que de "
-                     + "ce qu'elle laisse voir.")
-
+                capacites
+                // Grisés pendant qu'un autre flux pilote la page. Un bouton
+                // qu'on peut cliquer et qui refusera ensuite vaut moins qu'un
+                // bouton qui dit d'emblée que ce n'est pas le moment.
                 ButtonRow {
+                    Button(calibre ? "Tout recalibrer…" : "Apprendre les boutons…") {
+                        Relais.partage.calibrerTout(relire)
+                    }
                     Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
                     Button("Diagnostic…") { Relais.partage.diagnostic() }
                     Button("Se déconnecter…") { deconnecter() }
+                }
+                .disabled(relais.occupation != .libre)
+                if let raison = relais.occupation.raison {
+                    Note(raison + " Les réglages de la page attendent qu'elle se termine.",
+                         warning: true)
                 }
             }
         }
 
         if actif {
-            // Un bloc par mode, dans l'ordre où ils se débloquent.
-            //
-            // Ils ne sont pas trois variantes d'un même réglage : chacun exige
-            // ce que le précédent a obtenu, **plus** une chose de son cru — le
-            // deuxième deux boutons supplémentaires, le troisième une
-            // autorisation système.
-            etape(numero: 1,
-                  titre: "Dicter",
-                  faite: calibre,
-                  explication: calibre
-                    ? "Votre compte, votre session. En mode « Brut », rien n'est jamais "
-                      + "envoyé dans une conversation."
-                    : "Connectez-vous, puis montrez trois boutons de la page : le micro, "
-                      + "l'arrêt et la zone de texte.") {
-                Button(calibre ? "Recalibrer les boutons…" : "Terminer la configuration…") {
-                    Relais.partage.configurer(relire)
-                }
+            SectionLabel("Modules")
+            ForEach(modules) { module in
+                RelaisModuleCard(module: module, selecteurs: selecteurs,
+                                 surChangement: relire)
             }
 
-            etape(numero: 2,
-                  titre: "Réorganiser",
-                  faite: dialogue,
-                  disponible: calibre,
-                  explication: dialogue
-                    ? (Relais.partage.saitCopier
-                       ? "Ce que vous dictez repart à ChatGPT pour être remis en ordre. "
-                       : "⚠︎ Recalibrez : la réponse est désormais récupérée par le bouton "
-                         + "« copier » de ChatGPT, qui la rend entière et sans confusion "
-                         + "possible avec votre propre message. Deux clics suffisent.\n\n"
-                         + "Ce que vous dictez repart à ChatGPT pour être remis en ordre. ")
-                      + "Le mode se choisit sur la barre de dictée. Comptez une trentaine "
-                      + "de secondes de plus, et sachez que le texte entre alors dans "
-                      + "votre historique ChatGPT."
-                    : "Deux boutons de plus à montrer : l'envoi, et « copier » sous la "
-                      + "réponse. Un message d'essai sera envoyé — c'est le seul moyen de "
-                      + "faire exister une réponse à désigner.") {
-                Button(dialogue ? "Recalibrer l'aller-retour…" : "Activer « Réorganiser »…") {
-                    Relais.partage.calibrerDialogue(relire)
-                }
-            }
-
-            if dialogue {
+            if depart || modules.contains(where: \.demandeUnAllerRetour) {
                 Card {
                     Row(label: "Conversations créées par Caspr") {
                         Text(depart ? "dans un projet dédié" : "dans l'historique général")
                             .font(.system(size: 12))
                             .foregroundStyle(Style.textSecondary)
                     }
-                    Note("Chaque dictée « Réorganiser » ouvre une conversation neuve, sans "
-                         + "quoi la précédente orienterait la suivante. Pour les tenir à "
+                    Note("Chaque dictée qui envoie ouvre une conversation neuve, sans quoi "
+                         + "la précédente orienterait la suivante. Pour les tenir à "
                          + "l'écart : créez un projet dans ChatGPT, ouvrez-le dans la "
                          + "fenêtre du relais, puis adoptez-le.")
                     ButtonRow {
@@ -158,39 +109,26 @@ struct RelaisCard<Moteurs: View>: View {
         }
     }
 
-    /// Une étape de configuration : son rang, son état, ses actions.
+    /// Ce que Caspr a appris de la page — et ce qui lui manque encore.
     ///
-    /// `disponible` grise l'étape tant que la précédente n'est pas faite,
-    /// plutôt que de la masquer : on doit pouvoir lire d'avance ce qui attend,
-    /// et comprendre pourquoi ce n'est pas encore accessible.
-    @ViewBuilder
-    private func etape(numero: Int, titre: String, faite: Bool, disponible: Bool = true,
-                       explication: String,
-                       @ViewBuilder actions: () -> some View) -> some View {
-        Card {
-            HStack(spacing: 8) {
-                Text("\(numero).")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Style.textSecondary)
-                Text(titre)
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer()
-                if faite {
-                    Text("configuré")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Style.textSecondary)
+    /// Les capacités sont montrées telles quelles, sans être rangées en étapes :
+    /// elles ne se conditionnent pas les unes les autres, et les numéroter
+    /// laissait croire le contraire. Chaque module dit ensuite lesquelles il
+    /// exige, ce qui est la seule dépendance réelle.
+    private var capacites: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(RelaisCapacite.allCases, id: \.rawValue) { capacite in
+                let acquise = capacite.estAcquise(selecteurs)
+                HStack(spacing: 5) {
+                    Image(systemName: acquise ? "checkmark" : "minus")
+                        .font(.system(size: 9, weight: .bold))
+                    Text(capacite.libelle).font(.system(size: 11, weight: .medium))
                 }
-            }
-            Note(disponible ? explication
-                            : "Terminez l'étape précédente pour débloquer celle-ci.",
-                 warning: !disponible)
-            if disponible {
-                // `ButtonRow` et non un empilement à la main : il impose la
-                // taille et le style communs, et surtout il laisse les boutons
-                // sur une seule ligne. Le style secondaire, plus large, les
-                // faisait passer à la ligne à trois — le libellé se coupait au
-                // milieu d'un mot.
-                ButtonRow { actions() }
+                .foregroundStyle(acquise ? Style.accent : Style.textSecondary)
+                .padding(.horizontal, 9).padding(.vertical, 4)
+                .background(Capsule().fill(acquise ? Style.accent.opacity(0.12)
+                                                   : Color.primary.opacity(0.05)))
+                .help(acquise ? capacite.libelle : capacite.commentAcquerir)
             }
         }
     }
@@ -220,9 +158,9 @@ struct RelaisCard<Moteurs: View>: View {
     private func relire() {
         actif = Relais.partage.actif
         calibre = Relais.partage.estCalibre
-        dialogue = Relais.partage.saitDialoguer
         depart = Relais.partage.departPersonnalise
         modules = RelaisCatalogue.tous
+        selecteurs = RelaisSelecteurs.charger()
     }
 
     private var note: String? {
@@ -243,7 +181,7 @@ struct RelaisCard<Moteurs: View>: View {
         Relais.partage.actif = nouveau
         actif = nouveau
         if nouveau, !Relais.partage.estCalibre {
-            Relais.partage.configurer(relire)
+            Relais.partage.calibrerTout(relire)
         }
         // Le moteur local s'arrête ou repart selon la bascule : garder trois
         // gigaoctets de poids chargés pour un moteur qu'on ne peut plus appeler

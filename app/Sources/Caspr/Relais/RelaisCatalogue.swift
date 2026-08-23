@@ -1,59 +1,5 @@
 import Foundation
 
-/// Ce que ChatGPT fait de ce qu'on vient de dire.
-///
-/// Trois modes, et ce qui les sépare n'est pas la quantité de traitement mais
-/// **le rôle que joue la parole**. Dans `brut` elle est le texte lui-même ;
-/// dans `auPropre` elle est la matière à remettre en ordre ; dans `consigne`
-/// elle est l'instruction à exécuter. Confondre les deux derniers ferait
-/// réorganiser une demande au lieu de l'honorer.
-enum RelaisMode: String, CaseIterable, Codable {
-    /// La transcription, telle quelle. Rien n'est envoyé à ChatGPT.
-    case brut
-    /// La transcription est renvoyée à ChatGPT pour être remise en ordre.
-    case reorganiser
-    /// La parole est la commande d'un texte à produire. Pas encore construit.
-    case rediger
-
-    var libelle: String {
-        switch self {
-        case .brut: "Brut"
-        case .reorganiser: "Réorganiser"
-        case .rediger: "Rédiger"
-        }
-    }
-
-    /// Vrai quand le texte doit repartir dans la conversation.
-    var demandeUnAllerRetour: Bool { self != .brut }
-
-    // MARK: - Persistance
-
-    private static let cle = "relais.mode"
-
-    static var courant: RelaisMode {
-        get {
-            let brut = UserDefaults.standard.string(forKey: cle) ?? ""
-            // Les anciens noms sont traduits plutôt qu'ignorés. Un `rawValue`
-            // qui change et un repli silencieux sur `.brut`, c'est le réglage
-            // de l'utilisateur qui disparaît à la mise à jour — la même faute
-            // que celle qui a effacé les calibrages en 0.13.0, sous une autre
-            // forme.
-            switch brut {
-            case "auPropre": return .reorganiser
-            case "consigne": return .rediger
-            default: return RelaisMode(rawValue: brut) ?? .brut
-            }
-        }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: cle) }
-    }
-
-    /// Les modes réellement proposés.
-    ///
-    /// `rediger` en est absent tant qu'il n'est pas construit : afficher un
-    /// choix qui ne fait rien est pire que de ne pas le proposer.
-    static var proposes: [RelaisMode] { [.brut, .reorganiser] }
-}
-
 /// Ce qu'on montre de la page ChatGPT pendant qu'elle travaille.
 ///
 /// Trois niveaux, parce que trois usages. Rien, pour qui veut juste dicter et
@@ -99,6 +45,59 @@ enum RelaisAffichage: String, CaseIterable, Codable {
         get { RelaisAffichage(rawValue: UserDefaults.standard.string(forKey: cle) ?? "")
               ?? .barre }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: cle) }
+    }
+}
+
+/// Les modules livrés avec l'application, et celui qui est retenu.
+///
+/// Ce ne sont que des modules pré-remplis. Rien ne les distingue de ceux que
+/// l'utilisateur écrira, sinon qu'ils existent au premier lancement — ce qui
+/// permet de dicter sans avoir rien à configurer.
+enum RelaisCatalogue {
+    static let brut = RelaisModule(
+        identifiant: "brut", nom: "Brut", integre: true,
+        actions: [],
+        sorties: [.curseur, .note], sortieParDefaut: .curseur,
+        affichage: .barre)
+
+    static let reorganiser = RelaisModule(
+        identifiant: "reorganiser", nom: "Réorganiser", integre: true,
+        avant: RelaisPrompt.reorganiser + "\n\n=== DÉBUT DE LA TRANSCRIPTION ===\n",
+        apres: "\n=== FIN DE LA TRANSCRIPTION ===",
+        actions: [.envoyer],
+        sorties: [.curseur, .note], sortieParDefaut: .curseur,
+        affichage: .barre)
+
+    /// Tous les modules connus. Les modules de l'utilisateur s'y ajouteront.
+    static var tous: [RelaisModule] { [brut, reorganiser] }
+
+    /// Ceux qu'on peut réellement proposer, ici et maintenant.
+    ///
+    /// Un module dont les repères manquent n'apparaît pas sur la barre. Le
+    /// proposer laisserait le choisir en pleine phrase pour n'apprendre l'échec
+    /// qu'à la fin, quand il est trop tard pour redire.
+    static var proposes: [RelaisModule] {
+        let s = RelaisSelecteurs.charger()
+        return tous.filter { $0.estUtilisable(s) }
+    }
+
+    private static let cle = "relais.mode"
+
+    static var courant: RelaisModule {
+        get {
+            let enregistre = UserDefaults.standard.string(forKey: cle) ?? ""
+            // Les anciens noms sont traduits plutôt qu'ignorés : un
+            // identifiant qui change et un repli silencieux, c'est le réglage
+            // de l'utilisateur qui disparaît à la mise à jour.
+            let identifiant: String
+            switch enregistre {
+            case "auPropre": identifiant = "reorganiser"
+            case "consigne", "rediger": identifiant = "brut"
+            default: identifiant = enregistre
+            }
+            return tous.first { $0.identifiant == identifiant } ?? brut
+        }
+        set { UserDefaults.standard.set(newValue.identifiant, forKey: cle) }
     }
 }
 
@@ -185,36 +184,4 @@ enum RelaisPrompt {
         sont.
         """
 
-    /// Ce qu'on ajoute **autour** du texte déjà présent.
-    ///
-    /// Un délimiteur en toutes lettres plutôt que des accents graves : dans un
-    /// éditeur ProseMirror, trois accents graves déclenchent la création d'un
-    /// bloc de code, qui capture ensuite la touche d'envoi. Le but — dire sans
-    /// ambiguïté où commence et où finit la matière — est atteint aussi bien.
-    static func encadrement(_ mode: RelaisMode) -> (avant: String, apres: String) {
-        switch mode {
-        case .brut:
-            ("", "")
-        case .reorganiser:
-            (reorganiser + "\n\n=== DÉBUT DE LA TRANSCRIPTION ===\n",
-             "\n=== FIN DE LA TRANSCRIPTION ===")
-        case .rediger:
-            ("=== DÉBUT DE LA DEMANDE ===\n",
-             "\n=== FIN DE LA DEMANDE ===\n\n" + rediger)
-        }
-    }
-
-    /// Le message complet à déposer dans la zone de saisie.
-    ///
-    /// L'emballage vient **avant** le texte pour `reorganiser` : la consigne doit
-    /// être lue avant la matière, sans quoi un long monologue la noie. Il vient
-    /// **après** pour `rediger`, où le texte est l'instruction et où le rappel
-    /// de format se place naturellement en dernier.
-    static func envelopper(_ dicte: String, mode: RelaisMode) -> String {
-        switch mode {
-        case .brut: dicte
-        case .reorganiser: reorganiser + "\n\n---\n\n" + dicte
-        case .rediger: dicte + "\n\n---\n\n" + rediger
-        }
-    }
 }

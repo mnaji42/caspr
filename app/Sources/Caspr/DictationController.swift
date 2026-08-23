@@ -158,8 +158,10 @@ final class DictationController {
         overlay.onCancel = { [weak self] in self?.cancel() }
         // RELAIS — le choix se fait sur la barre, au moment de parler.
         overlay.onSelectModeIndex = { [weak self] index in
-            guard let self, RelaisMode.proposes.indices.contains(index) else { return }
-            RelaisMode.courant = RelaisMode.proposes[index]
+            guard let self else { return }
+            let modes = RelaisCatalogue.proposes
+            guard modes.indices.contains(index) else { return }
+            RelaisCatalogue.courant = modes[index]
             refreshOverlay()
         }
         overlay.onSelectMode = { [weak self] mode in
@@ -214,16 +216,16 @@ final class DictationController {
             // La pastille porte les modes du relais dès que l'aller-retour
             // est calibré. Sans lui, un seul mode est possible : proposer un
             // choix qui échouerait vaut moins que ne rien proposer.
-            let modes = Relais.partage.saitDialoguer ? RelaisMode.proposes : []
+            let modes = RelaisCatalogue.proposes
             return RecordingOverlay.Status(
                 mode: mode,
                 target: target,
                 noteName: noteFile?.lastPathComponent,
                 canPickNote: state != .recording,
                 previewEnabled: Preferences.shared.livePreviewEnabled,
-                modesAvailable: !modes.isEmpty,
-                modeLabels: modes.isEmpty ? nil : modes.map(\.libelle),
-                modeIndex: modes.firstIndex(of: RelaisMode.courant) ?? 0,
+                modesAvailable: modes.count > 1,
+                modeLabels: modes.count > 1 ? modes.map(\.nom) : nil,
+                modeIndex: modes.firstIndex(of: RelaisCatalogue.courant) ?? 0,
                 corpusEnabled: false,
                 corpusKeepsAudio: false,
                 languageBadge: "ChatGPT",

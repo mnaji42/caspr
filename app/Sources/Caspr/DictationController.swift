@@ -473,21 +473,31 @@ final class DictationController {
                 // configuré rend le vide aussi sûrement qu'un micro coupé, et
                 // dans ce cas jeter la dictée oblige à tout redire — ce que
                 // cette application s'interdit partout ailleurs.
-                pendingAudio = samples
-                pendingPreview = previewText
+                // RELAIS — rien à conserver ni à archiver : il n'y a pas
+                // d'audio de notre côté, « Réessayer » rejouerait le vide, et
+                // le corpus n'a que faire d'une dictée qu'un service tiers
+                // n'a pas entendue.
+                if !parRelais {
+                    pendingAudio = samples
+                    pendingPreview = previewText
+                }
                 // `.failed` et non `.idle` : la barre renvoyait au menu, et le
                 // menu affichait « Prêt ». Envoyer quelqu'un chercher une
                 // explication à un endroit qui n'en porte aucune est pire que
                 // de se taire — c'est lui faire douter de ce qu'il vient de
                 // lire. Le menu porte donc la même raison que sur un échec du
                 // moteur, puisque c'en est un du point de vue de l'utilisateur.
-                state = .failed("Le moteur a répondu sans rien transcrire "
-                                + "(\(Preferences.shared.engine.fullLabel)) — "
-                                + "audio conservé, « Réessayer » ci-dessous.")
+                state = .failed(parRelais
+                    ? "ChatGPT n'a rien transcrit — avez-vous parlé ?"
+                    : "Le moteur a répondu sans rien transcrire "
+                      + "(\(Preferences.shared.engine.fullLabel)) — "
+                      + "audio conservé, « Réessayer » ci-dessous.")
                 // Archivé comme le reste : c'est l'observation la plus utile
                 // du corpus, et c'était la seule qu'il jetait.
-                collect(samples: samples, primary: result, mode: used,
-                        outcome: .empty)
+                if !parRelais {                                    // RELAIS —
+                    collect(samples: samples, primary: result, mode: used,
+                            outcome: .empty)
+                }
                 return
             }
             if parRelais {                                     // RELAIS —

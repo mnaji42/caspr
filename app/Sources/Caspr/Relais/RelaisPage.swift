@@ -462,12 +462,34 @@ final class RelaisPage: NSObject {
         // précédent coupait la phrase.
         var precedent = ""
         var stable = 0
+        var vide = 0
         for _ in 0..<240 {                                  // 60 s
             try Task.checkCancellation()
             try? await Task.sleep(for: .milliseconds(250))
             let lu = try? await appeler("return window.__relais.lire(sel);",
                                         ["sel": selecteurs.composeur])
             let texte = (lu?["texte"] as? String) ?? ""
+
+            // La zone est revenue et reste vide : il n'y avait rien à
+            // transcrire. Appuyer sur la touche sans parler est un geste
+            // ordinaire — on se ravise, on est interrompu — et il laissait la
+            // barre sur « Transcription… » jusqu'à l'expiration d'une minute,
+            // sans autre issue qu'Échap.
+            //
+            // Quatre secondes, et non une : dans le cas normal, la zone
+            // revient déjà remplie, mais rien ne garantit que les deux
+            // arrivent au même instant. Attendre un peu coûte moins qu'un faux
+            // « rien entendu » sur une dictée réelle.
+            if texte.isEmpty {
+                vide += 1
+                if vide >= 16 {
+                    Log.info("relais : la zone est revenue vide — rien n'a été dicté")
+                    return ""
+                }
+            } else {
+                vide = 0
+            }
+
             if !texte.isEmpty && texte == precedent {
                 stable += 1
                 if stable >= 4 {                            // ~1 s sans changement

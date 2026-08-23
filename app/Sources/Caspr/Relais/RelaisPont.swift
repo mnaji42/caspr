@@ -225,6 +225,51 @@ extension RelaisPage {
           return { ok: true };
         },
 
+        // Clique le bouton « copier » **de la réponse**, et non le premier venu.
+        //
+        // ChatGPT en pose un sous chaque message, le vôtre compris. Chercher
+        // dans toute la page revenait donc à copier sa propre demande : le
+        // prompt et la transcription atterrissaient au curseur, sans que rien
+        // ne signale l'erreur puisqu'un texte arrivait bien.
+        //
+        // On part donc de la dernière réponse, on remonte jusqu'au bloc qui la
+        // porte, et on ne cherche le bouton que là-dedans. Remonter est
+        // nécessaire : la barre d'actions n'est pas dans le corps du message
+        // mais à côté, dans le même tour de conversation.
+        copierLaReponse(selReponse, selCopier) {
+          let reponses = [];
+          if (selReponse) {
+            try { reponses = [...document.querySelectorAll(selReponse)]; } catch (e) {}
+          }
+          if (!reponses.length) {
+            for (const s of HEURISTIQUES.reponse) {
+              reponses = [...document.querySelectorAll(s)];
+              if (reponses.length) break;
+            }
+          }
+          const visibles = reponses.filter((el) => el.getClientRects().length > 0);
+          if (!visibles.length) return { ok: false, raison: 'pas de réponse' };
+
+          const selecteurs = selCopier ? [selCopier, ...HEURISTIQUES.copier]
+                                       : HEURISTIQUES.copier;
+          let noeud = visibles[visibles.length - 1];
+          // Quatre niveaux : assez pour sortir du corps du message et atteindre
+          // le tour de conversation, pas assez pour ressortir dans la page et
+          // retrouver le bouton du message précédent.
+          for (let i = 0; i < 4 && noeud; i++) {
+            for (const s of selecteurs) {
+              let bouton = null;
+              try { bouton = noeud.querySelector(s); } catch (e) {}
+              if (bouton && bouton.getClientRects().length > 0) {
+                bouton.click();
+                return { ok: true };
+              }
+            }
+            noeud = noeud.parentElement;
+          }
+          return { ok: false, raison: 'pas de bouton copier' };
+        },
+
         // Clique le **dernier** élément qui corresponde, et dit s'il existait.
         //
         // Le dernier, parce qu'une conversation en compte un par réponse. Le

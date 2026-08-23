@@ -642,7 +642,8 @@ final class RelaisPage: NSObject {
         // Le bouton de ChatGPT quand on sait où il est, la lecture du DOM
         // sinon — pour ne pas casser une configuration antérieure.
         let reponse = selecteurs.saitCopier
-            ? try await copierReponse(patienceSecondes: patienceSecondes)
+            ? try await copierReponse(patienceSecondes: patienceSecondes,
+                                      empreinteEnvoyee: empreinte(encadrement.avant))
             : try await attendreReponse(patienceSecondes: patienceSecondes)
         charger()          // fil neuf pour la prochaine dictée
         return reponse
@@ -701,7 +702,8 @@ final class RelaisPage: NSObject {
     /// Le presse-papiers est rendu tel qu'on l'a trouvé : il appartient à
     /// l'utilisateur, et une dictée n'a pas à lui faire perdre ce qu'il y
     /// gardait.
-    private func copierReponse(patienceSecondes: Double) async throws -> String {
+    private func copierReponse(patienceSecondes: Double,
+                               empreinteEnvoyee: String) async throws -> String {
         let presse = NSPasteboard.general
         let avant = presse.changeCount
         let sauvegarde = presse.string(forType: .string)
@@ -710,8 +712,9 @@ final class RelaisPage: NSObject {
         for _ in 0..<Int(patienceSecondes * 4) {
             try Task.checkCancellation()
             try? await Task.sleep(for: .milliseconds(250))
-            let r = try? await appeler("return window.__relais.cliquerDernier('copier', sel);",
-                                       ["sel": selecteurs.copier])
+            let r = try? await appeler(
+                "return window.__relais.copierLaReponse(selReponse, selCopier);",
+                ["selReponse": selecteurs.reponse, "selCopier": selecteurs.copier])
             if r?["ok"] as? Bool == true { clique = true; break }
             if let message = await erreurAffichee() { throw Erreur.refusParChatGPT(message) }
         }
@@ -726,6 +729,16 @@ final class RelaisPage: NSObject {
             presse.clearContents()
             if let sauvegarde { presse.setString(sauvegarde, forType: .string) }
             guard !texte.isEmpty else { throw Erreur.pasDeReponse }
+            // Garde-fou : ce qu'on vient de copier ne doit pas être ce qu'on
+            // vient d'envoyer. Le délimiteur de la consigne ne figure jamais
+            // dans une réponse, et sa présence signe un bouton « copier » pris
+            // sous le mauvais message. Un texte arrivait alors bien au curseur,
+            // ce qui rendait la méprise invisible — c'est le prompt lui-même
+            // qui s'écrivait dans l'éditeur.
+            if !empreinteEnvoyee.isEmpty, texte.contains(empreinteEnvoyee) {
+                Log.error("relais : copie de la demande au lieu de la réponse")
+                throw Erreur.pasDeReponse
+            }
             return texte
         }
         throw Erreur.pasDeReponse

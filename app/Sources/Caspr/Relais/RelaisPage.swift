@@ -639,7 +639,11 @@ final class RelaisPage: NSObject {
         guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, secondes: 10) else {
             throw Erreur.introuvable(.envoi)
         }
-        let reponse = try await attendreReponse(patienceSecondes: patienceSecondes)
+        // Le bouton de ChatGPT quand on sait où il est, la lecture du DOM
+        // sinon — pour ne pas casser une configuration antérieure.
+        let reponse = selecteurs.saitCopier
+            ? try await copierReponse(patienceSecondes: patienceSecondes)
+            : try await attendreReponse(patienceSecondes: patienceSecondes)
         charger()          // fil neuf pour la prochaine dictée
         return reponse
     }
@@ -680,6 +684,51 @@ final class RelaisPage: NSObject {
             if lu?["ok"] as? Bool == true { return true }
         }
         return false
+    }
+
+    /// Attend la fin de la réponse, puis la récupère par le bouton de ChatGPT.
+    ///
+    /// Le bouton « copier » n'apparaît qu'une fois la génération terminée : sa
+    /// présence est donc à la fois le signal de fin — qu'on devinait
+    /// jusqu'ici en chronométrant l'arrêt du texte — et le moyen d'extraction.
+    ///
+    /// Extraction bien meilleure que la lecture du DOM, qui dépend du nœud
+    /// désigné à la calibration : cliquer sur un paragraphe de la réponse
+    /// faisait rendre ce seul paragraphe, sans que rien ne signale l'amputation.
+    /// Le bouton, lui, rend la réponse entière, dans la mise en forme voulue
+    /// par ChatGPT.
+    ///
+    /// Le presse-papiers est rendu tel qu'on l'a trouvé : il appartient à
+    /// l'utilisateur, et une dictée n'a pas à lui faire perdre ce qu'il y
+    /// gardait.
+    private func copierReponse(patienceSecondes: Double) async throws -> String {
+        let presse = NSPasteboard.general
+        let avant = presse.changeCount
+        let sauvegarde = presse.string(forType: .string)
+
+        var clique = false
+        for _ in 0..<Int(patienceSecondes * 4) {
+            try Task.checkCancellation()
+            try? await Task.sleep(for: .milliseconds(250))
+            let r = try? await appeler("return window.__relais.cliquerDernier('copier', sel);",
+                                       ["sel": selecteurs.copier])
+            if r?["ok"] as? Bool == true { clique = true; break }
+            if let message = await erreurAffichee() { throw Erreur.refusParChatGPT(message) }
+        }
+        guard clique else { throw Erreur.pasDeReponse }
+
+        // Le clic est asynchrone côté page : on attend que le presse-papiers
+        // change plutôt que de le lire aussitôt.
+        for _ in 0..<40 {                                       // jusqu'à 10 s
+            try? await Task.sleep(for: .milliseconds(250))
+            guard presse.changeCount != avant else { continue }
+            let texte = presse.string(forType: .string) ?? ""
+            presse.clearContents()
+            if let sauvegarde { presse.setString(sauvegarde, forType: .string) }
+            guard !texte.isEmpty else { throw Erreur.pasDeReponse }
+            return texte
+        }
+        throw Erreur.pasDeReponse
     }
 
     /// Attend que la réponse apparaisse, puis cesse de grandir.

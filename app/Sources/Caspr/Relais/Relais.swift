@@ -74,6 +74,8 @@ final class Relais {
     var estCalibre: Bool { RelaisSelecteurs.charger().estCalibre }
     /// Les deux sélecteurs supplémentaires de l'aller-retour sont-ils connus ?
     var saitDialoguer: Bool { RelaisSelecteurs.charger().saitDialoguer }
+    /// Vrai quand la réponse est récupérée par le bouton de ChatGPT.
+    var saitCopier: Bool { RelaisSelecteurs.charger().saitCopier }
 
     /// Charge la page au lancement quand le mode est déjà actif.
     ///
@@ -369,12 +371,24 @@ final class Relais {
             do { _ = try await page.calibrer(.envoi) }
             catch { Self.alerter("Relais", error.localizedDescription); return }
 
-            Self.alerter("Bouton 2 sur 2 — la réponse", """
+            Self.alerter("Bouton 2 sur 3 — la réponse", """
                 Attendez que ChatGPT ait fini de répondre, puis cliquez sur sa réponse.
 
                 Sur le texte lui-même, pas sur les icônes en dessous.
                 """)
             do { _ = try await page.calibrer(.reponse) }
+            catch { Self.alerter("Relais", error.localizedDescription); return }
+
+            Self.alerter("Bouton 3 sur 3 — copier", """
+                Cliquez maintenant l'icône « copier » sous la réponse — deux carrés \
+                superposés.
+
+                C'est par elle que Caspr récupérera le texte. Elle rend la réponse \
+                entière et proprement mise en forme, là où lire la page directement \
+                donnait parfois un seul paragraphe. Et comme elle n'apparaît qu'une fois \
+                la réponse finie, elle dit aussi à Caspr quand attendre est terminé.
+                """)
+            do { _ = try await page.calibrer(.copier) }
             catch { Self.alerter("Relais", error.localizedDescription); return }
 
             page.charger()

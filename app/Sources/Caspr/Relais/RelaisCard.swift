@@ -94,7 +94,12 @@ struct RelaisCard<Moteurs: View>: View {
                   faite: dialogue,
                   disponible: calibre,
                   explication: dialogue
-                    ? "Ce que vous dictez repart à ChatGPT pour être remis en ordre. "
+                    ? (Relais.partage.saitCopier
+                       ? "Ce que vous dictez repart à ChatGPT pour être remis en ordre. "
+                       : "⚠︎ Recalibrez : la réponse est désormais récupérée par le bouton "
+                         + "« copier » de ChatGPT, qui la rend entière. Sans lui, il arrive "
+                         + "qu'un seul paragraphe soit écrit.\n\n"
+                         + "Ce que vous dictez repart à ChatGPT pour être remis en ordre. ")
                       + "Le mode se choisit sur la barre de dictée. Comptez une trentaine "
                       + "de secondes de plus, et sachez que le texte entre alors dans "
                       + "votre historique ChatGPT."

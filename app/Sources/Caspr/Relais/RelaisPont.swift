@@ -47,6 +47,11 @@ extension RelaisPage {
           '[data-message-author-role="assistant"]',
           'article',
         ],
+        copier: [
+          '[data-testid="copy-turn-action-button"]',
+          'button[aria-label*="copi" i]',
+          'button[aria-label*="copy" i]',
+        ],
       };
 
       const visible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
@@ -217,6 +222,29 @@ extension RelaisPage {
           // Rendre le focus : le garder ferait de cette page le champ focalisé
           // du système, et l'insertion au curseur écrirait ici.
           el.blur();
+          return { ok: true };
+        },
+
+        // Clique le **dernier** élément qui corresponde, et dit s'il existait.
+        //
+        // Le dernier, parce qu'une conversation en compte un par réponse. Le
+        // fil est neuf à chaque passe, donc il n'y en a qu'un — mais s'en
+        // remettre à cette certitude, c'est se préparer à lire la réponse
+        // d'avant le jour où un rechargement n'aura pas abouti.
+        cliquerDernier(cible, selecteur) {
+          let elements = [];
+          if (selecteur) {
+            try { elements = [...document.querySelectorAll(selecteur)]; } catch (e) {}
+          }
+          if (!elements.length) {
+            for (const s of (HEURISTIQUES[cible] || [])) {
+              elements = [...document.querySelectorAll(s)];
+              if (elements.length) break;
+            }
+          }
+          const visibles = elements.filter((el) => el.isConnected);
+          if (!visibles.length) return { ok: false, raison: 'introuvable' };
+          visibles[visibles.length - 1].click();
           return { ok: true };
         },
 

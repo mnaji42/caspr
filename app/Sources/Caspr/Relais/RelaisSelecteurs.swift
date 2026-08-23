@@ -2,7 +2,7 @@ import Foundation
 
 /// Les trois éléments de la page ChatGPT dont le relais a besoin.
 enum RelaisCible: String, CaseIterable, Codable {
-    case micro, stop, composeur, envoi, reponse
+    case micro, stop, composeur, envoi, reponse, copier
 
     var libelle: String {
         switch self {
@@ -11,6 +11,7 @@ enum RelaisCible: String, CaseIterable, Codable {
         case .composeur: "la zone de texte"
         case .envoi:     "le bouton d'envoi (la flèche bleue)"
         case .reponse:   "la réponse de ChatGPT"
+        case .copier:    "le bouton copier sous la réponse"
         }
     }
 }
@@ -38,6 +39,15 @@ struct RelaisSelecteurs: Codable, Equatable {
     /// pour une fonctionnalité qu'on n'utilisera peut-être jamais.
     var envoi = ""
     var reponse = ""
+    /// Le bouton « copier » sous la réponse.
+    ///
+    /// C'est le chemin d'extraction à privilégier, et pour deux raisons qui
+    /// n'en font qu'une. Il rend le texte **entier** et proprement formaté, là
+    /// où lire le DOM dépend du nœud qu'on a désigné — cliquer sur un
+    /// paragraphe de la réponse donnait ce seul paragraphe. Et il n'existe
+    /// qu'une fois la réponse terminée : sa présence est donc le signal de fin
+    /// que l'on devinait jusque-là à coups de chronomètre.
+    var copier = ""
 
     subscript(cible: RelaisCible) -> String {
         get {
@@ -47,6 +57,7 @@ struct RelaisSelecteurs: Codable, Equatable {
             case .composeur: composeur
             case .envoi: envoi
             case .reponse: reponse
+            case .copier: copier
             }
         }
         set {
@@ -56,6 +67,7 @@ struct RelaisSelecteurs: Codable, Equatable {
             case .composeur: composeur = newValue
             case .envoi: envoi = newValue
             case .reponse: reponse = newValue
+            case .copier: copier = newValue
             }
         }
     }
@@ -66,6 +78,9 @@ struct RelaisSelecteurs: Codable, Equatable {
 
     /// Vrai quand l'aller-retour avec ChatGPT est possible.
     var saitDialoguer: Bool { estCalibre && !envoi.isEmpty && !reponse.isEmpty }
+
+    /// Sait-on récupérer la réponse par le bouton de ChatGPT ?
+    var saitCopier: Bool { !copier.isEmpty }
 
     // MARK: - Décodage tolérant aux champs qui n'existaient pas encore
     //
@@ -87,6 +102,7 @@ struct RelaisSelecteurs: Codable, Equatable {
         composeur = try c.decodeIfPresent(String.self, forKey: .composeur) ?? ""
         envoi = try c.decodeIfPresent(String.self, forKey: .envoi) ?? ""
         reponse = try c.decodeIfPresent(String.self, forKey: .reponse) ?? ""
+        copier = try c.decodeIfPresent(String.self, forKey: .copier) ?? ""
     }
 
     init() {}

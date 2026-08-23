@@ -257,6 +257,10 @@ extension RelaisPage {
             main { padding: 0 !important; }
             form { margin: 0 !important; }
             body { overflow: hidden !important; }
+            /* Les suggestions sous le champ — « Créer une image », « Écrire ou
+               modifier » — débordaient dans la bande et la déséquilibraient.
+               Elles sont les frères qui suivent le formulaire. */
+            main form ~ * { display: none !important; }
           `;
           document.head.appendChild(style);
           const el = trouver('composeur', selecteur);
@@ -264,7 +268,9 @@ extension RelaisPage {
           // le bloc qui les porte l'une et l'autre, pour que le cadrage tienne
           // dans les deux états.
           const bloc = el ? (el.closest('form') || el.parentElement || el) : null;
-          if (bloc) bloc.scrollIntoView({ block: 'center' });
+          // Centré dans les deux sens : la bande est plus étroite que la page,
+          // et un cadrage vertical seul laissait la pastille décalée à gauche.
+          if (bloc) bloc.scrollIntoView({ block: 'center', inline: 'center' });
           return { ok: true };
         },
 

@@ -260,22 +260,40 @@ final class RelaisPage: NSObject {
         Task { await rafraichirEtiquette() }
     }
 
-    /// La barre pendant la dictée : la pastille de ChatGPT, et rien d'autre.
+    /// Ce qu'on montre pendant la dictée, selon le réglage.
     ///
-    /// L'afficher règle aussi un défaut ancien : le système diffère les rendus
-    /// d'une fenêtre qu'il croit cachée, ce qui retardait l'apparition du bouton
-    /// d'arrêt et faisait échouer la première dictée de chaque session.
+    /// Les trois passent par la **fenêtre de la barre**, jamais par celle des
+    /// réglages : quelle que soit sa taille, elle ne doit pas pouvoir prendre
+    /// le clavier. Une fenêtre clé ferait écrire la dictée dans la page au lieu
+    /// de l'éditeur — c'est le défaut le plus coûteux qu'ait connu ce relais.
+    ///
+    /// L'afficher, même en barre, règle en prime un défaut ancien : le système
+    /// diffère les rendus d'une fenêtre qu'il croit cachée, ce qui retardait
+    /// l'apparition du bouton d'arrêt.
     func afficherBarre() {
         rendreLaVueALaBarre()
-        webView.pageZoom = Self.zoomBarre
-        Task { _ = try? await appeler("return window.__relais.compacter(true, sel);",
-                                      ["sel": selecteurs.composeur]) }
+        let affichage = RelaisAffichage.courant
+        guard affichage != .rien else {
+            // Hors champ, et non retirée de l'écran : une fenêtre cachée voit
+            // son JavaScript suspendu, ce qui ferait échouer l'attente.
+            barre.setFrameOrigin(Self.horsChamp)
+            barre.orderFrontRegardless()
+            return
+        }
+
+        let compact = affichage == .barre
+        webView.pageZoom = compact ? Self.zoomBarre : 1
+        Task { _ = try? await appeler("return window.__relais.compacter(actif, sel);",
+                                      ["actif": compact, "sel": selecteurs.composeur]) }
+
         guard let ecran = NSScreen.main else { return }
         let cadre = ecran.visibleFrame
-        barre.setFrame(NSRect(x: cadre.midX - Self.tailleBarre.width / 2,
-                              y: cadre.minY + Self.hauteurBarre,
-                              width: Self.tailleBarre.width,
-                              height: Self.tailleBarre.height),
+        let taille = compact ? Self.tailleBarre : Self.enVue.size
+        barre.setFrame(NSRect(x: cadre.midX - taille.width / 2,
+                              y: compact ? cadre.minY + Self.hauteurBarre
+                                         : cadre.midY - taille.height / 2,
+                              width: taille.width,
+                              height: taille.height),
                        display: true)
         barre.orderFrontRegardless()
     }

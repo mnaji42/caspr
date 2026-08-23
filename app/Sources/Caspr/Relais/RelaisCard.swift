@@ -27,6 +27,7 @@ struct RelaisCard<Moteurs: View>: View {
     @State private var calibre = Relais.partage.estCalibre
     @State private var dialogue = Relais.partage.saitDialoguer
     @State private var depart = Relais.partage.departPersonnalise
+    @State private var affichage = RelaisAffichage.courant
 
     var body: some View {
         SettingsToggleRow(
@@ -47,6 +48,25 @@ struct RelaisCard<Moteurs: View>: View {
             // autorisation système. Les empiler dans une seule carte, comme
             // c'était le cas, cachait cette progression et laissait croire
             // qu'on pouvait commencer par le milieu.
+            Card {
+                Text("Ce qu'on voit pendant la dictée")
+                    .font(.system(size: 13, weight: .semibold))
+                Note("La page ChatGPT travaille dans tous les cas ; ce réglage décide "
+                     + "seulement de ce qu'elle montre. Quelle que soit la taille, elle "
+                     + "ne prend jamais le clavier : le texte dicté va à votre curseur, "
+                     + "pas dans la page.")
+                ForEach(RelaisAffichage.allCases, id: \.rawValue) { choix in
+                    ChoiceCard(title: choix.libelle,
+                               subtitle: choix.explication,
+                               selected: affichage == choix,
+                               recommended: false,
+                               action: {
+                                   RelaisAffichage.courant = choix
+                                   affichage = choix
+                               }) { EmptyView() }
+                }
+            }
+
             etape(numero: 1,
                   titre: "Dicter — session ChatGPT",
                   faite: calibre,
@@ -179,6 +199,7 @@ struct RelaisCard<Moteurs: View>: View {
         calibre = Relais.partage.estCalibre
         dialogue = Relais.partage.saitDialoguer
         depart = Relais.partage.departPersonnalise
+        affichage = RelaisAffichage.courant
     }
 
     private var note: String? {

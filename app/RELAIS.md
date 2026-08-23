@@ -26,6 +26,16 @@ Tout tient dans `app/Sources/Caspr/Relais/`, un fichier par responsabilité :
 | `Relais.swift` | La façade et le cycle de vie. Contient aussi `RelaisEngine`, l'adaptateur vers `SpeechEngine`. |
 | `RelaisPage.swift` | La `WKWebView`, ses **deux** fenêtres, le micro, les popups de connexion. |
 
+### Ce qu'on montre pendant la dictée
+
+Trois niveaux, réglables : rien, la barre seule, la page entière. Le troisième
+existe pour rendre un défaut diagnosticable sans lire un journal — on y voit le
+texte envoyé, la réponse, une erreur de ChatGPT.
+
+Les trois passent par la **fenêtre de la barre**, jamais par celle des
+réglages, quelle que soit leur taille. Une fenêtre capable de devenir clé ferait
+écrire la dictée dans la page au lieu de l'éditeur.
+
 ### Les deux fenêtres
 
 Leurs exigences sont opposées, et une seule fenêtre qui change de costume ne

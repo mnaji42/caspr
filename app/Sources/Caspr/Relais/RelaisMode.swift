@@ -54,6 +54,51 @@ enum RelaisMode: String, CaseIterable, Codable {
     static var proposes: [RelaisMode] { [.brut, .reorganiser] }
 }
 
+/// Ce qu'on montre de la page ChatGPT pendant qu'elle travaille.
+///
+/// Trois niveaux, parce que trois usages. Rien, pour qui veut juste dicter et
+/// à qui la mécanique est indifférente. La barre, pour voir que ça écoute et
+/// que ça transcrit. La page entière, pour comprendre ce qui se passe quand
+/// quelque chose cloche — c'est le seul mode qui rende un défaut
+/// diagnosticable sans lire un journal.
+///
+/// Quelle que soit la taille, la fenêtre ne prend **jamais** le clavier
+/// pendant une dictée : c'est la fenêtre de la barre qu'on agrandit, pas celle
+/// des réglages. Une fenêtre capable de devenir clé ferait écrire la dictée
+/// dans la page au lieu de l'éditeur.
+enum RelaisAffichage: String, CaseIterable, Codable {
+    case rien, barre, page
+
+    var libelle: String {
+        switch self {
+        case .rien: "Ne rien afficher"
+        case .barre: "La barre seule"
+        case .page: "La page entière"
+        }
+    }
+
+    var explication: String {
+        switch self {
+        case .rien:
+            "Seule la barre de Caspr est visible. ChatGPT travaille hors champ."
+        case .barre:
+            "Une bande fine au-dessus de la barre de Caspr : on y voit ChatGPT "
+            + "écouter, puis transcrire."
+        case .page:
+            "La page ChatGPT en grand, le temps de la dictée. Pour voir ce qui "
+            + "s'y passe réellement — le texte envoyé, la réponse, une erreur."
+        }
+    }
+
+    private static let cle = "relais.affichage"
+
+    static var courant: RelaisAffichage {
+        get { RelaisAffichage(rawValue: UserDefaults.standard.string(forKey: cle) ?? "")
+              ?? .barre }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: cle) }
+    }
+}
+
 /// L'emballage que Caspr ajoute autour de ce qui a été dicté.
 ///
 /// La consigne, elle, se **dit** — « traduis ça en anglais », « réponds-lui

@@ -39,13 +39,6 @@ enum RelaisAffichage: String, CaseIterable, Codable {
         }
     }
 
-    private static let cle = "relais.affichage"
-
-    static var courant: RelaisAffichage {
-        get { RelaisAffichage(rawValue: UserDefaults.standard.string(forKey: cle) ?? "")
-              ?? .barre }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: cle) }
-    }
 }
 
 /// Les modules livrés avec l'application, et celui qui est retenu.
@@ -64,12 +57,59 @@ enum RelaisCatalogue {
         identifiant: "reorganiser", nom: "Réorganiser", integre: true,
         avant: RelaisPrompt.reorganiser + "\n\n=== DÉBUT DE LA TRANSCRIPTION ===\n",
         apres: "\n=== FIN DE LA TRANSCRIPTION ===",
-        actions: [.envoyer],
+        actions: [.demanderUneReponse],
         sorties: [.curseur, .note], sortieParDefaut: .curseur,
         affichage: .barre)
 
-    /// Tous les modules connus. Les modules de l'utilisateur s'y ajouteront.
-    static var tous: [RelaisModule] { [brut, reorganiser] }
+    /// Ceux que l'application livre.
+    static var livres: [RelaisModule] {
+        // L'affichage était un réglage unique pour toute la fonctionnalité ; il
+        // appartient maintenant à chaque module. Le sien est repris comme
+        // valeur de départ des modules livrés, plutôt que de le laisser
+        // retomber au défaut d'usine : un réglage qu'on a pris la peine de
+        // faire ne disparaît pas parce que le code a changé d'avis sur l'endroit
+        // où le ranger.
+        let ancien = UserDefaults.standard.string(forKey: "relais.affichage")
+            .flatMap(RelaisAffichage.init(rawValue:))
+        guard let ancien else { return [brut, reorganiser] }
+        var b = brut, r = reorganiser
+        b.affichage = ancien
+        r.affichage = ancien
+        return [b, r]
+    }
+
+    private static let cleModules = "relais.modules"
+
+    /// Tous les modules connus — les livrés, tels que l'utilisateur les a
+    /// réglés, plus les siens.
+    ///
+    /// La fusion est faite dans ce sens et pas l'autre : ce qui est enregistré
+    /// l'emporte, et un module livré qui n'y figure pas est **ajouté**. C'est
+    /// ce qui fait qu'une version future peut en livrer un nouveau sans que
+    /// personne n'ait à réinitialiser quoi que ce soit — et qu'un réglage déjà
+    /// fait n'est jamais écrasé par la valeur d'usine.
+    static var tous: [RelaisModule] {
+        guard let data = UserDefaults.standard.data(forKey: cleModules),
+              let enregistres = try? JSONDecoder().decode([RelaisModule].self, from: data),
+              !enregistres.isEmpty
+        else { return livres }
+        let connus = Set(enregistres.map(\.identifiant))
+        return enregistres + livres.filter { !connus.contains($0.identifiant) }
+    }
+
+    static func enregistrer(_ modules: [RelaisModule]) {
+        guard let data = try? JSONEncoder().encode(modules) else { return }
+        UserDefaults.standard.set(data, forKey: cleModules)
+    }
+
+    /// Remplace un module par sa version modifiée.
+    static func remplacer(_ module: RelaisModule) {
+        var liste = tous
+        guard let i = liste.firstIndex(where: { $0.identifiant == module.identifiant })
+        else { return }
+        liste[i] = module
+        enregistrer(liste)
+    }
 
     /// Ceux qu'on peut réellement proposer, ici et maintenant.
     ///

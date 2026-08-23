@@ -27,7 +27,7 @@ struct RelaisCard<Moteurs: View>: View {
     @State private var calibre = Relais.partage.estCalibre
     @State private var dialogue = Relais.partage.saitDialoguer
     @State private var depart = Relais.partage.departPersonnalise
-    @State private var affichage = RelaisAffichage.courant
+    @State private var modules = RelaisCatalogue.tous
 
     var body: some View {
         // Une seule carte pour la fonctionnalité : la bascule, ce qu'on montre
@@ -51,15 +51,29 @@ struct RelaisCard<Moteurs: View>: View {
             if actif {
                 Divider().opacity(0.25)
 
-                Row(label: "Montrer pendant la dictée") {
-                    PillPicker(options: RelaisAffichage.allCases.map {
-                                   ($0, $0.libelleCourt)
-                               },
-                               selection: Binding(get: { affichage },
-                                                  set: { RelaisAffichage.courant = $0
-                                                         affichage = $0 }))
+                // Un affichage par module, et non un pour toute la
+                // fonctionnalité. « Brut » n'a rien à montrer — c'est du texte
+                // qui part au curseur ; un module qui ouvre une conversation
+                // veut au contraire la page en grand. Un réglage unique
+                // obligeait à choisir pour le pire des deux cas.
+                ForEach(modules) { module in
+                    Row(label: module.nom) {
+                        PillPicker(options: RelaisAffichage.allCases.map {
+                                       ($0, $0.libelleCourt)
+                                   },
+                                   selection: Binding(
+                                       get: { module.affichage },
+                                       set: { choisi in
+                                           var maj = module
+                                           maj.affichage = choisi
+                                           RelaisCatalogue.remplacer(maj)
+                                           relire()
+                                       }))
+                    }
                 }
-                Note(affichage.explication)
+                Note("Ce que la page ChatGPT montre pendant que ce module travaille. "
+                     + "Elle travaille dans tous les cas ; le réglage ne décide que de "
+                     + "ce qu'elle laisse voir.")
 
                 ButtonRow {
                     Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
@@ -208,7 +222,7 @@ struct RelaisCard<Moteurs: View>: View {
         calibre = Relais.partage.estCalibre
         dialogue = Relais.partage.saitDialoguer
         depart = Relais.partage.departPersonnalise
-        affichage = RelaisAffichage.courant
+        modules = RelaisCatalogue.tous
     }
 
     private var note: String? {

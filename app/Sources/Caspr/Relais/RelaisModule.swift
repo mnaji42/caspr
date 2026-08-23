@@ -140,7 +140,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// enregistrée : un module ne choisit pas quand, seulement quoi.
     var etapes: [RelaisAction] { RelaisAction.allCases.filter { actions.contains($0) } }
 
-    var demandeUnAllerRetour: Bool { actions.contains(.envoyer) }
+    var demandeUnAllerRetour: Bool { actions.contains(.demanderUneReponse) }
     var ecranPossible: Bool { actions.contains(.joindreEcran) }
     var ditLaReponse: Bool { actions.contains(.direLaReponse) }
 

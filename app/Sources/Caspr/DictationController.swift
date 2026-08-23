@@ -162,6 +162,11 @@ final class DictationController {
             let modes = RelaisCatalogue.proposes
             guard modes.indices.contains(index) else { return }
             RelaisCatalogue.courant = modes[index]
+            // L'affichage appartient au module : changer de module en pleine
+            // dictée doit le faire suivre. C'était le seul réglage figé à
+            // l'appui de la touche, et c'est le cas courant — on change d'avis
+            // parce qu'on a déjà commencé à parler.
+            if state == .recording { Relais.partage.afficherBarre() }
             refreshOverlay()
         }
         overlay.onSelectMode = { [weak self] mode in

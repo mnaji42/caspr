@@ -194,7 +194,17 @@ final class RelaisPage: NSObject {
                             backing: .buffered, defer: false)
         barre.isReleasedWhenClosed = false
         barre.hidesOnDeactivate = false
-        barre.level = .statusBar
+        // Un cran **sous** la barre de Caspr, qui vit au niveau `.statusBar`.
+        //
+        // Au même niveau, celle qui passe devant est la dernière ordonnée : à
+        // l'ouverture initiale Caspr gagnait, à l'ouverture en cours de dictée
+        // le relais gagnait et recouvrait les pastilles — on ne pouvait plus
+        // changer de mode. Un niveau règle l'ordre une fois pour toutes, là où
+        // une course le rejoue à chaque fois.
+        //
+        // La barre de Caspr est celle qu'on manipule ; celle du relais n'est
+        // qu'un témoin. Le témoin passe derrière.
+        barre.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue - 1)
         barre.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
         cacher()
@@ -284,29 +294,37 @@ final class RelaisPage: NSObject {
     /// l'apparition du bouton d'arrêt.
     func afficherBarre() {
         rendreLaVueALaBarre()
-        let affichage = RelaisAffichage.courant
-        guard affichage != .rien else {
-            // Hors champ, et non retirée de l'écran : une fenêtre cachée voit
-            // son JavaScript suspendu, ce qui ferait échouer l'attente.
-            barre.setFrameOrigin(Self.horsChamp)
-            barre.orderFrontRegardless()
-            return
-        }
-
+        let affichage = RelaisCatalogue.courant.affichage
         let compact = affichage == .barre
+
+        // La page doit être **rendue**, même quand on ne veut rien voir.
+        //
+        // « Rien » a d'abord été traduit par « fenêtre laissée hors champ ».
+        // C'était faux, et du même genre que le défaut qui retardait
+        // l'apparition du bouton d'arrêt à la première dictée : le système
+        // suspend une page qu'il croit cachée, capture micro comprise. La
+        // dictée partait donc sans que rien ne soit enregistré, et ChatGPT
+        // répondait n'avoir rien entendu.
+        //
+        // La fenêtre est donc posée à sa place habituelle et rendue
+        // transparente. Elle occupe l'écran sans rien y montrer, et le système
+        // n'a plus de raison de la geler.
         webView.pageZoom = compact ? Self.zoomBarre : 1
         Task { _ = try? await appeler("return window.__relais.compacter(actif, sel);",
                                       ["actif": compact, "sel": selecteurs.composeur]) }
 
         guard let ecran = NSScreen.main else { return }
         let cadre = ecran.visibleFrame
-        let taille = compact ? Self.tailleBarre : Self.enVue.size
+        let taille = compact || affichage == .rien ? Self.tailleBarre : Self.enVue.size
         barre.setFrame(NSRect(x: cadre.midX - taille.width / 2,
-                              y: compact ? cadre.minY + Self.hauteurBarre
-                                         : cadre.midY - taille.height / 2,
+                              y: compact || affichage == .rien
+                                 ? cadre.minY + Self.hauteurBarre
+                                 : cadre.midY - taille.height / 2,
                               width: taille.width,
                               height: taille.height),
                        display: true)
+        barre.alphaValue = affichage == .rien ? 0 : 1
+        barre.ignoresMouseEvents = affichage == .rien
         barre.orderFrontRegardless()
     }
 
@@ -320,6 +338,11 @@ final class RelaisPage: NSObject {
         annexes.removeAll()
         fenetre.orderOut(nil)
         rendreLaVueALaBarre()
+        // Rendue opaque avant d'être rangée : la prochaine ouverture part d'une
+        // fenêtre normale, et non d'une fenêtre invisible qu'il faudrait penser
+        // à rallumer.
+        barre.alphaValue = 1
+        barre.ignoresMouseEvents = false
         barre.setFrameOrigin(Self.horsChamp)
         barre.orderFrontRegardless()
     }

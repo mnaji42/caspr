@@ -79,18 +79,31 @@ enum RelaisCapacite: String, CaseIterable, Codable {
 /// concernent. Le laisser réordonner permettrait d'écrire « récupérer la
 /// réponse » avant « envoyer » — une configuration qu'il faudrait valider au
 /// lieu de la rendre impossible.
+/// Une action est **grossière**, et emploie souvent plusieurs capacités.
+///
+/// « Demander une réponse » ne se réduit pas à cliquer le bouton d'envoi : elle
+/// lit la transcription, l'encadre si le module le prévoit, envoie, puis
+/// attend. Découper cela en autant d'actions donnerait une liste que personne
+/// ne voudrait cocher, et dont la plupart des combinaisons n'auraient aucun
+/// sens. On en veut peu, et qu'elles disent quelque chose.
 enum RelaisAction: String, CaseIterable, Codable {
     /// Joindre une capture de l'écran, avant d'envoyer.
     case joindreEcran
-    /// Envoyer le message dans la conversation.
-    case envoyer
+    /// Encadrer la transcription, l'envoyer, et attendre la réponse.
+    ///
+    /// L'encadrement en fait partie plutôt que d'être une action à lui seul :
+    /// un texte ajouté sans être envoyé ne servirait à rien. Vouloir ou non en
+    /// ajouter est un réglage de cette action — les deux champs vides
+    /// signifient « envoie la transcription telle quelle », ce dont
+    /// « Discuter » a précisément besoin.
+    case demanderUneReponse
     /// Faire lire la réponse à haute voix.
     case direLaReponse
 
     var libelle: String {
         switch self {
         case .joindreEcran: "Joindre l'écran"
-        case .envoyer: "Envoyer"
+        case .demanderUneReponse: "Demander une réponse"
         case .direLaReponse: "Lire la réponse à haute voix"
         }
     }
@@ -98,7 +111,7 @@ enum RelaisAction: String, CaseIterable, Codable {
     var capacitesRequises: [RelaisCapacite] {
         switch self {
         case .joindreEcran: [.capturerEcran]
-        case .envoyer: [.envoyer]
+        case .demanderUneReponse: [.envoyer]
         case .direLaReponse: [.direAHauteVoix]
         }
     }

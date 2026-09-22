@@ -3,10 +3,14 @@ import CasprCore
 
 /// Le choix qui compte : qui écrit le texte définitif.
 ///
-/// Deux lignes, macOS et CrisperWhisper, chacune hébergeant son propre panneau
-/// de configuration. La version de macOS et le modèle Whisper ne sont pas des
-/// choix de même rang — ce sont des détails internes à chaque famille — d'où
-/// leur place **à l'intérieur** de la ligne qui les concerne, et non à côté.
+/// Il n'en reste qu'une ligne, macOS, qui héberge son propre panneau de
+/// configuration. CrisperWhisper en avait une seconde ; elle est partie avec
+/// la refonte de septembre 2026, **en même temps que la migration** qui
+/// ramène ce réglage sur macOS à chaque lancement. Proposer encore la ligne
+/// aurait laissé choisir un moteur, télécharger ses gigaoctets, puis tout
+/// perdre au lancement suivant sans que rien ne le dise. La version de macOS
+/// n'est pas un choix de même rang — c'est un détail interne à la famille —
+/// d'où sa place **à l'intérieur** de la ligne, et non à côté.
 ///
 /// ## Le commit transactionnel
 ///
@@ -21,26 +25,10 @@ import CasprCore
 /// cas, la dictée continue avec le moteur précédent, et le panneau ouvert
 /// montre ce qu'il reste à faire.
 struct FinalEngineCard: View, ValidatingComponent {
-    /// Affiche le badge « conseillé pour vous », calculé à l'écran 2.
-    var showsRecommendation = false
-    var isOnboarding = false
-
     @State private var prefs = Preferences.shared
     @State private var safety = EngineSafetyManager.shared
     /// Ce que l'utilisateur vient de désigner, prêt ou non.
     @State private var draft: Preferences.FinalEngineChoice?
-
-    /// Ce qu'on continue d'afficher alors que le réglage a déjà changé.
-    ///
-    /// Arrêter le service fait passer le moteur sur macOS — c'est le sens du
-    /// geste, et le back en tient compte immédiatement. Mais faire sauter la
-    /// sélection d'une ligne à l'autre sous les doigts de quelqu'un qui n'a pas
-    /// cliqué sur macOS est déroutant : il a demandé à libérer de la mémoire,
-    /// pas à changer de moteur. La ligne reste donc où elle était, le message
-    /// de confirmation explique ce qui a changé, et l'affichage se remet
-    /// d'aplomb à la prochaine ouverture — c'est un état de vue, pas un
-    /// réglage, et il disparaît avec elle.
-    @State private var pinned: Preferences.FinalEngineChoice?
     @State private var monitor = EngineStateMonitor.shared
 
     // MARK: - Validité
@@ -55,19 +43,16 @@ struct FinalEngineCard: View, ValidatingComponent {
         }
     }
 
-    /// Ce qui est affiché comme sélectionné : le brouillon, puis l'épinglage,
-    /// puis le réglage.
+    /// Ce qui est affiché comme sélectionné : le brouillon, puis le réglage.
     private var shown: Preferences.FinalEngineChoice {
-        draft ?? pinned ?? prefs.finalEngine
+        draft ?? prefs.finalEngine
     }
 
     var body: some View {
-        // Pas d'enveloppe : les deux cartes de choix **sont** le contenu de
-        // l'écran, et les emboîter dans une troisième carte ajouterait un cadre
-        // autour de deux cadres.
+        // Pas d'enveloppe : la carte de choix **est** le contenu de l'écran,
+        // et l'emboîter dans une seconde ajouterait un cadre autour d'un cadre.
         VStack(alignment: .leading, spacing: 10) {
             choiceRow(.apple)
-            choiceRow(.crisperWhisper)
 
             if safety.isFallingBack {
                 Note("**\(prefs.engine.fullLabel) n'est pas disponible pour "
@@ -77,10 +62,6 @@ struct FinalEngineCard: View, ValidatingComponent {
                      + "opérationnel — votre réglage n'a pas été modifié.",
                      warning: true)
             }
-
-            Note("Rien de tout ça n'est définitif : le moteur se change à tout "
-                 + "moment, ici ou depuis les Réglages, et Caspr arrête le "
-                 + "service dès que vous repassez à macOS.")
         }
         // Le brouillon devient le réglage dès que son moteur sait écrire. Vérifié
         // à chaque changement d'état plutôt qu'au clic : un téléchargement qui
@@ -107,9 +88,7 @@ struct FinalEngineCard: View, ValidatingComponent {
         .onChange(of: monitor.isAnswering) { _, _ in commitIfReady() }
     }
 
-    /// Un clic sur une ligne lève l'épinglage : là, c'est un vrai choix.
     private func choose(_ choice: Preferences.FinalEngineChoice) {
-        pinned = nil
         draft = choice
     }
 
@@ -124,7 +103,7 @@ struct FinalEngineCard: View, ValidatingComponent {
         }
     }
 
-    // MARK: - Les deux lignes
+    // MARK: - La ligne
 
     @ViewBuilder
     private func choiceRow(_ choice: Preferences.FinalEngineChoice) -> some View {
@@ -134,7 +113,6 @@ struct FinalEngineCard: View, ValidatingComponent {
         ChoiceCard(title: title(for: choice),
                    subtitle: subtitle(for: choice),
                    selected: selected,
-                   recommended: showsRecommendation && isRecommended(choice),
                    action: { choose(choice) }) {
             if pending {
                 Note("Ce choix sera enregistré dès que le moteur sera prêt. "
@@ -144,19 +122,16 @@ struct FinalEngineCard: View, ValidatingComponent {
             switch choice {
             case .apple:
                 AppleEngineCard(isSubCard: true, target: .final)
+            // Jamais affichée : le cas ne survit dans l'énumération que
+            // jusqu'à son retrait, dans un commit à lui.
             case .crisperWhisper:
-                CrisperEngineCard(isSubCard: true, isOnboarding: isOnboarding,
-                                  onStopped: { pinned = .crisperWhisper })
+                EmptyView()
             }
         }
     }
 
-    /// Le titre et la description sont ceux du prototype.
-    ///
-    /// Ils nomment ce que **change** le choix plutôt que la technologie, et le
-    /// badge « ★ Conseillé pour vous » est porté par la carte au lieu d'être
-    /// collé au titre : il se lit alors comme une annotation, pas comme une
-    /// partie du nom du moteur.
+    /// Le titre et la description sont ceux du prototype : ils nomment ce
+    /// que **change** le choix plutôt que la technologie.
     private func title(for choice: Preferences.FinalEngineChoice) -> String {
         switch choice {
         case .apple: "macOS (Natif)"
@@ -177,18 +152,11 @@ struct FinalEngineCard: View, ValidatingComponent {
                 + "variables) et nettoie les hésitations (*euh*)."
         }
     }
-
-    private func isRecommended(_ choice: Preferences.FinalEngineChoice) -> Bool {
-        switch prefs.recommendation.choice {
-        case .appleNative: choice == .apple
-        case .crisperWhisper: choice == .crisperWhisper
-        }
-    }
 }
 
 #Preview("Moteur final") {
     ScrollView {
-        FinalEngineCard(showsRecommendation: true)
+        FinalEngineCard()
             .padding(Style.windowPadding)
     }
     .frame(width: Style.windowWidth, height: Style.windowHeight)

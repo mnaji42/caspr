@@ -18,6 +18,15 @@ enum Log {
         logger.info("\(message, privacy: .public)")
     }
 
+    /// Ce qu'on voudra relire après coup, et non seulement voir passer.
+    ///
+    /// `info` n'est gardé qu'en mémoire : un geste fait une seule fois au
+    /// lancement — une migration qui met des fichiers à la corbeille — aurait
+    /// disparu du journal avant que quiconque se demande où ils sont passés.
+    static func notice(_ message: String) {
+        logger.notice("\(message, privacy: .public)")
+    }
+
     static func error(_ message: String) {
         logger.error("\(message, privacy: .public)")
     }

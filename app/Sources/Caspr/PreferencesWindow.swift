@@ -37,11 +37,17 @@ struct PreferencesView: View {
     let history: TranscriptionHistory
     @State private var tab: Tab = .general
 
-    /// Six onglets, dans l'ordre où l'on se pose les questions : *ce qui vaut
-    /// pour toute l'application*, *comment on déclenche*, *avec quoi ça
-    /// transcrit*, puis les trois réserves — mots, historique, corpus.
+    /// Quatre onglets, dans l'ordre où l'on se pose les questions : *ce qui
+    /// vaut pour toute l'application*, *comment on déclenche*, *avec quoi ça
+    /// transcrit*, puis ce qui a été dicté.
+    ///
+    /// Il y en avait six. Le Lexique ne réglait que CrisperWhisper — les deux
+    /// moteurs de macOS l'ignorent, c'est mesuré — et la Collecte archivait des
+    /// dictées pour départager des moteurs qui ne sont plus proposés. Tous deux
+    /// sont partis avec lui : la migration du lancement efface leurs réglages,
+    /// et un onglet qui les réécrirait serait défait au lancement suivant.
     enum Tab: String, CaseIterable {
-        case general, recording, engine, lexicon, history, collection
+        case general, recording, engine, history
 
         /// Le symbole de l'onglet.
         ///
@@ -55,8 +61,6 @@ struct PreferencesView: View {
         /// Le choix suit ce que la page *fait*, pas son titre :
         /// - `⚡` était l'éclair de la vitesse ; le Moteur IA n'a rien de
         ///   rapide, il fait tourner un réseau de neurones — d'où le cerveau.
-        /// - `📦` était un colis ; la Collecte n'expédie rien, elle accumule
-        ///   des mesures — d'où le graphique.
         /// - `🕒` disait l'heure ; l'Historique dit ce qui est *passé* — d'où
         ///   la flèche qui revient en arrière.
         var icon: String {
@@ -64,9 +68,7 @@ struct PreferencesView: View {
             case .general: "gearshape"
             case .recording: "mic"
             case .engine: "brain"
-            case .lexicon: "character.book.closed"
             case .history: "clock.arrow.circlepath"
-            case .collection: "chart.bar.doc.horizontal"
             }
         }
 
@@ -83,9 +85,7 @@ struct PreferencesView: View {
             case .general: "Général"
             case .recording: "Dictée"
             case .engine: "Moteur IA"
-            case .lexicon: "Lexique"
             case .history: "Historique"
-            case .collection: "Collecte"
             }
         }
 
@@ -104,18 +104,10 @@ struct PreferencesView: View {
                 ("Moteur IA & Transcription Finale",
                  "Choisissez le moteur neuronal qui rédige le texte définitif "
                     + "de votre dictée vocale.")
-            case .lexicon:
-                ("Lexique & Mots Métier",
-                 "Personnalisez le dictionnaire local pour garantir "
-                    + "l'orthographe exacte de vos termes clés.")
             case .history:
                 ("Historique des Dictées",
                  "Retrouvez et copiez vos dernières transcriptions locales en "
                     + "un clic.")
-            case .collection:
-                ("Collecte & Comparatif Moteurs",
-                 "Archivez localement vos enregistrements pour mesurer et "
-                    + "comparer la précision de chaque IA.")
             }
         }
     }
@@ -132,9 +124,7 @@ struct PreferencesView: View {
                     case .general: GeneralTab()
                     case .recording: RecordingTab()
                     case .engine: TranscriptionSettings()
-                    case .lexicon: VocabularySettings()
                     case .history: HistoryTab(history: history)
-                    case .collection: CollectionTab()
                     }
                 }
                 // `.content-area { padding: 26px 30px 24px 30px }`. Les 30 pt
@@ -153,7 +143,7 @@ struct PreferencesView: View {
         .environment(\.selectSettingsTab) { tab = $0 }
     }
 
-    /// La barre segmentée du prototype : un rail sombre à coins arrondis, six
+    /// La barre segmentée du prototype : un rail sombre à coins arrondis, des
     /// boutons de largeur égale, l'actif en turquoise bordé.
     ///
     /// Elle réserve les 48 pt de la barre de titre au-dessus d'elle : la
@@ -374,213 +364,6 @@ private struct LoginItemCard: View {
 }
 
 // MARK: - Transcription
-
-// MARK: - Collecte
-
-/// L'archive locale des dictées, et les moteurs qu'on fait tourner pour
-/// comparer.
-private struct CollectionTab: View {
-    @State private var prefs = Preferences.shared
-    @State private var stats = Corpus.Statistics()
-    @State private var confirmingClear = false
-
-    var body: some View {
-        SettingsToggleRow(
-            title: "Archiver mes dictées (Collecte & Comparatif)",
-            description: "Garde le texte produit par chaque moteur à partir du "
-                + "**même enregistrement** pour mesurer leur précision sur votre "
-                + "propre voix.",
-            note: "🔒 **100 % sur votre Mac.** Rien n'est envoyé nulle part, ni à "
-                + "l'auteur de l'application ni à personne — il n'existe aucun "
-                + "serveur pour le recevoir. Vous pouvez ouvrir le dossier et "
-                + "l'effacer quand vous voulez.",
-            isOn: $prefs.corpusEnabled)
-
-        if prefs.corpusEnabled {
-            Card {
-                SettingsToggleRow(
-                    title: "Conserver aussi l'audio (.wav)",
-                    description: "Permet de ré-exécuter de futurs modèles sur vos "
-                        + "enregistrements passés (~2 Mo par minute).",
-                    isOn: $prefs.corpusKeepsAudio,
-                    isCard: false)
-
-                Divider().opacity(0.25)
-                engines
-                Divider().opacity(0.25)
-                statistics
-            }
-        }
-
-        Note("💡 **À quoi ça sert ?** Permet de lancer des scripts de "
-             + "comparaison (bancs de test) pour calculer le taux d'erreur mot à "
-             + "mot (WER) de chaque moteur sur votre propre voix.")
-            .onAppear { stats = Corpus.shared.statistics() }
-    }
-
-    // MARK: Les moteurs à comparer
-
-    private var engines: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("MOTEURS EXÉCUTÉS EN TÂCHE DE FOND POUR COMPARAISON")
-                .font(.system(size: 10.5, weight: .bold))
-                .kerning(0.63)
-                .foregroundStyle(Style.textTertiary)
-                .padding(.bottom, 2)
-
-            ForEach(EngineChoice.allCases, id: \.self) { choice in
-                engineCheck(choice)
-            }
-
-            Note("⚡ Exécuté en arrière-plan **après l'insertion**. Les moteurs "
-                 + "indisponibles sont grisés et ne participent pas à la collecte.")
-        }
-    }
-
-    /// Une case par moteur, grisée quand ce moteur ne peut rien produire ici.
-    ///
-    /// ## Grisé, jamais masqué
-    ///
-    /// Le prototype **retire** Apple Intelligence de la liste sur un Mac Intel.
-    /// On ne le suit pas, et c'est le seul écart de cette carte : une ligne
-    /// absente ne se distingue pas d'une ligne qu'on n'a pas trouvée. Savoir
-    /// qu'une version existe et qu'elle ne marche pas *ici* est une
-    /// information ; son absence n'en est pas une, et laisse chercher.
-    ///
-    /// Le prototype a raison en revanche sur CrisperWhisper, qu'il grise avec
-    /// un libellé qui dit pourquoi — c'est ce qu'on fait pour les trois.
-    ///
-    /// La case reste **cochable** malgré tout : elle vaudra le jour où le moteur
-    /// sera là, et d'ici là rien ne tourne. Seul le moteur d'écriture est
-    /// verrouillé, puisqu'il figure de toute façon dans chaque entrée.
-    private func engineCheck(_ choice: EngineChoice) -> some View {
-        let available = choice.isAvailable(for: prefs.primaryLanguage)
-        let isWriter = choice == prefs.engine
-        let checked = prefs.corpusEngines.contains(choice)
-
-        return HStack(alignment: .top, spacing: 10) {
-            CheckBox(checked: checked && available)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label(for: choice, available: available))
-                    .font(.system(size: 12))
-                    .foregroundStyle(available ? Style.textPrimary : Style.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if isWriter {
-                    Text("Moteur d'écriture — toujours archivé")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Style.textTertiary)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(checked && available ? Color.white.opacity(0.04) : .clear))
-        .opacity(available ? 1 : 0.45)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard !isWriter else { return }
-            if checked { prefs.corpusEngines.remove(choice) }
-            else { prefs.corpusEngines.insert(choice) }
-        }
-        .help(available ? "" : indisponibility(choice))
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(checked ? [.isSelected, .isButton] : .isButton)
-    }
-
-    /// Un `switch` plutôt qu'une égalité, et ici la raison n'est pas la même
-    /// qu'ailleurs : ces libellés **nomment une version et un modèle actif**.
-    /// Sous une égalité, un moteur ajouté demain aurait composé tout seul
-    /// « <NouveauMoteur> 2.0 (Modèle TURBO actif) » — une phrase fausse,
-    /// affichée sans que rien n'ait échoué. Le compilateur pose maintenant la
-    /// question.
-    private func label(for choice: EngineChoice, available: Bool) -> String {
-        switch choice {
-        case .crisperWhisper:
-            return available
-                ? "\(choice.label) 2.0 (Modèle "
-                    + "\(EngineInstall.selectedModel.label.uppercased()) actif)"
-                : "CrisperWhisper 2.0 — non téléchargé (indisponible)"
-        case .apple, .appleLegacy:
-            return available
-                ? choice.fullLabel
-                : "\(choice.fullLabel) — indisponible sur ce Mac"
-        }
-    }
-
-    private func indisponibility(_ choice: EngineChoice) -> String {
-        switch choice {
-        case .crisperWhisper:
-            "Téléchargez d'abord un modèle dans l'onglet Moteur IA pour "
-                + "activer ce comparatif."
-        case .apple, .appleLegacy:
-            "Cette version du moteur de macOS n'est pas utilisable ici, dans "
-                + "la langue active."
-        }
-    }
-
-    // MARK: L'état du corpus
-
-    private var statistics: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text("Corpus local")
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(.white)
-                    if stats.count > 0 {
-                        Text(stats.summary)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Style.accent)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(RoundedRectangle(cornerRadius: 5)
-                                .fill(Style.accent.opacity(0.1))
-                                .overlay(RoundedRectangle(cornerRadius: 5)
-                                    .strokeBorder(Style.accentBorder, lineWidth: 1)))
-                    } else {
-                        Text("(0 dictée enregistrée)")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Style.textTertiary)
-                    }
-                }
-                Text(.init("Format JSON Lines · Version active de l'app : "
-                           + "**\(UpdateChecker.currentVersion)**"))
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Style.textTertiary)
-            }
-            Spacer(minLength: 0)
-            VStack(alignment: .trailing, spacing: 6) {
-                Button("Afficher dans le Finder") { Corpus.shared.reveal() }
-                    .buttonStyle(CasprSecondaryButtonStyle())
-                if stats.count > 0 {
-                    DangerLink("Tout effacer") { confirmingClear = true }
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.black.opacity(0.35))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)))
-        // Une confirmation, parce que c'est irréversible et que ces dictées ne
-        // se reconstituent pas : ce sont des heures de parole réelle.
-        .alert("Effacer tout le corpus ?", isPresented: $confirmingClear) {
-            Button("Annuler", role: .cancel) {}
-            Button("Tout effacer", role: .destructive) {
-                Corpus.shared.clear()
-                stats = Corpus.shared.statistics()
-            }
-        } message: {
-            Text("\(stats.summary) seront supprimés, audio compris. Rien ne "
-                 + "permet de les reconstituer.")
-        }
-    }
-}
 
 /// La case à cocher du prototype : carré arrondi de 16 pt qui se remplit
 /// d'accent avec une coche sombre.

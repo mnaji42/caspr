@@ -79,7 +79,25 @@ private enum Step: Int, CaseIterable {
     /// le vide. La barre annonçait « Bienvenue dans Caspr » au-dessus de
     /// « Vos Préférences » jusqu'au premier changement d'étape.
     @MainActor static var resumed: Step {
-        Step(rawValue: Preferences.shared.onboardingStep) ?? .welcome
+        allCases.first { $0.name == Preferences.shared.onboardingScreen } ?? .welcome
+    }
+
+    /// Le nom sous lequel l'étape est enregistrée.
+    ///
+    /// Un nom et non un numéro : l'index rangé dans l'ancienne clé
+    /// `caspr.onboarding.step` changeait de sens dès qu'on retirait un écran,
+    /// et rouvrait l'accueil sur la page d'après sans rien dire. Un nom qui
+    /// disparaît ne désigne plus rien, et l'on repart du début. Ces noms sont
+    /// ceux sous lesquels `LegacyCleanup` traduit l'ancien index : les
+    /// changer, c'est perdre l'étape de qui était en cours de route.
+    var name: String {
+        switch self {
+        case .welcome: "welcome"
+        case .preferences: "preferences"
+        case .liveEngine: "liveEngine"
+        case .finalEngine: "finalEngine"
+        case .completion: "completion"
+        }
     }
 
     var windowTitle: String {
@@ -102,8 +120,8 @@ private enum Step: Int, CaseIterable {
                 + "et vos langues mélangées.")
         case .preferences:
             ("Vos Préférences",
-             "Configurez vos langues de travail et vos habitudes pour que "
-                + "Caspr s'adapte à vous.")
+             "Configurez vos langues de travail pour que Caspr s'adapte à "
+                + "vous.")
         case .liveEngine:
             ("Moteur Live & Premier Essai",
              "Ce moteur assure l'aperçu en direct (Live Preview) sous la barre "
@@ -111,8 +129,8 @@ private enum Step: Int, CaseIterable {
         case .finalEngine:
             ("Moteur de transcription finale",
              "Le moteur Live (configuré à l'étape précédente) assure l'aperçu "
-                + "sous la barre flottante. Choisissez maintenant le moteur qui "
-                + "rédigera le texte définitif de votre dictée.")
+                + "sous la barre flottante. Choisissez maintenant la version de "
+                + "macOS qui rédigera le texte définitif de votre dictée.")
         case .completion:
             ("Tout est prêt !",
              "Caspr est configuré et prêt à transcrire votre voix en toute "
@@ -233,7 +251,7 @@ private struct OnboardingView: View {
         // Enregistrée en continu : quitter l'application au milieu d'une étape
         // ne doit pas coûter les précédentes.
         .onChange(of: step) { _, now in
-            prefs.onboardingStep = now.rawValue
+            prefs.onboardingScreen = now.name
             onStepChange(now)
         }
     }
@@ -266,12 +284,10 @@ private struct OnboardingView: View {
                           + "requise. **Vos paroles ne quittent jamais votre "
                           + "Mac.**")
                 Divider().opacity(0.25)
-                principle(3, "Liberté de vos moteurs & modèles IA",
-                          "**Vous gardez le contrôle total.** Utilisez le "
-                          + "moteur natif de macOS pour une légèreté absolue "
-                          + "(0 Mo de RAM), ou choisissez des modèles IA "
-                          + "spécialisés (comme CrisperWhisper) selon vos "
-                          + "besoins de vocabulaire, de code ou de bilingue.")
+                principle(3, "Rien à installer",
+                          "Caspr s'appuie sur la reconnaissance vocale de "
+                          + "macOS : aucun modèle à héberger, et **0 Mo de "
+                          + "RAM** entre deux dictées.")
             }
             .padding(.bottom, 12)
 
@@ -312,10 +328,6 @@ private struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 0) {
             SectionLabel("Langues de dictée (Au moins 1 langue requise)", followsHeader: true)
             Card { LanguagePicker() }
-                .padding(.bottom, 12)
-
-            SectionLabel("Vos habitudes d'expression (Optionnel)")
-            UsageHabitsCard()
         }
     }
 
@@ -342,7 +354,7 @@ private struct OnboardingView: View {
     // MARK: 4 — Moteur final
 
     private var finalEngineStep: some View {
-        FinalEngineCard(showsRecommendation: true, isOnboarding: true)
+        FinalEngineCard()
     }
 
     // MARK: 5 — Tout est prêt

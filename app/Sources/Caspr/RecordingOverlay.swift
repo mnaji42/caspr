@@ -69,8 +69,6 @@ final class RecordingOverlay {
         var destinationImposee: String? = nil
         var modeLabels: [String]? = nil
         var modeIndex: Int = 0
-        var corpusEnabled: Bool
-        var corpusKeepsAudio: Bool
         /// La langue en cours, « 🇫🇷 FR ».
         var languageBadge: String = ""
 
@@ -141,7 +139,6 @@ final class RecordingOverlay {
     /// accès à toutes les autres sans rien élargir.
     private let languageMenu = FirstMouseMenuButton()
     private var menuCodes: [String] = []
-    private let corpusBadge = BadgeButton()
     private var container: NSStackView?
     private var recordingRow: NSStackView?
     private var textRow: NSStackView?
@@ -167,14 +164,12 @@ final class RecordingOverlay {
     var onSelectTarget: ((Bool) -> Void)?
     var onSelectLanguage: ((String) -> Void)?
 
-    var onToggleCorpus: (() -> Void)?
     var onCancel: (() -> Void)?
 
     private var startedAt: Date?
     private var pulsePhase: CGFloat = 0
     private var status = Status(mode: .intended, target: .caret, noteName: nil,
-                                previewEnabled: false,
-                                corpusEnabled: false, corpusKeepsAudio: false)
+                                previewEnabled: false)
 
     // MARK: - Mesures et couleurs
 
@@ -186,11 +181,6 @@ final class RecordingOverlay {
     /// barre et les Réglages avaient fini par ne plus tout à fait s'accorder.
     /// Cf. `Style.accent`.
     static let accent = NSColor.casprAccent
-    /// La collecte a sa propre couleur, et c'est délibéré : c'est le seul
-    /// réglage qui écrit sur le disque à l'insu de l'utilisateur. Il doit se
-    /// distinguer d'un simple choix de mode.
-    private static let collecting = NSColor(srgbRed: 0xFB / 255.0, green: 0x92 / 255.0,
-                                            blue: 0x3C / 255.0, alpha: 1)
 
     private static let rowHeight: CGFloat = 26
     /// La hauteur d'un groupe de pastilles — `PillSelector` fait 28 pt.
@@ -595,13 +585,6 @@ final class RecordingOverlay {
         previewLabel.toolTip = Self.previewExplanation
         previewLabel.isHidden = !status.previewEnabled
 
-        corpusBadge.setActive(status.corpusEnabled, color: Self.collecting)
-        corpusBadge.toolTip = status.corpusEnabled
-            ? (status.corpusKeepsAudio
-                ? "Chaque dictée est archivée, audio compris\nCliquer pour arrêter"
-                : "Chaque dictée est archivée (texte seul)\nCliquer pour arrêter")
-            : "Collecte arrêtée\nCliquer pour archiver les dictées"
-
         resize()
     }
 
@@ -835,8 +818,7 @@ final class RecordingOverlay {
         buildIndicators()
         buildControls()
 
-        let recording = makeRow([dot, timeLabel, meter, NSView(),
-                                 micButton, corpusBadge])
+        let recording = makeRow([dot, timeLabel, meter, NSView(), micButton])
         let tabs = makeSpacedRow([modeControl, targetControl])
         recordingRow = recording
         textRow = tabs
@@ -1088,9 +1070,6 @@ final class RecordingOverlay {
             // Réagit sans que Caspr passe au premier plan.
             button.setButtonType(.momentaryChange)
         }
-        corpusBadge.title = "COLLECTE"
-        corpusBadge.target = self
-        corpusBadge.action = #selector(toggleCorpus)
 
         modeControl.onSelect = { [weak self] index in
             guard let self else { return }
@@ -1198,53 +1177,8 @@ final class RecordingOverlay {
         micButton.attributedTitle = Self.buttonTitle(Self.microphoneModeLabel)
     }
 
-    @objc private func toggleCorpus() { onToggleCorpus?() }
-
     @objc private func openMicrophoneModes() {
         AVCaptureDevice.showSystemUserInterface(.microphoneModes)
-    }
-}
-
-/// Pastille d'état, allumée ou éteinte.
-///
-/// Elle sert de rappel autant que d'interrupteur : la collecte écrit sur le
-/// disque, et un réglage qu'on oublie d'avoir activé finit par accumuler des
-/// gigaoctets d'audio sans qu'on s'en aperçoive.
-private final class BadgeButton: NSButton {
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        isBordered = false
-        setButtonType(.momentaryChange)
-        wantsLayer = true
-        layer?.cornerRadius = 6
-        translatesAutoresizingMaskIntoConstraints = false
-        heightAnchor.constraint(equalToConstant: 17).isActive = true
-    }
-
-    required init?(coder: NSCoder) { fatalError("non utilisé") }
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    func setActive(_ active: Bool, color: NSColor) {
-        layer?.backgroundColor = active
-            ? color.withAlphaComponent(0.9).cgColor
-            : NSColor.clear.cgColor
-        layer?.borderWidth = active ? 0 : 1
-        layer?.borderColor = NSColor.tertiaryLabelColor.withAlphaComponent(0.5).cgColor
-
-        attributedTitle = NSAttributedString(string: title, attributes: [
-            .font: NSFont.systemFont(ofSize: 9, weight: .bold),
-            // L'espacement des lettres fait lire la pastille comme une
-            // étiquette d'état plutôt que comme un mot de plus dans la barre.
-            .kern: 0.8,
-            .foregroundColor: active ? NSColor.white : NSColor.tertiaryLabelColor,
-        ])
-    }
-
-    override var intrinsicContentSize: NSSize {
-        var size = super.intrinsicContentSize
-        size.width += 12
-        return size
     }
 }
 

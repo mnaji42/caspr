@@ -215,23 +215,14 @@ final class DictationController {
             refreshOverlay()
             onStateChange?(state)
         }
-        // La collecte se coupe depuis la barre, pas seulement depuis le menu :
-        // c'est en dictant qu'on se rend compte qu'on ne veut pas archiver
-        // ce qu'on est en train de dire.
-        overlay.onToggleCorpus = { [weak self] in
-            guard let self else { return }
-            Preferences.shared.corpusEnabled.toggle()
-            refreshOverlay()
-            onStateChange?(state)
-        }
     }
 
     /// État courant de la barre.
     ///
-    /// RELAIS — trois réglages n'ont aucun sens quand la dictée passe par
+    /// RELAIS — deux réglages n'ont aucun sens quand la dictée passe par
     /// ChatGPT, et les afficher quand même laisse croire qu'ils agissent : les
-    /// modes appartiennent à CrisperWhisper, la langue est détectée par le
-    /// service lui-même, et rien n'est collecté. Le badge de langue sert alors
+    /// modes appartiennent à CrisperWhisper, et la langue est détectée par le
+    /// service lui-même. Le badge de langue sert alors
     /// à nommer le moteur réellement à l'œuvre — sans quoi la barre est
     /// indiscernable d'une dictée ordinaire.
     private var overlayStatus: RecordingOverlay.Status {
@@ -252,8 +243,6 @@ final class DictationController {
                     ? "Réponse à l'écran" : nil,
                 modeLabels: modes.count > 1 ? modes.map(\.nom) : nil,
                 modeIndex: modes.firstIndex(of: courant) ?? 0,
-                corpusEnabled: false,
-                corpusKeepsAudio: false,
                 languageBadge: "ChatGPT",
                 switchableLanguages: [],
                 languageCode: Preferences.shared.primaryLanguage)
@@ -267,8 +256,6 @@ final class DictationController {
             canPickNote: state != .recording,
             previewEnabled: Preferences.shared.livePreviewEnabled,
             modesAvailable: Preferences.shared.engine.hasModes,
-            corpusEnabled: Preferences.shared.corpusEnabled,
-            corpusKeepsAudio: Preferences.shared.corpusKeepsAudio,
             // La langue **effectivement** écoutée. Elle n'était nulle part sur
             // la barre : depuis le multi-langues, dicter en français avec
             // l'anglais actif produit un texte incompréhensible qu'on met

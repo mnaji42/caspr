@@ -25,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Tout premier geste, avant la moindre lecture de réglage ou de
         // fichier : ce qui suit suppose que les données sont à leur place.
         Rebranding.migrateIfNeeded()
+        // Après le renommage, qui peut apporter des réglages de Sofler encore
+        // réglés sur CrisperWhisper ; avant tout ce qui lit `Preferences`.
+        Migration.run()
         LanguageSwitchCoordinator.shared.probeSelectedLanguages()
         let engine = SocketSpeechEngine()
         controller = DictationController(engine: engine)

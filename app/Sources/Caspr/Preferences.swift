@@ -45,7 +45,8 @@ final class Preferences {
         static let shortcut = "caspr.shortcut"
         static let corpusEngines = "caspr.corpus.engines"
         static let onboarded = "caspr.onboarded"
-        static let onboardingStep = "caspr.onboarding.step"
+        /// Le nom de l'étape, et non plus son numéro — cf. `onboardingScreen`.
+        static let onboardingScreen = "caspr.onboarding.screen"
         static let updateCheck = "caspr.update.check"
         static let ignoredUpdate = "caspr.update.ignored"
         static let lastValidEngine = "caspr.engine.lastValid"
@@ -81,8 +82,13 @@ final class Preferences {
     /// page de bienvenue qu'il a déjà lue.
     ///
     /// Ne veut plus rien dire une fois `onboarded` vrai, et n'est plus lue.
-    var onboardingStep: Int {
-        didSet { defaults.set(onboardingStep, forKey: Key.onboardingStep) }
+    ///
+    /// Rangée sous son nom (« liveEngine »), pas sous son rang : l'ancienne
+    /// clé `caspr.onboarding.step` tenait un index, qui aurait désigné l'écran
+    /// suivant le jour où l'accueil en perd un. `LegacyCleanup` traduit
+    /// l'ancien index avant la première lecture.
+    var onboardingScreen: String? {
+        didSet { defaults.set(onboardingScreen, forKey: Key.onboardingScreen) }
     }
 
     /// Caspr doit-il regarder tout seul s'il existe une version plus récente ?
@@ -739,7 +745,7 @@ final class Preferences {
         // avec tous les moteurs, parce qu'une collecte amputée ne répond pas
         // à la question qu'on se pose en l'activant.
         onboarded = defaults.bool(forKey: Key.onboarded)
-        onboardingStep = defaults.integer(forKey: Key.onboardingStep)
+        onboardingScreen = defaults.string(forKey: Key.onboardingScreen)
         checksForUpdates = defaults.bool(forKey: Key.updateCheck)
         corpusEnabled = defaults.bool(forKey: Key.corpus)
         corpusKeepsAudio = defaults.object(forKey: Key.corpusAudio) as? Bool ?? true

@@ -175,6 +175,32 @@ final class Relais: ObservableObject {
     private var debut = Date()
     var secondesEcoulees: Double { Date().timeIntervalSince(debut) }
 
+    /// L'attente de la dictée qui s'achève, ouverte à l'arrêt de l'écoute.
+    ///
+    /// Retenue ici pour que la barre la lise : c'est elle qui sait ce qu'on
+    /// attend et depuis quand. Oubliée à l'appui suivant, pour qu'une barre
+    /// ne montre jamais le chrono de la dictée d'avant.
+    private(set) var attente: RelaisAttente?
+
+    /// Le message d'une sortie qui n'écrit nulle part est chez ChatGPT.
+    ///
+    /// Passé ce point, il n'y a plus rien à abandonner : l'envoi ne se défait
+    /// pas, et ChatGPT répond déjà. La touche de dictée cesse alors seulement
+    /// d'attendre la lecture à haute voix, et la discussion s'ouvre. Traitée
+    /// en abandon, elle laissait la discussion fermée, et la fin du cycle
+    /// rechargeait la page — la conversation effacée pendant que ChatGPT y
+    /// répondait, au moment même où l'on appuyait pour lui répondre.
+    private(set) var messageParti = false
+
+    /// Ce que la barre affiche pendant l'attente, `nil` avant qu'elle ne
+    /// commence.
+    var avancement: RecordingOverlay.ProcessingProgress? {
+        guard let attente else { return nil }
+        return .init(label: attente.phase.libelle, elapsed: attente.ecoule,
+                     exitHint: messageParti ? "touche de dictée pour ne plus attendre"
+                                            : "touche de dictée pour abandonner")
+    }
+
     /// La préparation de la page pour la dictée suivante, s'il y en a une en
     /// cours.
     ///
@@ -346,6 +372,8 @@ final class Relais: ObservableObject {
         // fini. Il l'est, sauf si l'on rappuie dans la seconde.
         try await attendreLaPreparation()
         debut = Date()
+        attente = nil
+        messageParti = false
         avertissement = nil
         do {
             try await pageActive().demarrer()
@@ -359,8 +387,13 @@ final class Relais: ObservableObject {
         }
     }
 
+    /// Arrête l'écoute et rend la transcription, en ouvrant l'attente que
+    /// la suite de la dictée consommera — la transformation comprise.
     func arreterEtLire(secondesDictees: Double) async throws -> String {
-        try await pageActive().arreterEtLire(secondesDictees: secondesDictees)
+        let attente = RelaisAttente(secondesDictees: secondesDictees)
+        self.attente = attente
+        Log.info("relais : échéance de la dictée dans \(RelaisAttente.duree(attente.budget))")
+        return try await pageActive().arreterEtLire(attente)
     }
 
     func annuler() async {
@@ -488,38 +521,53 @@ final class Relais: ObservableObject {
               module.estUtilisable(RelaisSelecteurs.charger()),
               !brut.isEmpty
         else { return brut }
-        // La patience suit la longueur du texte : une page se réorganise en
-        // quelques secondes, dix minutes de monologue demandent bien plus.
-        // Trois minutes de plancher, une seconde par vingt caractères.
+        // L'attente ouverte à l'arrêt de l'écoute, et non une patience de
+        // plus : la réponse consomme ce que la transcription a laissé. Chaque
+        // phase repartait de trois minutes au moins, et elles s'empilaient.
+        let attente = self.attente ?? RelaisAttente(secondesDictees: secondesEcoulees)
         // Une sortie qui n'écrit nulle part n'a rien à rapatrier : on envoie,
         // et l'on s'arrête là. La réponse s'affichera dans la page, que
         // l'utilisateur a sous les yeux.
         if module.sortieParDefaut == .aucune {
             do {
                 try await pageActive()
-                    .envoyerSansAttendre((avant: module.avant, apres: module.apres))
-                Log.info("relais : \(module.identifiant) — envoyé, réponse à l'écran")
-                // Un refus — un quota — se dit dans la barre : sans quoi on
-                // attend une voix qui ne viendra pas, et l'on redemande.
-                if module.ditLaReponse,
-                   let refus = await pageActive().faireLireLaReponse(patienceSecondes: 180) {
-                    avertissement = RelaisPage.Erreur.refusParChatGPT(refus).raisonCourte
-                }
+                    .envoyerSansAttendre((avant: module.avant, apres: module.apres),
+                                         attente: attente)
             } catch is CancellationError { throw CancellationError() }
             catch {
+                // Abandonné avant l'envoi : rien n'est parti, et c'est un
+                // abandon, pas un échec à afficher.
+                if Task.isCancelled { throw CancellationError() }
                 Log.error("relais : \(module.identifiant) n'a pas pu envoyer "
                           + "(\(error.localizedDescription))")
                 avertissement = (error as? RelaisPage.Erreur)?.raisonCourte
                     ?? "\(module.nom) n'a pas pu envoyer"
+                return ""
+            }
+            messageParti = true
+            Log.info("relais : \(module.identifiant) — envoyé, réponse à l'écran")
+            // Un refus — un quota — ou l'échéance passée se dit dans la
+            // barre : sans quoi on attend une voix qui ne viendra pas, et
+            // l'on redemande.
+            if module.ditLaReponse,
+               let echec = await pageActive().faireLireLaReponse(attente: attente) {
+                avertissement = echec.raisonCourte
+            }
+            // Interrompue, la lecture se tait sans lever, et c'est voulu :
+            // le message est parti, l'appui a seulement cessé d'attendre (cf.
+            // `messageParti`). Rendre "" ouvre la discussion sur le fil que
+            // ChatGPT est en train de remplir.
+            if Task.isCancelled {
+                Log.info("relais : attente de la lecture interrompue, discussion conservée")
             }
             return ""
         }
 
-        let patience = max(180.0, Double(brut.count) / 20)
         do {
             let texte = try await pageActive()
                 .reorganiserSurPlace((avant: module.avant, apres: module.apres),
-                                     patienceSecondes: patience)
+                                     attente: attente)
+            try Task.checkCancellation()
             guard !texte.isEmpty else {
                 Log.error("relais : réponse vide, transcription brute conservée")
                 avertissement = "ChatGPT a rendu une réponse vide"
@@ -527,8 +575,14 @@ final class Relais: ObservableObject {
             }
             if module.ditLaReponse {
                 // La réponse est déjà là : ce qui fait défaut ici, c'est le
-                // son seul, et le texte remanié s'insère quand même.
-                await pageActive().faireLireLaReponse(patienceSecondes: 30)
+                // son seul, et le texte remanié s'insère quand même. Trente
+                // secondes au plus, et non l'échéance : le texte attend ce
+                // clic pour s'insérer.
+                await pageActive().faireLireLaReponse(attente: attente, auPlus: 30)
+                // Interrompue, elle rend la main sans rien dire : sans cette
+                // vérification, le texte s'insérait au curseur un instant
+                // après l'abandon, et entrait dans l'historique.
+                try Task.checkCancellation()
             }
             Log.info("relais : \(module.identifiant) — \(brut.count) → \(texte.count) caractères")
             return texte
@@ -537,16 +591,22 @@ final class Relais: ObservableObject {
             // dont on vient de demander l'abandon.
             throw CancellationError()
         } catch {
+            // Une attente interrompue peut finir sur une autre erreur que
+            // l'annulation — un appel au pont coupé, une copie jamais venue.
+            // Ce n'est pas un échec de la transformation : le brut ne se
+            // rend pas plus ici qu'ailleurs.
+            if Task.isCancelled { throw CancellationError() }
             Log.error("relais : \(module.identifiant) a échoué (\(error.localizedDescription)) "
                       + "— transcription brute conservée")
             // Le brut est rendu, mais pas en silence : il s'insère là où l'on
             // attendait un texte remanié, et rien ne distinguait l'un de
             // l'autre. Un quota atteint surtout doit se lire — sans quoi on
-            // relance, et le même refus revient.
-            if case RelaisPage.Erreur.refusParChatGPT = error,
-               let courte = (error as? RelaisPage.Erreur)?.raisonCourte {
-                avertissement = courte
-            } else {
+            // relance, et le même refus revient. L'échéance passée aussi :
+            // « n'a pas abouti » ne dit pas qu'on a attendu trois minutes.
+            switch error as? RelaisPage.Erreur {
+            case .refusParChatGPT?, .attenteEpuisee?:
+                avertissement = (error as? RelaisPage.Erreur)?.raisonCourte
+            default:
                 avertissement = "\(module.nom) n'a pas abouti"
             }
             return brut
@@ -852,6 +912,7 @@ struct RelaisEngine: SpeechEngine {
         // chaque cycle tant que Caspr enregistrait en parallèle — il fallait
         // bien lui rendre le micro. Les deux modes s'excluant désormais, plus
         // personne ne le lui dispute, et le raccourci redevient instantané.
+        // L'échéance de toute la suite est fixée ici, sur la durée parlée.
         texte = try await Relais.partage.arreterEtLire(secondesDictees: secondes)
         // La seconde passe, quand le mode la demande. Elle rend le brut si
         // elle échoue : rien de ce qui a été dit ne se perd.

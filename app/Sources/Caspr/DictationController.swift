@@ -380,6 +380,17 @@ final class DictationController {
         // sa barre. Le chemin ordinaire ne connaît que le magnétophone de
         // Caspr : Échap pendant l'enregistrement rendait donc la main, mais
         // laissait ChatGPT écouter derrière une barre restée à l'écran.
+        //
+        // Sauf une fois le message de « Discuter » parti : il n'y a plus rien
+        // à abandonner, ChatGPT répond dans le fil. Ni arrêter la page, ni
+        // cacher la barre — seulement cesser d'attendre la lecture à haute
+        // voix. Le cycle s'achève alors de lui-même, sur la discussion
+        // ouverte (cf. `Relais.messageParti`).
+        if relaisEnCours, state == .processing, Relais.partage.messageParti {
+            relaisTache?.cancel()
+            relaisTache = nil
+            return
+        }
         if relaisEnCours, state == .recording || state == .processing {
             relaisTache?.cancel()
             relaisTache = nil
@@ -545,7 +556,11 @@ final class DictationController {
             // clic délibéré au bon endroit.
             releaseEscape()
             Feedback.recordingStopped()
-            overlay.showProcessing()
+            // La phase et le chrono, relus sur l'attente du relais : elle
+            // peut durer des minutes, et la touche de dictée en est la
+            // sortie — encore faut-il le dire.
+            overlay.showProcessing(RelaisAttente.Phase.transcription.libelle,
+                                   progress: { Relais.partage.avancement })
             Log.info("fin de dictée relais : "
                      + "\(String(format: "%.1f", Date().timeIntervalSince(relaisDebut))) s")
             await transcribeAndInject([])
@@ -651,11 +666,22 @@ final class DictationController {
             // un filet pour retrouver un texte qu'une insertion aurait perdu,
             // et une conversation n'est pas une dictée qu'on range.
             if parRelais, Relais.partage.sortieCourante == .aucune {
+                // Abandonnée avant l'envoi, la dictée n'ouvre pas de
+                // discussion : l'annulation a déjà rendu la main. Après
+                // l'envoi, l'appui n'a fait que cesser d'attendre, et le fil
+                // parti doit rester ouvert — sans quoi la fin du cycle
+                // rechargeait la page sous la réponse de ChatGPT.
+                if Task.isCancelled, !Relais.partage.messageParti {
+                    throw CancellationError()
+                }
                 // Sauf un refus — un quota, un envoi impossible : sans voix
                 // ni texte à insérer, la barre est le seul endroit où le lire.
+                // L'avertissement se suffit, en une ligne : un titre « n'a
+                // pas répondu » au-dessus de « n'a pas répondu en 3 min » ne
+                // faisait que le répéter.
                 if let avertissement = Relais.partage.prendreAvertissement() {
-                    overlay.showFailure("ChatGPT n'a pas répondu", hint: avertissement)
-                    state = .failed("ChatGPT n'a pas répondu — \(avertissement).")
+                    overlay.showFailure(avertissement)
+                    state = .failed("\(avertissement).")
                 } else {
                     overlay.hide()
                     state = .idle
@@ -724,6 +750,10 @@ final class DictationController {
             // ou si l'on bascule vers un module qui écrit en pleine dictée, la
             // fenêtre du relais est au premier plan : le texte y partirait.
             if parRelais { await Relais.partage.rendreLeClavier() }
+            // RELAIS — la touche de dictée abandonne jusqu'ici, et
+            // l'insertion ne vérifie rien : un texte arrivé au moment de
+            // l'abandon s'écrivait quand même.
+            try Task.checkCancellation()
             let devant = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
             Log.info("insertion vers \(devant)")
             try await deliver(text)

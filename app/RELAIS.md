@@ -56,6 +56,7 @@ la barre par défaut, rangée hors champ — jamais retirée de l'écran, le sys
 suspendant une fenêtre qu'il croit cachée.
 | `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
 | `RelaisSelecteurs.swift` | Les sélecteurs CSS appris, et leur persistance. |
+| `RelaisAttente.swift` | L'échéance **unique** d'une dictée, fixée à l'arrêt de l'écoute sur la durée parlée, et la phase en cours que la barre affiche. Toutes les attentes après l'arrêt la consomment ; aucune n'a plus son propre budget. |
 | `RelaisCard.swift` | La bascule dans Réglages › Moteur IA. |
 | `RelaisMode.swift` | Les modes de dictée et l'emballage des prompts. |
 
@@ -114,7 +115,9 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
   décidait en silence d'une session ouverte sur un service tiers.
 - **`RecordingOverlay.swift`** — la pastille des modes accepte des libellés de
   rechange. Le relais n'a ni « Texte nettoyé » ni « Mot à mot », et le choix se
-  fait au moment de parler, pas dans un écran de réglages.
+  fait au moment de parler, pas dans un écran de réglages. L'attente, elle,
+  s'affiche avec sa phase et son chrono dès dix secondes, et la sortie par la
+  touche de dictée (`showProcessing(_:progress:)`).
 - **`DictationController.swift`** — l'essentiel : un drapeau posé au début du
   cycle, une branche qui n'ouvre pas le micro, une autre qui choisit
   `RelaisEngine` plutôt que le moteur configuré, et trois exclusions (collecte,

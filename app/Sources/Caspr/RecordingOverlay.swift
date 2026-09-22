@@ -92,8 +92,23 @@ final class RecordingOverlay {
         var languageCode: String = ""
     }
 
+    /// Une attente qui se raconte : ce qu'on attend, depuis quand, et
+    /// comment en sortir.
+    ///
+    /// Relue deux fois par seconde plutôt que poussée : c'est l'attente qui
+    /// sait où elle en est, et la barre n'a qu'à regarder.
+    struct ProcessingProgress {
+        var label: String
+        var elapsed: TimeInterval
+        var exitHint: String?
+    }
+
     private var panel: NSPanel?
     private var timer: Timer?
+    /// Le battement de l'attente, distinct du chrono de l'écoute : ce dernier
+    /// dit aussi « on enregistre » (cf. `isRecording`).
+    private var processingTimer: Timer?
+    private var processingProgress: (() -> ProcessingProgress?)?
     /// L'effacement différé d'un message d'échec. Annulé si une dictée
     /// reprend entre-temps, sinon il ferait disparaître la barre suivante.
     private var dismissal: DispatchWorkItem?
@@ -247,6 +262,7 @@ final class RecordingOverlay {
 
         startedAt = Date()
         stopProcessingGlow()
+        stopProcessingProgress()
         card?.layer?.borderColor = Self.accent.withAlphaComponent(0.35).cgColor
         statusLabel.isHidden = true
         container?.isHidden = false
@@ -275,11 +291,18 @@ final class RecordingOverlay {
     /// Sur une longue dictée le traitement prend plusieurs secondes ; sans ce
     /// retour, on croit à un échec et on relance.
     ///
-    /// - Parameter label: ce qu'on attend. Le relais s'en sert aussi avant
-    ///   l'écoute, quand la page ChatGPT n'est pas encore prête.
-    func showProcessing(_ label: String = "Transcription…") {
+    /// - Parameters:
+    ///   - label: ce qu'on attend. Le relais s'en sert aussi avant l'écoute,
+    ///     quand la page ChatGPT n'est pas encore prête.
+    ///   - progress: l'attente elle-même, relue en continu, quand elle
+    ///     peut durer des minutes. Sans elle, « Transcription… » restait
+    ///     immobile trois minutes durant, que ChatGPT transcrive ou réponde,
+    ///     et rien ne disait qu'on pouvait en sortir.
+    func showProcessing(_ label: String = "Transcription…",
+                        progress: (() -> ProcessingProgress?)? = nil) {
         let panel = self.panel ?? makePanel()
         self.panel = panel
+        stopProcessingProgress()
         // Le relais l'affiche aussi avant l'écoute, juste après un échec dont
         // la fermeture programmée l'aurait retirée en pleine attente.
         dismissal?.cancel()
@@ -310,6 +333,57 @@ final class RecordingOverlay {
         card?.layer?.borderColor = Self.accent.withAlphaComponent(0.40).cgColor
         panel.orderFrontRegardless()
         startProcessingGlow()
+
+        guard let progress else { return }
+        processingProgress = progress
+        refreshProcessingProgress()
+        processingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) {
+            [weak self] _ in
+            Task { @MainActor in self?.refreshProcessingProgress() }
+        }
+    }
+
+    /// Réécrit la ligne d'attente : la phase, puis le temps écoulé et la
+    /// sortie dès dix secondes.
+    ///
+    /// Pas avant : la plupart des dictées aboutissent en quelques secondes,
+    /// et un chrono qui s'affiche pour disparaître aussitôt n'est que du
+    /// bruit. Passé dix secondes, en revanche, une barre sans chiffre se lit
+    /// comme un gel, et l'on relance une dictée déjà en cours.
+    ///
+    /// Une ligne, jamais deux : la carte a été taillée et son liseré tracé
+    /// pour elle, et la redimensionner en pleine attente ferait sauter l'un
+    /// et l'autre.
+    private func refreshProcessingProgress() {
+        guard let progress = processingProgress?() else { return }
+        let seconds = Int(progress.elapsed)
+        guard seconds >= 10 else {
+            statusLabel.stringValue = progress.label
+            return
+        }
+        let centred = NSMutableParagraphStyle()
+        centred.alignment = .center
+        let text = NSMutableAttributedString(
+            string: progress.label + " " + String(format: "%d:%02d", seconds / 60, seconds % 60),
+            attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: centred,
+            ])
+        if let hint = progress.exitHint {
+            text.append(NSAttributedString(string: " — " + hint, attributes: [
+                .font: NSFont.systemFont(ofSize: 12),
+                .foregroundColor: NSColor.tertiaryLabelColor,
+                .paragraphStyle: centred,
+            ]))
+        }
+        statusLabel.attributedStringValue = text
+    }
+
+    private func stopProcessingProgress() {
+        processingTimer?.invalidate()
+        processingTimer = nil
+        processingProgress = nil
     }
 
     /// Montre un échec, puis s'efface toute seule.
@@ -338,6 +412,7 @@ final class RecordingOverlay {
 
         timer?.invalidate()
         stopProcessingGlow()
+        stopProcessingProgress()
         container?.isHidden = true
         textRow?.isHidden = true
         tabsBelowCard?.isActive = false
@@ -376,6 +451,7 @@ final class RecordingOverlay {
         timer = nil
         startedAt = nil
         stopProcessingGlow()
+        stopProcessingProgress()
         panel?.orderOut(nil)
     }
 

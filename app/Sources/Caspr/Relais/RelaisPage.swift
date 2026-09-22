@@ -24,10 +24,10 @@ final class BarreRelais: NSPanel {
 final class RelaisPage: NSObject {
     enum Erreur: LocalizedError {
         case introuvable(RelaisCible)
-        case pasDeTexte
-        case zoneJamaisRevenue
         case pasConnecte
         case pasDeReponse
+        /// L'échéance de la dictée est passée (cf. `RelaisAttente`).
+        case attenteEpuisee(RelaisAttente.Abandon)
         case consigneNonPosee
         case refusParChatGPT(String)
         /// Le pont n'a pas répondu dans le délai : la page est figée.
@@ -40,7 +40,7 @@ final class RelaisPage: NSObject {
         /// Ce que la barre affiche, quand la raison générique mentirait.
         ///
         /// « Réessayer dans le menu » ne veut rien dire pour le relais, qui ne
-        /// garde pas d'audio. Pour ces trois cas, la raison elle-même est ce
+        /// garde pas d'audio. Pour ces cas-là, la raison elle-même est ce
         /// qu'on a besoin de lire — surtout le texte d'un refus, qui dit
         /// d'emblée si c'est un quota et non une panne.
         var raisonCourte: String? {
@@ -48,6 +48,7 @@ final class RelaisPage: NSObject {
             case .refusParChatGPT(let message):
                 let court = message.count > 90 ? String(message.prefix(89)) + "…" : message
                 return "ChatGPT : \(court)"
+            case .attenteEpuisee(let abandon): return abandon.raisonCourte
             case .pontMuet: return "ChatGPT ne répond plus — page rechargée, réessayez"
             case .pageInterrompue: return "La page ChatGPT s'est fermée — dictée perdue"
             default: return nil
@@ -68,15 +69,12 @@ final class RelaisPage: NSObject {
             switch self {
             case .introuvable(let c):
                 "Impossible de trouver \(c.libelle) dans la page. Calibrer à nouveau ?"
-            case .pasDeTexte:
-                "ChatGPT n'a rien transcrit."
-            case .zoneJamaisRevenue:
-                "ChatGPT n'a pas rendu la transcription. Le texte est peut-être "
-                + "encore dans la fenêtre du relais — rien n'a été rechargé."
             case .pasConnecte:
                 "Pas connecté à ChatGPT. Ouvrez la fenêtre du relais et connectez-vous."
             case .pasDeReponse:
                 "ChatGPT n'a pas répondu. La transcription brute est dans l'historique."
+            case .attenteEpuisee(let abandon):
+                abandon.explication
             case .consigneNonPosee:
                 "La consigne de reformulation n'a pas pu être ajoutée au texte."
             case .refusParChatGPT(let message):
@@ -642,7 +640,8 @@ final class RelaisPage: NSObject {
         _ = try? await appeler("return window.__relais.vider(sel);",
                                ["sel": selecteurs.composeur])
         alertesAvant = await relever().alertes
-        guard try await cliquerQuandDisponible(.micro, selecteurs.micro, secondes: 8) else {
+        guard try await cliquerQuandDisponible(.micro, selecteurs.micro,
+                                               jusqua: .now.addingTimeInterval(8)) else {
             throw Erreur.introuvable(.micro)
         }
     }
@@ -658,7 +657,11 @@ final class RelaisPage: NSObject {
     ///
     /// **Le texte doit ensuite cesser de bouger.** Il arrive par fragments :
     /// lire au premier caractère rendrait une phrase tronquée.
-    func arreterEtLire(secondesDictees: Double) async throws -> String {
+    ///
+    /// Les deux attentes vont jusqu'à l'échéance de la dictée, et plus
+    /// jusqu'à un budget chacune : la stabilisation avait sa minute à elle,
+    /// qui s'ajoutait à celle de la transcription.
+    func arreterEtLire(_ attente: RelaisAttente) async throws -> String {
         // Après l'arrêt, ChatGPT passe par un état intermédiaire — le mot
         // « Transcription » et une roue — pendant lequel la zone de saisie
         // n'est toujours pas là. Sa durée suit celle de la dictée : quelques
@@ -677,23 +680,23 @@ final class RelaisPage: NSObject {
         // On n'essaie plus de distinguer « écoute encore » de « transcrit » :
         // le seul signal fiable est le retour de la zone de saisie, et il
         // signifie exactement ce qu'on attend.
-        guard try await cliquerQuandDisponible(.stop, selecteurs.stop, secondes: 15) else {
+        guard try await cliquerQuandDisponible(.stop, selecteurs.stop,
+                                               jusqua: attente.limite(dans: 15)) else {
+            try attente.verifier()
             throw Erreur.introuvable(.stop)
         }
 
-        // Le budget suit la dictée, avec un plancher large. Une transcription
-        // ne doit jamais être abandonnée parce qu'un chiffre écrit d'avance la
-        // jugeait trop lente.
+        // L'échéance de la dictée, qui suit sa durée avec un plancher large.
+        // Une transcription ne doit jamais être abandonnée parce qu'un chiffre
+        // écrit d'avance la jugeait trop lente.
         //
         // Une échéance plutôt qu'un nombre de tours : chaque tour interroge la
         // page, et un tour dont l'appel attend son délai n'aurait plus duré un
         // quart de seconde. Compter les tours laissait donc une page figée
         // multiplier la patience par vingt.
-        let budget = max(180.0, secondesDictees * 4)
-        let limite = Date.now.addingTimeInterval(budget)
         var revenue = false
         var tour = 0
-        while Date.now < limite {
+        while !attente.expiree {
             try Task.checkCancellation()
             try verifierLaPage()
             try? await Task.sleep(for: .milliseconds(250))
@@ -715,7 +718,7 @@ final class RelaisPage: NSObject {
             if let message = await erreurAffichee(nouvelles: true) {
                 throw Erreur.refusParChatGPT(message)
             }
-            throw Erreur.zoneJamaisRevenue
+            throw attente.epuisee()
         }
 
         // Phase 2 : la stabilisation. Une seconde pleine sans changement, et
@@ -725,8 +728,7 @@ final class RelaisPage: NSObject {
         var precedent = ""
         var stable = 0
         var vide = 0
-        let finStabilisation = Date.now.addingTimeInterval(60)
-        while Date.now < finStabilisation {
+        while !attente.expiree {
             try Task.checkCancellation()
             try verifierLaPage()
             try? await Task.sleep(for: .milliseconds(250))
@@ -782,7 +784,7 @@ final class RelaisPage: NSObject {
             }
             precedent = texte
         }
-        throw Erreur.pasDeTexte
+        throw attente.epuisee()
     }
 
     /// Clique un bouton, en lui laissant le temps d'exister.
@@ -797,9 +799,12 @@ final class RelaisPage: NSObject {
     ///
     /// Attendre coûte quelques centaines de millisecondes dans le cas normal,
     /// où le bouton est là au premier essai.
+    ///
+    /// Une date de fin et non une durée : après l'arrêt de l'écoute, la borne
+    /// propre au bouton ne doit jamais dépasser l'échéance de la dictée (cf.
+    /// `RelaisAttente.limite`).
     private func cliquerQuandDisponible(_ cible: RelaisCible, _ selecteur: String,
-                                        secondes: Double) async throws -> Bool {
-        let limite = Date.now.addingTimeInterval(secondes)
+                                        jusqua limite: Date) async throws -> Bool {
         var essai = 0
         repeat {
             try Task.checkCancellation()
@@ -903,25 +908,35 @@ final class RelaisPage: NSObject {
     /// clique pas « copier » puisque rien n'est à insérer, et on ne recharge
     /// pas puisque le contexte de la conversation est précisément ce qu'on veut
     /// garder. Recharger ici détruirait ce que le module existe pour offrir.
-    func envoyerSansAttendre(_ encadrement: (avant: String, apres: String)) async throws {
+    func envoyerSansAttendre(_ encadrement: (avant: String, apres: String),
+                             attente: RelaisAttente) async throws {
+        attente.entrer(.envoi)
+        // Une transcription qui a pris tout le temps de la dictée ne laisse
+        // rien pour la suite : on n'entame pas un envoi qu'on abandonnerait à
+        // mi-chemin, consigne posée dans la zone.
+        try attente.verifier()
         if !encadrement.avant.isEmpty || !encadrement.apres.isEmpty {
             let r = try await appeler("return window.__relais.encadrer(sel, avant, apres);",
                                       ["sel": selecteurs.composeur,
                                        "avant": encadrement.avant,
                                        "apres": encadrement.apres])
             guard r["ok"] as? Bool == true else { throw Erreur.introuvable(.composeur) }
-            guard try await attendreEncadrement(empreinte(encadrement.avant)) else {
+            guard try await attendreEncadrement(empreinte(encadrement.avant), attente) else {
                 throw Erreur.consigneNonPosee
             }
         }
         (alertesAvant, reponsesAvantEnvoi) = await relever()
-        guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, secondes: 10) else {
+        guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi,
+                                               jusqua: attente.limite(dans: 10)) else {
+            try attente.verifier()
             throw Erreur.introuvable(.envoi)
         }
     }
 
     func reorganiserSurPlace(_ encadrement: (avant: String, apres: String),
-                             patienceSecondes: Double) async throws -> String {
+                             attente: RelaisAttente) async throws -> String {
+        attente.entrer(.envoi)
+        try attente.verifier()                     // cf. `envoyerSansAttendre`
         let r = try await appeler("return window.__relais.encadrer(sel, avant, apres);",
                                   ["sel": selecteurs.composeur,
                                    "avant": encadrement.avant,
@@ -933,20 +948,23 @@ final class RelaisPage: NSObject {
         // ajouté : seule la transcription brute était expédiée, sans la
         // consigne qui lui donne son sens. Un délai fixe marcherait jusqu'au
         // jour où la machine rame ; une relecture, non.
-        guard try await attendreEncadrement(empreinte(encadrement.avant)) else {
+        guard try await attendreEncadrement(empreinte(encadrement.avant), attente) else {
             throw Erreur.consigneNonPosee
         }
 
         (alertesAvant, reponsesAvantEnvoi) = await relever()
-        guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, secondes: 10) else {
+        guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi,
+                                               jusqua: attente.limite(dans: 10)) else {
+            try attente.verifier()
             throw Erreur.introuvable(.envoi)
         }
+        attente.entrer(.reponse)
         // Le bouton de ChatGPT quand on sait où il est, la lecture du DOM
         // sinon — pour ne pas casser une configuration antérieure.
         let reponse = selecteurs.saitCopier
-            ? try await copierReponse(patienceSecondes: patienceSecondes,
+            ? try await copierReponse(attente: attente,
                                       empreinteEnvoyee: empreinte(encadrement.avant))
-            : try await attendreReponse(patienceSecondes: patienceSecondes)
+            : try await attendreReponse(attente: attente)
         // Pas de rechargement ici : la page neuve est ouverte à l'appui
         // suivant, pour toutes les dictées et au même endroit. En recharger une
         // seconde fois depuis ce chemin-ci, c'était une deuxième politique de
@@ -965,9 +983,10 @@ final class RelaisPage: NSObject {
     }
 
     /// Attend que la consigne soit réellement dans la zone de saisie.
-    private func attendreEncadrement(_ empreinte: String) async throws -> Bool {
+    private func attendreEncadrement(_ empreinte: String,
+                                     _ attente: RelaisAttente) async throws -> Bool {
         guard !empreinte.isEmpty else { return true }
-        let limite = Date.now.addingTimeInterval(6)
+        let limite = attente.limite(dans: 6)
         while Date.now < limite {
             try Task.checkCancellation()
             try verifierLaPage()
@@ -976,6 +995,7 @@ final class RelaisPage: NSObject {
                                         ["sel": selecteurs.composeur])
             if let texte = lu?["texte"] as? String, texte.contains(empreinte) { return true }
         }
+        try attente.verifier()
         Log.error("relais : la consigne n'a pas tenu dans la zone de saisie")
         return false
     }
@@ -1037,13 +1057,19 @@ final class RelaisPage: NSObject {
     /// disproportionné.
     ///
     /// Sauf un refus : un quota atteint, et aucune réponse ne viendra. Le
-    /// guetter comme `copierReponse`, une fois par seconde, évite trois
-    /// minutes d'attente sous « Transcription… » ; son texte est rendu pour
-    /// que la barre le montre.
+    /// guetter comme `copierReponse`, une fois par seconde, évite d'attendre
+    /// l'échéance pour rien ; il est rendu pour que la barre le montre, comme
+    /// l'échéance elle-même quand elle passe sans réponse.
+    ///
+    /// - Parameter auPlus: une borne plus courte que l'échéance, quand la
+    ///   réponse est déjà connue pour finie — après une copie, il ne reste
+    ///   qu'à la voir immobile, et le texte attend pour s'insérer.
     @discardableResult
-    func faireLireLaReponse(patienceSecondes: Double) async -> String? {
+    func faireLireLaReponse(attente: RelaisAttente,
+                            auPlus: TimeInterval? = nil) async -> Erreur? {
         guard selecteurs.saitLire else { return nil }
-        let limite = Date.now.addingTimeInterval(patienceSecondes)
+        attente.entrer(.reponse)
+        let limite = auPlus.map { attente.limite(dans: $0) } ?? attente.echeance
         var precedent = ""
         var stable = 0
         var prete = false
@@ -1055,7 +1081,7 @@ final class RelaisPage: NSObject {
             try? await Task.sleep(for: .milliseconds(250))
             if tour % 4 == 3, let message = await refusPendantLAttente(silences: &silences) {
                 Log.error("relais : ChatGPT a refusé (« \(message) »), lecture abandonnée")
-                return message
+                return .refusParChatGPT(message)
             }
             guard let r = try? await appeler("return window.__relais.etatReponse(avant);",
                                              ["avant": reponsesAvantEnvoi]),
@@ -1073,14 +1099,19 @@ final class RelaisPage: NSObject {
         guard prete else {
             Log.error("relais : réponse jamais prête, lecture à haute voix abandonnée")
             // L'attente a expiré : une alerte apparue depuis l'envoi est la
-            // meilleure explication qu'on ait, et la seule que la barre
-            // puisse montrer.
-            return await erreurAffichee(nouvelles: true)
+            // meilleure explication qu'on ait. À défaut, l'échéance passée
+            // en est une, et elle se dit.
+            if let message = await erreurAffichee(nouvelles: true) {
+                return .refusParChatGPT(message)
+            }
+            return attente.expiree ? attente.epuisee() : nil
         }
 
+        attente.entrer(.lecture)
         // Le clic lui-même, répété quelques secondes : la barre d'actions de
         // la réponse s'affiche juste après la fin de la génération, pas au
-        // même instant.
+        // même instant. Sa borne propre, même au-delà de l'échéance : la
+        // réponse est là, ce clic n'attend plus ChatGPT.
         func cliquer(_ parent: String, _ bouton: String) async -> Bool {
             let fin = Date.now.addingTimeInterval(5)
             repeat {
@@ -1168,17 +1199,16 @@ final class RelaisPage: NSObject {
     /// Le presse-papiers est rendu tel qu'on l'a trouvé : il appartient à
     /// l'utilisateur, et une dictée n'a pas à lui faire perdre ce qu'il y
     /// gardait.
-    private func copierReponse(patienceSecondes: Double,
+    private func copierReponse(attente: RelaisAttente,
                                empreinteEnvoyee: String) async throws -> String {
         let presse = NSPasteboard.general
         let avant = presse.changeCount
         let sauvegarde = presse.string(forType: .string)
 
         var clique = false
-        let limite = Date.now.addingTimeInterval(patienceSecondes)
         var tour = 0
         var silences = 0
-        while Date.now < limite {
+        while !attente.expiree {
             try Task.checkCancellation()
             try verifierLaPage()
             try? await Task.sleep(for: .milliseconds(250))
@@ -1207,17 +1237,33 @@ final class RelaisPage: NSObject {
             if let message = await erreurAffichee(nouvelles: true) {
                 throw Erreur.refusParChatGPT(message)
             }
-            throw Erreur.pasDeReponse
+            throw attente.epuisee()
         }
 
         // Le clic est asynchrone côté page : on attend que le presse-papiers
         // change plutôt que de le lire aussitôt.
-        for _ in 0..<40 {                                       // jusqu'à 10 s
-            try? await Task.sleep(for: .milliseconds(250))
-            guard presse.changeCount != avant else { continue }
+        //
+        // Dix secondes à elle, même au-delà de l'échéance : la réponse est
+        // finie et copiée, il ne reste qu'à la ramasser. Couper ici jetterait
+        // un texte obtenu, et laisserait la copie écraser le presse-papiers
+        // sans qu'on le rende.
+        //
+        // Sauf l'abandon, qui l'interrompt — mais seulement après avoir rendu
+        // le presse-papiers si la copie y est déjà. Sans ce contrôle, une
+        // tâche annulée tournait ici dix secondes (le sommeil lève aussitôt,
+        // et `try?` l'avalait), puis rendait un texte qui s'insérait.
+        let finCopie = Date.now.addingTimeInterval(10)
+        while Date.now < finCopie {
+            let annulee = Task.isCancelled
+            if !annulee { try? await Task.sleep(for: .milliseconds(250)) }
+            guard presse.changeCount != avant else {
+                if annulee { throw CancellationError() }
+                continue
+            }
             let texte = presse.string(forType: .string) ?? ""
             presse.clearContents()
             if let sauvegarde { presse.setString(sauvegarde, forType: .string) }
+            try Task.checkCancellation()
             guard !texte.isEmpty else { throw Erreur.pasDeReponse }
             // Garde-fou : ce qu'on vient de copier ne doit pas être ce qu'on
             // vient d'envoyer. Le délimiteur de la consigne ne figure jamais
@@ -1241,13 +1287,12 @@ final class RelaisPage: NSObject {
     /// deux fragments d'une longue réponse dépassent régulièrement la seconde,
     /// et un seuil trop court rendrait un texte coupé au milieu, ce qui est
     /// pire que pas de texte du tout : rien ne signale la coupure.
-    private func attendreReponse(patienceSecondes: Double) async throws -> String {
+    private func attendreReponse(attente: RelaisAttente) async throws -> String {
         var precedent = ""
         var stable = 0
-        let limite = Date.now.addingTimeInterval(patienceSecondes)
         var tour = 0
         var silences = 0
-        while Date.now < limite {
+        while !attente.expiree {
             defer { tour += 1 }
             try Task.checkCancellation()
             try verifierLaPage()
@@ -1269,7 +1314,7 @@ final class RelaisPage: NSObject {
         if let message = await erreurAffichee(nouvelles: true) {
             throw Erreur.refusParChatGPT(message)
         }
-        throw Erreur.pasDeReponse
+        throw attente.epuisee()
     }
 
     /// Le message d'échec que ChatGPT affiche, s'il est apparu depuis le

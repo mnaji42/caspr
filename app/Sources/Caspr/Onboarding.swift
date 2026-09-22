@@ -4,8 +4,8 @@ import SwiftUI
 /// L'accueil du premier lancement.
 ///
 /// Caspr ne peut pas se contenter d'apparaître dans la barre de menus. Il lui
-/// faut le micro et l'accessibilité, et son moteur intégré exige des modèles
-/// qui se téléchargent — des conditions qu'une app sans fenêtre n'a aucun moyen
+/// faut le micro et l'accessibilité, et le moteur de macOS peut exiger des
+/// modèles qui se téléchargent — des conditions qu'une app sans fenêtre n'a aucun moyen
 /// d'expliquer une fois lancée et invisible. Sans accueil, le premier lancement
 /// se solde par une icône muette et une dictée qui ne fait rien.
 ///
@@ -353,8 +353,11 @@ private struct OnboardingView: View {
 
     // MARK: 4 — Moteur final
 
+    /// La version de macOS qui écrit le texte définitif. Il y avait un choix
+    /// de moteur au-dessus d'elle ; il est parti avec le moteur local, et le
+    /// nom de l'écran reste celui sous lequel l'étape est enregistrée.
     private var finalEngineStep: some View {
-        FinalEngineCard()
+        AppleEngineCard(target: .final)
     }
 
     // MARK: 5 — Tout est prêt
@@ -454,14 +457,8 @@ private struct OnboardingView: View {
     /// Intelligence même quand le modèle de la langue n'est pas téléchargé et
     /// que la Dictée classique prendra le relais.
     private var engineSummary: String {
-        switch EngineSafetyManager.shared.effectiveEngine {
-        case .crisperWhisper:
-            let model = EngineInstall.selectedModel.label.uppercased()
-            return "CrisperWhisper IA · Modèle \(model) (0 Mo au repos)"
-        case let macOS:
-            let version = macOS.versionLabel ?? macOS.label
-            return "macOS Natif · \(version) (0 Mo de RAM, instantané)"
-        }
+        let version = EngineSafetyManager.shared.effectiveEngine.versionLabel
+        return "macOS Natif · \(version) (0 Mo de RAM, instantané)"
     }
 
     private func summary(_ label: String, _ value: String) -> some View {
@@ -520,7 +517,7 @@ private struct OnboardingView: View {
         // Le déclencheur **et** le moteur d'aperçu : c'est l'étape qui rend
         // Caspr utilisable, et la dernière qu'exige la garde d'accès.
         case .liveEngine: TriggerCard.validate() ?? AppleEngineCard.validate(target: .live)
-        case .finalEngine: FinalEngineCard.validate()
+        case .finalEngine: AppleEngineCard.validate(target: .final)
         case .completion: nil
         }
     }

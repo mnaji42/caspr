@@ -38,8 +38,7 @@ final class Preferences {
         static let livePreview = "caspr.preview.live"
         static let corpus = "caspr.corpus.enabled"
         static let corpusAudio = "caspr.corpus.audio"
-        static let engine = "caspr.engine"              // hérité, migré vers final/apple
-        static let finalEngine = "caspr.engine.final"
+        static let engine = "caspr.engine"              // hérité, migré vers apple
         static let finalAppleTechnology = "caspr.engine.apple"
         static let liveTechnology = "caspr.engine.live"
         static let shortcut = "caspr.shortcut"
@@ -50,9 +49,6 @@ final class Preferences {
         static let updateCheck = "caspr.update.check"
         static let ignoredUpdate = "caspr.update.ignored"
         static let lastValidEngine = "caspr.engine.lastValid"
-        static let habits = "caspr.habits"
-        static let crisperLicence = "caspr.crisper.licence"
-        static let crisperChosenModel = "caspr.crisper.model.chosen"
         /// Marque qu'une installation antérieure au multi-langues a été
         /// reprise. Sert à ne pas changer sous les pieds de quelqu'un des
         /// défauts qui n'ont bougé que pour les installations neuves.
@@ -249,10 +245,12 @@ final class Preferences {
         didSet {
             guard storedPrimaryLanguage != oldValue else { return }
             defaults.set(storedPrimaryLanguage, forKey: Key.primaryLanguage)
-            // Tout ce qui dépend de la langue — la version de macOS capable de
-            // l'écrire, le moteur final — est réévalué au même endroit pour
-            // tout le monde.
-            LanguageSwitchCoordinator.shared.primaryLanguageChanged()
+            // Une langue fraîchement choisie vaut « inconnue » pour
+            // l'inventaire des modèles, ce qui n'est pas « manquante » : la
+            // carte de macOS ne proposerait pas de la télécharger. Le système
+            // est donc interrogé tout de suite, et la carte se redessine
+            // quand il répond.
+            SpeechAssets.shared.probe([storedPrimaryLanguage])
         }
     }
 
@@ -281,46 +279,6 @@ final class Preferences {
         selectedLanguages.filter { $0 != primaryLanguage }
     }
 
-    /// La licence des poids a-t-elle été acceptée **pour ce téléchargement** ?
-    ///
-    /// Volontairement non persistée. Elle l'était, et la case disparaissait dès
-    /// qu'on l'avait cochée une fois : six mois plus tard, on téléchargeait un
-    /// autre modèle sans que rien ne rappelle sous quelle licence. Or c'est le
-    /// seul moment où l'information compte — celui où l'on récupère les poids.
-    ///
-    /// La recocher prend deux secondes, et remet la licence sous les yeux à
-    /// chaque fois. Rien d'autre n'en dépend : elle ne sert qu'à autoriser le
-    /// bouton d'installation.
-    var crisperLicenceAccepted = false
-
-
-    /// Ce que l'utilisateur a dit de son usage, à l'écran 2 de l'accueil.
-    ///
-    /// Persisté, alors que ça ne pilote aucun comportement : c'est le seul
-    /// moyen pour l'écran 4 de justifier sa recommandation quand on y revient
-    /// après avoir quitté l'application en cours de route. Un conseil qui
-    /// change entre deux lancements parce que sa prémisse a été oubliée est
-    /// pire qu'un conseil absent.
-    var habits: UsageHabits {
-        didSet {
-            guard let data = try? JSONEncoder().encode(habits) else { return }
-            defaults.set(data, forKey: Key.habits)
-        }
-    }
-
-    /// Le moteur conseillé, compte tenu des langues retenues.
-    ///
-    /// La couverture est mesurée sur **toutes** les langues déclarées, pas
-    /// seulement la principale : conseiller un moteur qui n'en couvre qu'une
-    /// partie reviendrait à promettre un repli silencieux à la première
-    /// bascule.
-    var recommendation: EngineRecommendation {
-        EngineRecommendation.advise(
-            habits: habits,
-            primaryBase: Language.named(primaryLanguage).base,
-            crisperCoversAll: activeLanguages.allSatisfy(\.isCoveredByCrisperWhisper))
-    }
-
     /// Le catalogue restreint à ce que l'utilisateur a retenu, dans son ordre.
     var activeLanguages: [Language] { selectedLanguages.map(Language.named) }
 
@@ -331,15 +289,9 @@ final class Preferences {
     ///
     /// Conservé parce que tout ce qui transcrit le lit — moteurs, aperçu,
     /// corpus — et que ces appels ne gagneraient rien à être réécrits : « la
-    /// langue » y désigne bien la langue courante. Il rend désormais une locale
-    /// complète (`fr-FR`) là où il rendait un code court (`fr`), ce qui vaut
-    /// mieux pour `SpeechTranscriber` et `SFSpeechRecognizer`, dont les modèles
-    /// sont fournis par région.
-    ///
-    /// **La conversion vers le code court se fait à la frontière du socket**,
-    /// et nulle part ailleurs : Whisper compose le jeton `<|fr|>`, et `fr-FR`
-    /// lui donnerait un jeton inconnu sans lever la moindre erreur.
-    /// Cf. `SocketSpeechEngine` et `Language`.
+    /// langue » y désigne bien la langue courante. Il rend une locale complète
+    /// (`fr-FR`) et non un code court (`fr`) : `SpeechTranscriber` et
+    /// `SFSpeechRecognizer` ont leurs modèles par région.
     var language: String {
         get { primaryLanguage }
         set {
@@ -355,27 +307,6 @@ final class Preferences {
                 selectedLanguages.append(newValue)
                 primaryLanguage = newValue
             }
-        }
-    }
-
-    /// Le modèle CrisperWhisper que l'utilisateur a **réellement retenu**.
-    ///
-    /// `nil` tant qu'il n'en a choisi aucun. Parcourir la grille pendant
-    /// l'accueil — cliquer sur Small, puis Large, pour lire ce qu'ils font — ne
-    /// retient rien : il faut avoir au moins **lancé un téléchargement** ou
-    /// **démarré le service**. C'est ce qui distingue regarder de choisir.
-    ///
-    /// Sert à ne pas reposer la question. Sans cette mémoire, la carte
-    /// redéployait ses quatre modèles dès que le service était arrêté, ce qui
-    /// pousse à retélécharger des gigaoctets déjà sur le disque pour une
-    /// décision déjà prise. Avec elle, revenir coûte deux clics : l'état, et
-    /// « Changer de modèle… » si l'on veut vraiment en changer.
-    ///
-    /// Distinct du modèle du descripteur, qui vaut `.turbo` par défaut et ne
-    /// dit donc pas si quelqu'un l'a voulu.
-    var chosenCrisperModel: CrisperWhisperModel? {
-        didSet {
-            defaults.set(chosenCrisperModel?.rawValue, forKey: Key.crisperChosenModel)
         }
     }
 
@@ -399,8 +330,7 @@ final class Preferences {
     /// d'écrire une ligne, et rien ne disait pourquoi.
     ///
     /// L'ordre suit la qualité attendue puis la disponibilité : le moteur de
-    /// macOS 26 s'il est là, celui de la Dictée sinon. CrisperWhisper n'est
-    /// jamais un défaut — lui seul demande un téléchargement.
+    /// macOS 26 s'il est là, celui de la Dictée sinon.
     ///
     /// Quand aucune version de macOS ne marche ici, on retient quand même la
     /// famille : l'interface montre alors la ligne « macOS » avec la raison
@@ -465,47 +395,12 @@ final class Preferences {
 
     // MARK: - Moteur
 
-    /// Moteur qui écrit réellement le texte inséré.
+    /// La version de macOS qui écrit le texte définitif — Apple Intelligence
+    /// ou Dictée.
     ///
-    /// Apple par défaut : il est inclus dans le système, sans téléchargement
-    /// ni licence à accepter, et il transcrit pendant qu'on parle. Il ne sait
-    /// pas écrire `useEffect` — c'est mesuré — donc l'utilisateur qui dicte du
-    /// code choisira CrisperWhisper en connaissance de cause.
-    /// Qui écrit le texte définitif : macOS, ou CrisperWhisper.
-    ///
-    /// C'est **la** décision, celle qu'on prend à l'écran 4 de l'accueil. La
-    /// version de macOS employée n'en est pas une autre : c'est un détail
-    /// interne à « macOS », au même titre que le modèle sous CrisperWhisper.
-    enum FinalEngineChoice: String, CaseIterable, Codable, Sendable {
-        case apple
-        case crisperWhisper = "crisperwhisper"
-
-        /// Cette famille demande-t-elle qu'un service local tourne ?
-        ///
-        /// Le pendant de `EngineChoice.isLocalService`, pour les mêmes
-        /// raisons : la plupart des appelants demandaient « CrisperWhisper ? »
-        /// alors qu'ils voulaient savoir « faut-il un démon ? ». Les deux
-        /// coïncident tant qu'il n'y a qu'un moteur local, et divergent au
-        /// deuxième sans que rien ne le signale.
-        var isLocalService: Bool {
-            switch self {
-            case .crisperWhisper: true
-            case .apple: false
-            }
-        }
-    }
-
-    var finalEngine: FinalEngineChoice {
-        didSet {
-            defaults.set(finalEngine.rawValue, forKey: Key.finalEngine)
-            EngineService.reconcile(needed: needsLocalEngine)
-        }
-    }
-
-    /// La version de macOS retenue — Apple Intelligence ou Dictée.
-    ///
-    /// Toujours une des deux, jamais CrisperWhisper : c'est ce que garantit le
-    /// point d'entrée `engine`, seul chemin d'écriture exposé aux vues.
+    /// Il y avait au-dessus d'elle un second réglage, la famille : macOS ou
+    /// l'ancien moteur local. Parti avec lui, il ne reste que celui-ci ;
+    /// l'ancienne clé `caspr.engine.final` n'est plus lue.
     var finalAppleTechnology: EngineChoice {
         didSet {
             defaults.set(finalAppleTechnology.rawValue, forKey: Key.finalAppleTechnology)
@@ -546,44 +441,21 @@ final class Preferences {
         defaults.string(forKey: Key.finalAppleTechnology) != nil
     }
 
-    /// Le moteur qui écrit, recomposé à partir des deux réglages ci-dessus.
+    /// Le moteur qui écrit.
     ///
-    /// Point d'entrée historique, et toujours le bon : tout ce qui transcrit
-    /// veut savoir « qui écrit », pas « quelle case est cochée où ». L'affecter
-    /// décompose vers le bon couple, ce qui évite à chaque appelant de savoir
-    /// que la décision est désormais rangée en deux morceaux.
+    /// Point d'entrée historique : tout ce qui transcrit veut savoir « qui
+    /// écrit », pas « quelle case est cochée où ».
     var engine: EngineChoice {
-        get {
-            // Un `switch` et non un ternaire, alors que le `set` juste en
-            // dessous en est déjà un : c'est *ici* que se jouait la panne la
-            // plus discrète du projet. Le `set` refuse de compiler dès qu'un
-            // cas s'ajoute ; le ternaire, lui, compilait sans rien dire et
-            // renvoyait `finalAppleTechnology` — l'utilisateur choisissait un
-            // moteur, et Caspr dictait avec celui de macOS.
-            switch finalEngine {
-            case .crisperWhisper: .crisperWhisper
-            case .apple: finalAppleTechnology
-            }
-        }
-        set {
-            switch newValue {
-            case .crisperWhisper:
-                finalEngine = .crisperWhisper
-            case .apple, .appleLegacy:
-                finalAppleTechnology = newValue
-                finalEngine = .apple
-            }
-        }
+        get { finalAppleTechnology }
+        set { finalAppleTechnology = newValue }
     }
 
     /// Le dernier moteur dont on a **constaté** qu'il savait écrire.
     ///
-    /// Filet de sécurité du commit transactionnel : tant qu'un moteur exploré
-    /// dans les réglages n'est pas prêt — poids en cours de téléchargement,
-    /// service arrêté, modèle supprimé — la dictée continue avec celui-ci
-    /// plutôt que d'échouer. Sans lui, cocher « CrisperWhisper » avant la fin
-    /// du téléchargement cassait la dictée en silence, et rien ne disait
-    /// pourquoi. Cf. `EngineSafetyManager`.
+    /// Filet de sécurité : tant que la version choisie ne sait pas écrire ici
+    /// — modèle Apple Intelligence pas encore téléchargé, Dictée éteinte —
+    /// la dictée continue avec celle-ci plutôt que d'échouer. Cf.
+    /// `EngineSafetyManager`.
     var lastValidEngine: EngineChoice {
         didSet { defaults.set(lastValidEngine.rawValue, forKey: Key.lastValidEngine) }
     }
@@ -591,25 +463,11 @@ final class Preferences {
     /// Moteurs à faire tourner **en plus** pour la collecte, après insertion.
     ///
     /// C'est ce qui permet de comparer sans changer d'outil : on dicte avec
-    /// Apple, on archive aussi ce qu'aurait écrit CrisperWhisper.
+    /// une version de macOS, on archive aussi ce qu'aurait écrit l'autre.
     var corpusEngines: Set<EngineChoice> {
         didSet {
             defaults.set(corpusEngines.map(\.rawValue), forKey: Key.corpusEngines)
-            EngineService.reconcile(needed: needsLocalEngine)
         }
-    }
-
-    /// Le service local doit-il tourner ? Un modèle de 3 Go ne reste pas
-    /// chargé « au cas où » : il faut qu'il écrive, ou qu'il soit coché dans
-    /// une collecte réellement active.
-    var needsLocalEngine: Bool {
-        // RELAIS — corrigé ici plutôt qu'aux appelants : trois changements de
-        // réglages relancent le service via cette propriété, et il n'a rien à
-        // charger tant que ChatGPT écrit. Un oubli sur l'un des trois aurait
-        // remis trois gigaoctets en mémoire pour un moteur inatteignable.
-        if Relais.partage.actif { return false }
-        if engine.isLocalService { return true }
-        return corpusEnabled && corpusEngines.contains(where: \.isLocalService)
     }
 
     /// Moteurs qui produiront une transcription pour cette dictée.
@@ -637,10 +495,7 @@ final class Preferences {
     /// Coûte une seconde passe du moteur par dictée, lancée après insertion et
     /// abandonnée si on réenchaîne — la latence de dictée ne se négocie pas.
     var corpusEnabled: Bool {
-        didSet {
-            defaults.set(corpusEnabled, forKey: Key.corpus)
-            EngineService.reconcile(needed: needsLocalEngine)
-        }
+        didSet { defaults.set(corpusEnabled, forKey: Key.corpus) }
     }
 
     /// Conserve aussi l'audio. Séparé de la collecte parce que le coût en
@@ -749,10 +604,6 @@ final class Preferences {
         checksForUpdates = defaults.bool(forKey: Key.updateCheck)
         corpusEnabled = defaults.bool(forKey: Key.corpus)
         corpusKeepsAudio = defaults.object(forKey: Key.corpusAudio) as? Bool ?? true
-        // Apple par défaut : inclus dans le système, aucun téléchargement,
-        // aucune licence à accepter, et rien ne réside en mémoire. Une
-        // installation neuve ne charge donc aucun modèle tant que
-        // l'utilisateur n'a pas explicitement choisi le contraire.
         if let stored = defaults.dictionary(forKey: Key.shortcut),
            let code = stored["keyCode"] as? Int,
            let modifiers = stored["modifiers"] as? Int,
@@ -763,27 +614,14 @@ final class Preferences {
         } else {
             dictateShortcut = .dictate
         }
-        // Migration des moteurs : un réglage unique (`caspr.engine`) devient
-        // deux décisions distinctes — qui écrit, et avec quelle version de
-        // macOS. L'ancienne valeur porte les deux à la fois, on la décompose.
-        let legacyEngine = EngineChoice(rawValue: defaults.string(forKey: Key.engine) ?? "")
-        let resolvedFinal: FinalEngineChoice
-        if let stored = defaults.string(forKey: Key.finalEngine),
-           let choice = FinalEngineChoice(rawValue: stored) {
-            resolvedFinal = choice
-        } else {
-            resolvedFinal = switch legacyEngine {
-            case .crisperWhisper: .crisperWhisper
-            case .apple, .appleLegacy, .none: .apple
-            }
-        }
-        finalEngine = resolvedFinal
         // La version de macOS : celle explicitement rangée, sinon celle que
-        // l'ancien réglage désignait s'il en désignait une, sinon celle que
+        // l'ancien réglage unique (`caspr.engine`) désignait, sinon celle que
         // cette machine sait faire tourner — mesuré, jamais déduit du numéro
-        // de version.
+        // de version. La valeur de l'ancien moteur local ne se relit plus :
+        // `Migration` l'a déjà traduite, et un réglage qu'elle n'aurait pas
+        // encore vu retombe sur ce que la machine sait faire.
         let resolvedApple = EngineChoice(rawValue: defaults.string(forKey: Key.finalAppleTechnology) ?? "")
-            ?? (legacyEngine?.isSystem == true ? legacyEngine : nil)
+            ?? EngineChoice(rawValue: defaults.string(forKey: Key.engine) ?? "")
             ?? Self.defaultEngine(for: primary)
         finalAppleTechnology = resolvedApple
         liveEngineTechnology = EngineChoice(rawValue: defaults.string(forKey: Key.liveTechnology) ?? "")
@@ -791,19 +629,10 @@ final class Preferences {
         // Au premier lancement, le dernier moteur valide est celui qu'on vient
         // de retenir : rien n'a encore échoué, et démarrer sur un repli
         // arbitraire ferait dicter avec autre chose que ce qui est affiché.
-        let impliedValid: EngineChoice = switch resolvedFinal {
-        case .crisperWhisper: .crisperWhisper
-        case .apple: resolvedApple
-        }
         lastValidEngine = EngineChoice(rawValue: defaults.string(forKey: Key.lastValidEngine) ?? "")
-            ?? impliedValid
+            ?? resolvedApple
 
         ignoredUpdateVersion = defaults.string(forKey: Key.ignoredUpdate)
-        chosenCrisperModel = defaults.string(forKey: Key.crisperChosenModel)
-            .flatMap(CrisperWhisperModel.init(rawValue:))
-        habits = defaults.data(forKey: Key.habits)
-            .flatMap { try? JSONDecoder().decode(UsageHabits.self, from: $0) }
-            ?? UsageHabits()
 
         corpusEngines = defaults.stringArray(forKey: Key.corpusEngines)
             .map { Set($0.compactMap(EngineChoice.init(rawValue:))) }

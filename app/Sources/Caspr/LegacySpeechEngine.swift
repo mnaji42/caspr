@@ -13,7 +13,7 @@ import CasprCore
 /// livrés avec Apple Intelligence.
 ///
 /// Cette contrainte laissait des Mac entiers sans aucun moteur : un Mac Intel
-/// sous macOS 26 n'a ni Apple Intelligence ni CrisperWhisper, alors que la
+/// sous macOS 26 n'a pas Apple Intelligence, alors que la
 /// Dictée d'Apple y fonctionne parfaitement. Le constat est venu d'une machine
 /// virtuelle où la Dictée dictait très bien pendant que Caspr annonçait
 /// qu'aucune langue n'était disponible — deux familles d'actifs distinctes,
@@ -50,8 +50,9 @@ final class LegacySpeechEngine: SpeechEngine, @unchecked Sendable {
                     + "Reconnaissance vocale."
             case .offlineUnsupported(let code):
                 "macOS ne sait pas reconnaître « \(code) » hors ligne sur cette "
-                    + "machine. Caspr n'enverra pas votre voix à un serveur : "
-                    + "utilisez CrisperWhisper, ou une autre langue."
+                    + "machine. Caspr n'enverra pas votre voix à un serveur "
+                    + "sans que vous l'ayez choisi : dictez dans une autre "
+                    + "langue, ou passez par ChatGPT dans l'onglet Moteur IA."
             case .noResult:
                 "La dictée de macOS n'a rien produit."
             }

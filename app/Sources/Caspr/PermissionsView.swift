@@ -40,7 +40,7 @@ final class PermissionsMonitor {
     private(set) var dictationDisabled = SystemDictation.isDisabled
 
     /// Le droit de reconnaissance vocale n'entre dans le compte que s'il sert :
-    /// l'exiger sur une machine qui dictera avec CrisperWhisper bloquerait
+    /// l'exiger sur une machine qui dictera avec Apple Intelligence bloquerait
     /// l'accueil sur une autorisation inutile.
     /// Combien d'autorisations cette machine réclame réellement.
     var neededCount: Int { requiresSpeech ? 3 : 2 }
@@ -51,7 +51,7 @@ final class PermissionsMonitor {
     /// écrit, la collecte l'exécute après insertion, ou c'est elle qui assure
     /// l'aperçu en direct. La version précédente ne voyait que la première et
     /// une approximation de la troisième — quelqu'un qui écrivait avec
-    /// CrisperWhisper tout en archivant avec la Dictée n'avait jamais
+    /// Apple Intelligence tout en archivant avec la Dictée n'avait jamais
     /// l'occasion d'accorder le droit dont sa collecte dépendait.
     var requiresSpeech: Bool {
         let prefs = Preferences.shared

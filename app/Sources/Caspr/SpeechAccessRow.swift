@@ -9,8 +9,8 @@ import SwiftUI
 /// déclencheur (`TriggerCard`).
 ///
 /// Celle-ci non. Elle ne concerne que `SFSpeechRecognizer`, c'est-à-dire la
-/// version **Dictée** du moteur de macOS. Quelqu'un qui dicte avec
-/// CrisperWhisper, ou avec Apple Intelligence, n'en a aucun usage — et la lui
+/// version **Dictée** du moteur de macOS. Quelqu'un qui dicte avec Apple
+/// Intelligence, ou par ChatGPT, n'en a aucun usage — et la lui
 /// réclamer serait exactement ce qu'on reproche aux applications qui demandent
 /// plus de droits qu'elles n'en emploient.
 ///

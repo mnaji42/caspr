@@ -5,9 +5,9 @@ import CasprCore
 ///
 /// ## Deux réglages, et c'est l'utilisateur qui arbitre
 ///
-/// Le même composant sert deux fois — sous la bascule de l'aperçu en direct, et
-/// dans le panneau « macOS (Natif) » du moteur final — et chaque exemplaire
-/// pilote **son** réglage, désigné par `target`. C'est ce que fait
+/// Le même composant sert deux fois — pour l'aperçu en direct, et pour le
+/// texte définitif — et chaque exemplaire pilote **son** réglage, désigné par
+/// `target`. C'est ce que fait
 /// `AppleEngineCard.jsx`.
 ///
 /// J'avais tranché l'inverse, en croyant qu'un aperçu utilisant une autre
@@ -30,15 +30,10 @@ import CasprCore
 ///
 /// Les langues secondaires manquantes sont donc **proposées, jamais exigées**.
 struct AppleEngineCard: View, ValidatingComponent {
-    /// Imbriqué sous une ligne de choix : la carte perd son cadre et son
-    /// en-tête, qui feraient une carte dans une carte.
-    var isSubCard = false
-
     /// Lequel des deux moteurs cette carte règle.
     ///
-    /// Le même composant sert deux fois — sous la bascule de l'aperçu en direct,
-    /// et dans le panneau « macOS (Natif) » du moteur final — et chaque
-    /// exemplaire pilote **son** réglage. C'est le `target` de
+    /// Le même composant sert deux fois — pour l'aperçu en direct, et pour le
+    /// texte définitif — et chaque exemplaire pilote **son** réglage. C'est le `target` de
     /// `AppleEngineCard.jsx`. Sans lui, les deux cartes écrivaient la même
     /// valeur : choisir Dictée pour l'aperçu basculait aussi la transcription,
     /// et réciproquement.
@@ -85,6 +80,7 @@ struct AppleEngineCard: View, ValidatingComponent {
     }
 
     @State private var prefs = Preferences.shared
+    @State private var safety = EngineSafetyManager.shared
     @State private var assets = SpeechAssets.shared
     @State private var monitor = PermissionsMonitor.shared
     @State private var installing: Set<String> = []
@@ -152,22 +148,11 @@ struct AppleEngineCard: View, ValidatingComponent {
             if SystemDictation.isDisabled { return .systemDictationDisabled }
             return PermissionsMonitor.shared.speechGranted
                 ? nil : .speechRecognitionPermissionRequired
-        case .crisperWhisper:
-            // Impossible par construction : les deux réglages de version ne
-              // prennent que les deux versions de macOS. On ne bloque pas sur un état qui ne peut
-            // pas exister.
-            return nil
         }
     }
 
     var body: some View {
-        Group {
-            if isSubCard {
-                VStack(alignment: .leading, spacing: 12) { content }
-            } else {
-                Card { content }
-            }
-        }
+        Card { content }
         // ## L'horloge est tenue ici, et pas plus bas
         //
         // La carte lit trois choses qui changent depuis les Réglages Système —
@@ -208,8 +193,8 @@ struct AppleEngineCard: View, ValidatingComponent {
     /// **légitime et courant**, celui de quelqu'un qui a choisi Apple
     /// Intelligence puis dicte dans une langue qu'il ne couvre pas. Le réglage
     /// n'est alors pas fautif, il ne s'applique simplement pas ici et
-    /// maintenant — `LanguageSwitchCoordinator` le laisse en place à dessein et
-    /// son bandeau le dit déjà. Crier à l'anomalie là-dessus ferait de ce
+    /// maintenant — `EngineSafetyManager` le laisse en place à dessein, et la
+    /// note de couverture des langues le dit déjà. Crier à l'anomalie là-dessus ferait de ce
     /// message un bruit de fond, et le jour où il dirait vrai plus personne ne
     /// le lirait.
     ///
@@ -256,24 +241,31 @@ struct AppleEngineCard: View, ValidatingComponent {
         // sur la carte ne mérite d'être lu avant lui.
         if let fix = inconsistency {
             inconsistencyNotice(fix)
+        } else if target == .final, safety.isFallingBack {
+            // Le texte définitif part ailleurs que là où le réglage le dit :
+            // le taire ferait passer la transcription de l'autre version pour
+            // un caprice de celle qu'on a choisie.
+            Note("**\(prefs.engine.fullLabel) ne sait pas écrire ici pour "
+                 + "l'instant.** Caspr dicte avec "
+                 + "\(safety.effectiveEngine.fullLabel) en attendant, et "
+                 + "reviendra tout seul à votre choix dès qu'il sera "
+                 + "opérationnel — votre réglage n'a pas été modifié.",
+                 warning: true)
         }
 
-        // Hors sous-carte, la carte porte son propre en-tête : une pastille qui
-        // dit si le moteur est opérationnel, le nom de la version active, et ce
-        // qu'elle est. En sous-carte, la ligne de choix parente le dit déjà.
-        if !isSubCard {
-            HStack(alignment: .top, spacing: 12) {
-                statusCircle
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(headerTitle)
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text(headerDetail)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Style.textSecondary)
-                        .lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        // L'en-tête : une pastille qui dit si le moteur est opérationnel, le
+        // nom de la version active, et ce qu'elle est.
+        HStack(alignment: .top, spacing: 12) {
+            statusCircle
+            VStack(alignment: .leading, spacing: 3) {
+                Text(headerTitle)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(headerDetail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Style.textSecondary)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
 
@@ -285,7 +277,7 @@ struct AppleEngineCard: View, ValidatingComponent {
             // n'est pas levé, et le laisser en second faisait accorder un droit
             // pour rien.
             SystemDictationRow()
-            SpeechAccessRow(explains: !isSubCard)
+            SpeechAccessRow(explains: true)
         default:
             models
         }
@@ -309,10 +301,7 @@ struct AppleEngineCard: View, ValidatingComponent {
         }
     }
 
-    private var headerTitle: String {
-        let version = shownTechnology
-        return "macOS · \(version.versionLabel ?? version.label)"
-    }
+    private var headerTitle: String { shownTechnology.fullLabel }
 
     private var headerDetail: String {
         shownTechnology == .apple
@@ -345,9 +334,7 @@ struct AppleEngineCard: View, ValidatingComponent {
     @ViewBuilder
     private var versionPicker: some View {
         if !available.isEmpty {
-            if !isSubCard {
-                Divider().opacity(0.25)
-            }
+            Divider().opacity(0.25)
             Text("VERSION DU MOTEUR")
                 .font(.system(size: 10, weight: .bold))
                 .kerning(0.6)
@@ -356,7 +343,7 @@ struct AppleEngineCard: View, ValidatingComponent {
 
             if available.count > 1 {
                 Row(label: "Technologie :") {
-                    PillPicker(options: available.map { ($0, $0.versionLabel ?? $0.label) },
+                    PillPicker(options: available.map { ($0, $0.versionLabel) },
                                selection: Binding(
                                    get: { technology },
                                    set: { setTechnology($0) }))
@@ -364,9 +351,7 @@ struct AppleEngineCard: View, ValidatingComponent {
             }
             languageCoverage
 
-            if let explanation = shownTechnology.versionExplanation {
-                Note(explanation)
-            }
+            Note(shownTechnology.versionExplanation)
         } else {
             Note(LegacySpeechEngine.unavailabilityReason(for: prefs.primaryLanguage)
                  ?? "Aucune version du moteur de macOS n'est utilisable ici.",
@@ -494,7 +479,7 @@ struct AppleEngineCard: View, ValidatingComponent {
         } else if shownTechnology == .appleLegacy {
             Note("**\(LegacySpeechEngine.supportedLocaleCount) langues** sur ce "
                  + "Mac : c'est la liste de la Dictée de macOS, la plus large "
-                 + "des trois.")
+                 + "des deux.")
         }
     }
 

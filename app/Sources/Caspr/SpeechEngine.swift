@@ -2,8 +2,9 @@ import Foundation
 
 /// Style de transcription.
 ///
-/// Deux modes, pas une échelle : CrisperWhisper émet ses cinq tags de mode en
-/// un bloc unique, ce sont deux signaux distincts et non dix niveaux.
+/// Aucune version de macOS ne le distingue (`EngineChoice.hasModes`) : le
+/// réglage survit à l'ancien moteur local qui le portait, et s'en va avec le
+/// reste des modes.
 enum TranscriptionMode: String, Sendable, CaseIterable {
     /// Ce qui était voulu — texte nettoyé, nombres en chiffres. Défaut.
     case intended
@@ -20,10 +21,10 @@ enum TranscriptionMode: String, Sendable, CaseIterable {
 /// De quoi retrouver, des mois plus tard, avec quoi une dictée a été
 /// transcrite.
 struct EngineIdentity: Sendable, Equatable {
-    /// Famille du moteur : `crisperwhisper`, `apple`, `whisper`…
+    /// Famille du moteur : `apple`, `apple-legacy`.
     var engine: String
-    /// Modèle précis quand il y en a un — `nyralabs/CrisperWhisper2.0_turbo`.
-    /// Pour un moteur système sans version publique, la locale fait l'affaire.
+    /// Modèle précis quand il y en a un. Pour un moteur système sans version
+    /// publique, la locale fait l'affaire.
     var model: String?
 }
 
@@ -51,23 +52,6 @@ struct TranscriptionResult: Sendable {
         var encoderMs: Double
         var decoderMs: Double
         var wallMs: Double
-    }
-}
-
-enum SpeechEngineError: LocalizedError {
-    case unavailable(String)
-    case transportFailure(String)
-    case engineError(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .unavailable(let detail):
-            return "Moteur indisponible : \(detail)"
-        case .transportFailure(let detail):
-            return "Communication interrompue : \(detail)"
-        case .engineError(let detail):
-            return "Le moteur a échoué : \(detail)"
-        }
     }
 }
 

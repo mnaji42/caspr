@@ -11,7 +11,7 @@
     <true/>
 
     <!-- Volontairement PAS de com.apple.security.app-sandbox : Caspr doit
-         joindre le socket du moteur hors de son conteneur et insérer du texte
-         dans d'autres applications, deux choses que le bac à sable interdit. -->
+         insérer du texte dans d'autres applications, ce que le bac à sable
+         interdit. -->
 </dict>
 </plist>

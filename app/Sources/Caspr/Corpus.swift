@@ -165,7 +165,7 @@ final class Corpus {
             // Les deux versions comptent : depuis que macOS en fournit deux,
             // ne reconnaître que « apple » revenait à déclarer sans texte
             // système toutes les dictées d'une machine sans Apple Intelligence.
-            if moteurs.contains(where: { EngineChoice(rawValue: $0)?.isSystem == true }) {
+            if moteurs.contains(where: { EngineChoice(rawValue: $0) != nil }) {
                 stats.withApple += 1
             }
             if moteurs.count > 1 { stats.withBothEngines += 1 }

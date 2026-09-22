@@ -44,21 +44,11 @@ final class RecordingOverlay {
         /// Faux quand le moteur **retenu** n'a qu'un rendu : la pastille de
         /// mode **disparaît** plutôt que d'être grisée. Un contrôle inerte
         /// occupe la place et l'attention sans rien offrir.
-        ///
-        /// Retenu, et non celui qui écrit à cet instant. La nuance compte
-        /// pendant un repli : CrisperWhisper coché mais son service arrêté,
-        /// c'est macOS qui écrit, et macOS ignore le mode. La pastille reste
-        /// pourtant, et c'est délibéré — la barre montre l'intention et la
-        /// configuration, pas l'état interne du filet de sécurité. La faire
-        /// disparaître ferait clignoter la rangée à chaque repli temporaire,
-        /// pour un réglage qui redeviendra effectif dès que le service
-        /// remontera. Le repli est un filet, pas un mode nominal ; c'est le
-        /// bandeau des Réglages qui l'annonce, pas la barre.
         var modesAvailable: Bool = true
         // RELAIS — libellés de rechange pour la pastille des modes.
         //
-        // Le relais n'a ni « Texte nettoyé » ni « Mot à mot » : ces deux-là
-        // appartiennent à CrisperWhisper. Il a ses propres modes, et la
+        // Le relais n'a ni « Texte nettoyé » ni « Mot à mot » : il a ses
+        // propres modes, et la
         // pastille est l'endroit où on les choisit — au moment de parler, pas
         // dans un écran de réglages qu'on n'ouvrira pas pour une phrase.
         // RELAIS — la destination qu'un module impose, quand il en impose une.
@@ -533,8 +523,6 @@ final class RecordingOverlay {
            }) {
             switchable = [current] + switchable.dropLast()
         }
-        // Sous CrisperWhisper aussi : la requête lui transmet la langue, il n'y
-        // a donc aucune raison de retirer la bascule quand il écrit.
         let all = status.switchableLanguages
         let usesMenu = all.count > 3
         let canSwitch = usesMenu || switchable.count > 1
@@ -850,8 +838,8 @@ final class RecordingOverlay {
         // onglets ce qu'on en fait. Posés au-dessus, ils s'interposaient entre
         // le regard et le texte reconnu, qui est la seule chose qu'on lit
         // vraiment pendant qu'on parle.
-        // Le mode de rendu passe **au-dessus**, à droite. Il n'appartient qu'à
-        // CrisperWhisper : le laisser en bas obligeait la rangée du bas à se
+        // Le mode de rendu passe **au-dessus**, à droite. Il n'apparaît que
+        // sous le relais : le laisser en bas obligeait la rangée du bas à se
         // réorganiser selon le moteur, et la destination changeait de place
         // d'une dictée à l'autre. En haut, il apparaît et disparaît sans rien
         // déplacer de ce qui reste.
@@ -914,13 +902,8 @@ final class RecordingOverlay {
     /// - **Une seule** : un simple indicateur, qui dit dans quelle langue on
     ///   parle.
     ///
-    /// **Quel que soit le moteur**, y compris CrisperWhisper : la requête lui
-    /// transmet la langue, il n'y avait donc aucune raison de lui retirer la
-    /// bascule. Elle lui était refusée, et la langue apparaissait au centre en
-    /// simple indicateur.
-    ///
     /// Le mode de rendu n'est pas ici : il est passé **au-dessus de la carte, à
-    /// droite** (cf. `makePanel`). Il n'appartient qu'à CrisperWhisper, et le
+    /// droite** (cf. `makePanel`). Il n'apparaît que sous le relais, et le
     /// laisser en bas obligeait cette rangée à se réorganiser selon le moteur —
     /// la destination changeait alors de place d'une dictée à l'autre.
     ///
@@ -937,9 +920,7 @@ final class RecordingOverlay {
             row.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
-        // Les langues à gauche, la destination à droite. Toujours, quel que
-        // soit le moteur : CrisperWhisper reçoit lui aussi la langue de la
-        // requête, il n'y avait donc aucune raison de lui retirer la bascule.
+        // Les langues à gauche, la destination à droite.
         let left: NSView = !switchable ? languageBadge
             : (usesMenu ? languageMenu : languageControl)
         fill(row, with: [left, targetControl])
@@ -990,8 +971,8 @@ final class RecordingOverlay {
             }
             row.addArrangedSubview(view)
         }
-        // Trois contrôles sous CrisperWhisper : les deux intervalles doivent
-        // rester égaux, sinon la pastille de langue n'est pas au centre.
+        // Avec trois contrôles, les deux intervalles doivent rester égaux,
+        // sinon celui du milieu n'est pas au centre.
         for spacer in spacers.dropFirst() {
             spacer.widthAnchor.constraint(equalTo: spacers[0].widthAnchor).isActive = true
         }

@@ -6,9 +6,9 @@ import CasprCore
 ///
 /// La disponibilité n'est pas une propriété du moteur, c'est une propriété de
 /// *cette machine à cet instant* : un modèle téléchargé ou non, une version de
-/// macOS, un service debout. Elle interroge `Speech`, `LegacySpeechEngine` et
-/// `EngineService`, donc elle ne peut pas vivre dans CasprCore — et elle n'a
-/// pas à y vivre, puisqu'elle n'est pas testable sans la machine.
+/// macOS, la Dictée allumée. Elle interroge `Speech` et `LegacySpeechEngine`,
+/// donc elle ne peut pas vivre dans CasprCore — et elle n'a pas à y vivre,
+/// puisqu'elle n'est pas testable sans la machine.
 extension EngineChoice {
     /// Ce moteur est-il utilisable ici, **maintenant** ?
     ///
@@ -32,8 +32,6 @@ extension EngineChoice {
             return Language.appleSupports(language) != false
         case .appleLegacy:
             return LegacySpeechEngine.isAvailable(for: language)
-        case .crisperWhisper:
-            return EngineService.isInstalled || EngineService.modelIsDownloaded
         }
     }
 
@@ -55,7 +53,7 @@ extension EngineChoice {
     /// disponible. `nil` quand aucune ne marche ici.
     static func systemEngine(preferring current: EngineChoice,
                              for language: String) -> EngineChoice? {
-        if current.isSystem, current.isAvailable(for: language) { return current }
+        if current.isAvailable(for: language) { return current }
         return availableSystemEngines(for: language).first
     }
 }

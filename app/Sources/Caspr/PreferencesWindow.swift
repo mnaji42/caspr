@@ -30,9 +30,6 @@ final class PreferencesWindowController {
 
 // MARK: - Fenêtre
 
-// Interne, et non `private` : son énumération d'onglets est la cible de
-// `selectSettingsTab`, que des composants d'autres fichiers empruntent pour
-// renvoyer vers l'onglet qui résout ce qu'ils signalent.
 struct PreferencesView: View {
     let history: TranscriptionHistory
     @State private var tab: Tab = .general
@@ -41,7 +38,7 @@ struct PreferencesView: View {
     /// vaut pour toute l'application*, *comment on déclenche*, *avec quoi ça
     /// transcrit*, puis ce qui a été dicté.
     ///
-    /// Il y en avait six. Le Lexique ne réglait que CrisperWhisper — les deux
+    /// Il y en avait six. Le Lexique ne réglait que l'ancien moteur local — les deux
     /// moteurs de macOS l'ignorent, c'est mesuré — et la Collecte archivait des
     /// dictées pour départager des moteurs qui ne sont plus proposés. Tous deux
     /// sont partis avec lui : la migration du lancement efface leurs réglages,
@@ -140,7 +137,6 @@ struct PreferencesView: View {
         }
         .background(WindowBackground().ignoresSafeArea())
         .tint(Style.accent)
-        .environment(\.selectSettingsTab) { tab = $0 }
     }
 
     /// La barre segmentée du prototype : un rail sombre à coins arrondis, des

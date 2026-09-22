@@ -15,7 +15,6 @@ enum ComponentValidationError: Equatable, LocalizedError {
     /// La Dictée de macOS est éteinte dans les Réglages Système. Ce n'est pas
     /// une autorisation — cf. `SystemDictation` — mais ça empêche autant.
     case systemDictationDisabled
-    case crisperEngineNotReady
     /// Aucune version du moteur de macOS ne fonctionne ici, avec la raison
     /// mesurée — pas déduite d'un numéro de version.
     case noSystemEngine(String)
@@ -41,8 +40,6 @@ enum ComponentValidationError: Equatable, LocalizedError {
         case .systemDictationDisabled:
             "La Dictée de macOS est désactivée : activez-la dans Réglages "
                 + "Système › Clavier › Dictée."
-        case .crisperEngineNotReady:
-            "Le service CrisperWhisper n'est pas encore prêt."
         case .noSystemEngine(let reason):
             reason
         case .notesFileMissing:
@@ -63,7 +60,7 @@ enum ComponentValidationError: Equatable, LocalizedError {
 ///
 /// Le problème de fond est que la validité n'est pas un état : c'est une
 /// **conclusion** tirée d'états qui vivent déjà ailleurs — `PermissionsMonitor`,
-/// `SpeechAssets`, `Preferences`, `EngineService`. La stocker une seconde fois
+/// `SpeechAssets`, `Preferences`. La stocker une seconde fois
 /// crée exactement l'occasion de divergence que ce projet a déjà payée en
 /// recopiant des réglages dans `DictationController`.
 ///

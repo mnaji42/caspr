@@ -11,12 +11,9 @@ import Foundation
 /// - Le dossier de support, qui contient **le corpus** — des centaines de
 ///   dictées réelles que rien ne permet de reconstituer.
 /// - Les préférences, rangées sous un domaine qui est l'identifiant lui-même.
-/// - L'agent launchd du moteur, dont le label porte l'ancien identifiant : sans
-///   retrait explicite, deux services coexisteraient, chacun chargeant trois
-///   gigaoctets.
-/// - Le descripteur du moteur, qui contient un chemin **absolu** vers l'ancien
-///   dossier : déplacer les fichiers sans le réécrire donnerait un moteur qui
-///   pointe dans le vide.
+/// - L'agent launchd de l'ancien moteur local, dont le label porte l'ancien
+///   identifiant : il tient ses fichiers ouverts, et doit sortir avant qu'on
+///   déplace le dossier sous lui.
 ///
 /// Les autorisations micro et accessibilité, elles, ne se migrent pas : TCC les
 /// lie à l'identifiant et ne fournit aucun moyen de les transférer. Elles
@@ -62,8 +59,6 @@ enum Rebranding {
         retireOldAgent()
         moveDirectories()
         adoptPreferences()
-        repairEngineDescriptor()
-        renameEngineModule()
     }
 
     // MARK: - L'agent de l'ancien nom
@@ -140,75 +135,5 @@ enum Rebranding {
         // L'ancien domaine est laissé intact : si quelque chose s'est mal
         // passé, il reste de quoi revenir en arrière à la main.
         NSLog("caspr: \(old.count) réglages repris de Caspr")
-    }
-
-    // MARK: - Le module Python du moteur
-
-    /// Remplace le paquet `sofler_engine` par `caspr_engine`.
-    ///
-    /// Le module a été renommé avec le reste, et l'agent launchd lance
-    /// désormais `python -m caspr_engine.server`. Mais le code installé dans le
-    /// dossier de support, lui, a été **déplacé** tel quel : il contenait
-    /// encore `sofler_engine`. Le service démarrait donc, échouait sur
-    /// `ModuleNotFoundError`, et launchd le relançait toutes les trente
-    /// secondes — l'application, elle, attendait un socket qui ne viendrait
-    /// jamais et tournait jusqu'à son délai de trois minutes.
-    ///
-    /// Le paquet est repris du bundle plutôt que renommé sur place : c'est le
-    /// code de cette version, et non celui qui traînait depuis la précédente
-    /// installation. L'environnement Python et les poids, eux, ne bougent pas —
-    /// ce sont eux qui coûtent une heure à reconstruire.
-    @MainActor private static func renameEngineModule() {
-        let fm = FileManager.default
-        let engine = home.appending(path: "Library/Application Support/Caspr/engine")
-        let stale = engine.appending(path: "sofler_engine")
-        guard fm.fileExists(atPath: stale.path) else { return }
-
-        guard let bundled = EngineBootstrap.bundledSource?
-            .appending(path: "caspr_engine"),
-              fm.fileExists(atPath: bundled.path)
-        else {
-            NSLog("caspr: module du moteur introuvable dans le bundle")
-            return
-        }
-
-        let destination = engine.appending(path: "caspr_engine")
-        do {
-            try? fm.removeItem(at: destination)
-            try fm.copyItem(at: bundled, to: destination)
-            try fm.removeItem(at: stale)
-            // Le service tournait peut-être déjà en boucle d'échec : on le
-            // sort, il repartira quand on le lui demandera.
-            EngineService.reconcile(needed: false)
-            NSLog("caspr: module du moteur repris sous son nouveau nom")
-        } catch {
-            NSLog("caspr: reprise du module impossible — \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Le descripteur du moteur
-
-    /// Réécrit le chemin absolu que le descripteur contient.
-    ///
-    /// Il désigne le dossier de l'environnement Python, qui vient de changer de
-    /// place. Sans cette reprise, `EngineInstall.isAvailable` répondrait non —
-    /// le chemin n'existe plus — et l'application proposerait de réinstaller
-    /// 1,2 Go déjà présents.
-    private static func repairEngineDescriptor() {
-        let url = home.appending(path: "Library/Application Support/Caspr/engine.json")
-        guard let data = try? Data(contentsOf: url),
-              var json = try? JSONSerialization.jsonObject(with: data)
-                as? [String: Any],
-              let project = json["project"] as? String,
-              project.contains("/Application Support/Sofler/")
-        else { return }
-
-        json["project"] = project.replacingOccurrences(
-            of: "/Application Support/Sofler/", with: "/Application Support/Caspr/")
-        guard let rewritten = try? JSONSerialization.data(
-            withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
-        else { return }
-        try? rewritten.write(to: url)
-        NSLog("caspr: descripteur du moteur reporté sur le nouveau dossier")
     }
 }

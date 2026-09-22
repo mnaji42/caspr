@@ -1,14 +1,28 @@
 import AppKit
 import Foundation
 import ServiceManagement
+import CasprCore
 
 /// Ce que Caspr a déposé sur la machine, et comment le retirer.
 ///
 /// Une application qui demande le micro, l'accessibilité et le droit de
 /// démarrer toute seule doit savoir partir. Sans ça, désinstaller veut dire
-/// glisser un bundle à la corbeille et laisser derrière soi un service
-/// lancé au démarrage, un modèle d'un giga et demi, et des autorisations
-/// accordées à quelque chose qui n'existe plus.
+/// glisser un bundle à la corbeille et laisser derrière soi une session
+/// ChatGPT connectée et des autorisations accordées à quelque chose qui
+/// n'existe plus.
+///
+/// ## Les restes de l'ancien moteur local
+///
+/// Caspr n'installe plus rien de lui-même. Mais jusqu'en septembre 2026 il
+/// savait installer un moteur local : un service lancé à l'ouverture de
+/// session, un environnement Python, des poids de un à trois gigaoctets.
+/// `Migration` les met à la corbeille au lancement ; ce désinstalleur garde
+/// pourtant de quoi les retirer, parce qu'il est le filet de qui n'aurait
+/// jamais lancé la version qui migre — une copie ancienne remplacée à la main,
+/// par exemple. Ces trois lignes n'apparaissent **que si** quelque chose
+/// reste sur le disque ; chez tous les autres, la fenêtre ne les montre pas.
+/// Les emplacements viennent de `LegacyCleanup`, la même table que la
+/// migration.
 ///
 /// **Rien n'est effacé définitivement : tout part à la corbeille.** C'est la
 /// convention de macOS, et surtout c'est ce qui sépare une erreur d'un
@@ -39,38 +53,36 @@ enum Uninstall {
             switch self {
             case .settings: "Réglages et historique"
             case .permissions: "Autorisations micro, accessibilité, dictée"
-            case .service: "Service moteur CrisperWhisper"
-            case .engine: "Moteur Python et ses bibliothèques"
+            case .service: "Ancien moteur local — service"
+            case .engine: "Ancien moteur local — Python et ses bibliothèques"
             case .logs: "Journaux et fichiers temporaires"
             case .corpus: "Dictées archivées"
-            case .model: "Modèle CrisperWhisper"
+            case .model: "Ancien moteur local — modèle"
             }
         }
 
         var explanation: String {
             switch self {
             case .settings:
-                "Votre lexique, votre raccourci, vos préférences et les "
+                "Votre raccourci, vos langues, vos préférences et les "
                     + "transcriptions récentes."
             case .permissions:
                 "Retire Caspr des Réglages Système — micro, accessibilité et "
                     + "reconnaissance vocale. Sans ça, il y reste listé alors "
                     + "qu'il n'existe plus."
             case .service:
-                "Le service qui charge le modèle à l'ouverture de session. "
-                    + "Il ne sert à rien sans l'application."
+                "Le service qu'une ancienne version de Caspr lançait à "
+                    + "l'ouverture de session. Plus rien ne s'en sert."
             case .engine:
-                // La formulation précédente parlait d'une installation « depuis
-                // le Terminal », ce qui n'est plus vrai depuis que l'application
-                // installe elle-même. Et « Python » inquiète à juste titre :
-                // il faut dire lequel part, et surtout lesquels ne partent pas.
-                "L'environnement Python de Caspr — torch, transformers et "
-                    + "l'outil `uv`, installés **dans le dossier de Caspr** et "
-                    + "nulle part ailleurs. Ni le Python de votre système, ni "
-                    + "celui de Homebrew, ni les versions que `uv` garde pour "
-                    + "vos autres projets ne sont touchés. Le garder permet de "
-                    + "réinstaller CrisperWhisper sans rien retélécharger ; le "
-                    + "retirer libère plus d'un gigaoctet."
+                // « Python » inquiète à juste titre : il faut dire lequel part,
+                // et surtout lesquels ne partent pas.
+                "L'environnement Python qu'une ancienne version de Caspr avait "
+                    + "installé — torch, transformers et l'outil `uv`, **dans "
+                    + "le dossier de Caspr** et nulle part ailleurs. Ni le "
+                    + "Python de votre système, ni celui de Homebrew, ni les "
+                    + "versions que `uv` garde pour vos autres projets ne sont "
+                    + "touchés. Plus rien ne s'en sert ; le retirer libère plus "
+                    + "d'un gigaoctet."
             case .logs:
                 "Sans valeur une fois l'application partie."
             case .corpus:
@@ -78,25 +90,26 @@ enum Uninstall {
                     + "reconstituer.** Décochez si vous comptez réinstaller, "
                     + "ou si vous voulez les garder pour vous."
             case .model:
-                "Les poids téléchargés depuis Hugging Face, pour **tous** les "
-                    + "modèles présents. Les retirer impose de les "
-                    + "retélécharger pour s'en resservir."
+                "Les poids que l'ancien moteur local avait téléchargés depuis "
+                    + "Hugging Face. Seuls les siens : les autres modèles du "
+                    + "cache Hugging Face ne sont pas touchés. Plus rien ne "
+                    + "s'en sert."
             }
         }
 
         /// Coché d'avance ?
         ///
-        /// Tout ce qui est petit et se reconstruit, oui. Le corpus, le modèle
-        /// et le moteur, non : le premier est irremplaçable, le deuxième coûte
-        /// un long téléchargement, et le troisième est le seul dont la
-        /// reconstruction repasse par le Terminal. Un désinstalleur qui coche
-        /// par défaut la seule chose qu'on ne peut pas récupérer est un piège ;
-        /// un désinstalleur qui impose une ligne de commande à quiconque
-        /// réinstalle en est un autre.
+        /// Ce qui ne sert plus à rien, oui : le service et les poids de
+        /// l'ancien moteur local ne servent à aucune version de Caspr. Le
+        /// corpus, non — il est irremplaçable, et un désinstalleur qui coche
+        /// par défaut la seule chose qu'on ne peut pas récupérer est un piège.
+        /// L'environnement Python non plus : sur une machine de développement,
+        /// il vit dans le dépôt de travail, où l'on s'en sert encore pour
+        /// relancer l'ancien moteur à la main.
         var checkedByDefault: Bool {
             switch self {
-            case .settings, .permissions, .service, .logs: true
-            case .engine, .corpus, .model: false
+            case .settings, .permissions, .service, .logs, .model: true
+            case .engine, .corpus: false
             }
         }
 
@@ -109,7 +122,6 @@ enum Uninstall {
     private static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
 
     static let bundleIdentifier = "fr.lyriastudio.caspr"
-    private static let serviceLabel = "fr.lyriastudio.caspr.engine"
 
     /// Le bundle à retirer : celui qui est installé, pas la copie fantôme.
     ///
@@ -178,8 +190,8 @@ enum Uninstall {
     private static var preferencesFile: URL {
         home.appending(path: "Library/Preferences/\(bundleIdentifier).plist")
     }
-    /// Contient le corpus, les sauvegardes de réglages et la déclaration du
-    /// moteur : c'est tout ce que Caspr garde à long terme.
+    /// Contient le corpus, et chez qui l'avait installé la déclaration de
+    /// l'ancien moteur local : c'est tout ce que Caspr garde à long terme.
     ///
     /// Il n'est jamais retiré d'un bloc. Ce qu'il contient appartient à trois
     /// cases différentes, et les jeter ensemble a déjà eu une conséquence
@@ -188,13 +200,19 @@ enum Uninstall {
     /// laisse décochée exprès. Le dossier lui-même s'en va à la fin, s'il ne
     /// reste rien dedans.
     private static var supportDirectory: URL {
-        home.appending(path: "Library/Application Support/Caspr")
+        LegacyCleanup.supportDirectory(home: home)
     }
     private static var corpusDirectory: URL {
         supportDirectory.appending(path: "corpus")
     }
 
-    /// Ce que `setup-engine.sh` a laissé sur la machine.
+    /// La déclaration que l'installation de l'ancien moteur local laissait :
+    /// elle dit où vit son environnement Python.
+    private static var engineDescriptor: URL {
+        LegacyCleanup.engineDescriptor(home: home)
+    }
+
+    /// Ce que l'installation de l'ancien moteur local a laissé sur la machine.
     ///
     /// Déduit du descripteur, jamais d'un chemin écrit en dur — et la
     /// distinction n'est pas cosmétique ici. Se tromper d'emplacement dans un
@@ -207,6 +225,10 @@ enum Uninstall {
     /// en remonter d'un cran et le jeter effacerait le code source et tout ce
     /// qui n'y est pas encore commité. Dans ce cas seul l'environnement
     /// Python s'en va — c'est lui qui pèse, et lui seul se régénère.
+    ///
+    /// Plus large que `LegacyCleanup.engineLocations`, qui ne touche jamais un
+    /// dépôt de travail : la migration agit sans que personne l'ait demandé,
+    /// ce désinstalleur agit sur une case cochée.
     private static var enginePaths: [(url: URL, label: String)] {
         let fm = FileManager.default
         var found: [(URL, String)] = []
@@ -217,12 +239,14 @@ enum Uninstall {
         let tool = supportDirectory.appending(path: "tools")
         if fm.fileExists(atPath: tool.path) { found.append((tool, "uv")) }
 
-        guard let project = EngineInstall.descriptor?.project else { return found }
+        guard let project = (try? Data(contentsOf: engineDescriptor))
+            .flatMap(LegacyCleanup.engineProject(descriptor:))
+        else { return found }
         let projectURL = URL(fileURLWithPath: project).standardizedFileURL
 
         // Installation faite depuis l'application : tout tient dans un dossier
         // qui n'appartient qu'à Caspr, code et environnement compris.
-        let own = EngineBootstrap.engineDirectory.standardizedFileURL
+        let own = supportDirectory.appending(path: "engine").standardizedFileURL
         if projectURL.path == own.path, fm.fileExists(atPath: own.path) {
             found.append((own, "moteur Python"))
             return found
@@ -286,22 +310,20 @@ enum Uninstall {
         home.appending(path: "Library/WebKit/\(bundleIdentifier)")
     }
 
+    /// L'agent launchd de l'ancien moteur local — le premier des deux labels,
+    /// l'autre étant celui de Sofler, que `Rebranding` retire déjà.
+    private static var serviceLabel: String { LegacyCleanup.agentLabels[0] }
+
     private static var launchAgent: URL {
-        home.appending(path: "Library/LaunchAgents/\(serviceLabel).plist")
+        LegacyCleanup.agentPlist(serviceLabel, home: home)
     }
-    /// Uniquement le modèle de Caspr. Le cache Hugging Face est partagé avec
-    /// tout autre projet qui utilise la bibliothèque : l'effacer en entier
-    /// ferait retélécharger des gigaoctets qui ne nous appartiennent pas.
-    /// Les poids présents, quel que soit le modèle.
-    ///
-    /// Le chemin était écrit en dur sur `turbo`. Quelqu'un qui avait
-    /// téléchargé `large` — trois gigaoctets — le gardait après une
-    /// désinstallation où il avait pourtant coché « Modèle CrisperWhisper »,
-    /// et rien ne le lui disait. Depuis qu'on peut changer de modèle depuis
-    /// l'application, le cas n'a plus rien de théorique.
-    private static var modelDirectories: [URL] {
-        CrisperWhisperModel.allCases.map(\.cacheDirectory)
-            .filter { FileManager.default.fileExists(atPath: $0.path) }
+    /// Uniquement les poids de l'ancien moteur local, variante par variante,
+    /// avec leurs verrous. Le cache Hugging Face est partagé avec tout autre
+    /// projet qui utilise la bibliothèque : l'effacer en entier ferait
+    /// retélécharger des gigaoctets qui ne nous appartiennent pas.
+    private static var modelLocations: [LegacyCleanup.Location] {
+        LegacyCleanup.modelLocations(home: home)
+            .filter { FileManager.default.fileExists(atPath: $0.url.path) }
     }
 
     /// Ce que l'élément occupe, prêt à afficher. Vide s'il n'y a rien.
@@ -327,10 +349,7 @@ enum Uninstall {
                 ? "installé" : "non installé"
         case .engine:
             let paths = enginePaths
-            guard !paths.isEmpty else {
-                return EngineInstall.descriptor == nil
-                    ? "non installé" : "déclaration seule"
-            }
+            guard !paths.isEmpty else { return "déclaration seule" }
             return size(of: paths.map(\.url))
         case .logs:
             return size(of: [logsDirectory] + cacheDirectories)
@@ -339,17 +358,12 @@ enum Uninstall {
             guard stats.count > 0 else { return "aucune dictée" }
             return "\(stats.count) dictées · \(size(of: [corpusDirectory]))"
         case .model:
-            let present = modelDirectories
-            guard !present.isEmpty else { return "non téléchargé" }
-            let names = CrisperWhisperModel.allCases.filter(\.isDownloaded)
-                .map(\.label).joined(separator: ", ")
-            return "\(names) · \(size(of: present))"
+            return size(of: modelLocations.map(\.url))
         }
     }
 
-    /// L'élément a-t-il quelque chose à retirer ? Sinon on le grise plutôt que
-    /// de le masquer : savoir qu'un modèle n'a jamais été téléchargé est une
-    /// information, une ligne absente n'en est pas une.
+    /// L'élément a-t-il quelque chose à retirer ? Sinon la fenêtre ne le
+    /// propose pas.
     static func isPresent(_ item: Item) -> Bool {
         let fm = FileManager.default
         switch item {
@@ -358,12 +372,12 @@ enum Uninstall {
         case .service: return fm.fileExists(atPath: launchAgent.path)
         case .engine:
             return !enginePaths.isEmpty
-                || fm.fileExists(atPath: EngineInstall.descriptorURL.path)
+                || fm.fileExists(atPath: engineDescriptor.path)
         case .logs:
             return fm.fileExists(atPath: logsDirectory.path)
                 || cacheDirectories.contains { fm.fileExists(atPath: $0.path) }
         case .corpus: return Corpus.shared.statistics().count > 0
-        case .model: return !modelDirectories.isEmpty
+        case .model: return !modelLocations.isEmpty
         }
     }
 
@@ -374,20 +388,15 @@ enum Uninstall {
     /// - Returns: le compte rendu, ligne par ligne. Affiché avant de quitter :
     ///   quelqu'un qui désinstalle veut la preuve que c'est fait, pas une
     ///   fenêtre qui disparaît.
-    /// - Parameter removingApp: faux pour un retrait ciblé — retirer
-    ///   CrisperWhisper depuis les Réglages emploie exactement les mêmes
-    ///   fonctions que la désinstallation, mais laisse l'application en place.
-    ///   Deux chemins qui effacent des gigaoctets finiraient par diverger ;
-    ///   celui-ci est le même, avec une case en moins.
-    static func perform(_ items: Set<Item>, removingApp: Bool = true) -> [String] {
+    static func perform(_ items: Set<Item>) -> [String] {
         var report: [String] = []
 
-        // Le service tient le socket et se relancerait tout seul : il part en
-        // premier, avant les fichiers dont il dépend.
+        // Le service se relancerait tout seul : il part en premier, avant les
+        // fichiers dont il dépend.
         if items.contains(.service) {
             runTool("/bin/launchctl",
                     ["bootout", "gui/\(getuid())/\(serviceLabel)"])
-            report.append(trash(launchAgent, "service moteur"))
+            report.append(trash(launchAgent, "service de l'ancien moteur local"))
         }
 
         // Après le service, qui s'exécutait depuis cet environnement Python :
@@ -400,8 +409,7 @@ enum Uninstall {
             // avec les dictées archivées, donc il survivait à toute
             // désinstallation raisonnable — et une réinstallation retrouvait
             // une déclaration pointant vers un moteur qui n'existait plus.
-            report.append(trash(EngineInstall.descriptorURL,
-                                "déclaration du moteur"))
+            report.append(trash(engineDescriptor, "déclaration du moteur"))
         }
 
         if items.contains(.logs) {
@@ -426,9 +434,12 @@ enum Uninstall {
         }
 
         if items.contains(.model) {
-            for model in CrisperWhisperModel.allCases where model.isDownloaded {
-                report.append(trash(model.cacheDirectory, "modèle \(model.label)"))
+            // Un dossier et un verrou par variante : autant de lignes
+            // identiques, qu'une seule suffit à dire.
+            let lines = modelLocations.map {
+                trash($0.url, "modèle de l'ancien moteur local")
             }
+            report.append(contentsOf: Set(lines).sorted())
         }
 
         // Après le corpus : les réglages disent où il se trouvait.
@@ -478,11 +489,9 @@ enum Uninstall {
         // coquille vide, un dossier `backups` que plus rien n'écrit et un
         // `.DS_Store` — c'est-à-dire l'impression tenace, en rouvrant le
         // Finder, que quelque chose n'est pas parti.
-        if isEffectivelyEmpty(supportDirectory) {
+        if LegacyCleanup.isEffectivelyEmpty(supportDirectory) {
             report.append(trash(supportDirectory, "dossier de Caspr"))
         }
-
-        guard removingApp else { return report }
 
         // Jamais optionnel. Laissé en place, macOS tenterait de lancer une
         // application supprimée à chaque ouverture de session, et se
@@ -517,26 +526,6 @@ enum Uninstall {
             return "✓ \(label) — mis à la corbeille"
         } catch {
             return "✗ \(label) — \(error.localizedDescription)"
-        }
-    }
-
-    /// Ne reste-t-il là-dedans que des miettes ?
-    ///
-    /// Un `.DS_Store` et des dossiers vides ne sont pas des données de
-    /// l'utilisateur : les compter comme du contenu ferait survivre le dossier
-    /// à sa propre vacuité. Récursif, parce que la vacuité l'est.
-    private static func isEffectivelyEmpty(_ url: URL) -> Bool {
-        let fm = FileManager.default
-        guard let entries = try? fm.contentsOfDirectory(atPath: url.path) else {
-            return false
-        }
-        return entries.allSatisfy { name in
-            if name == ".DS_Store" { return true }
-            let child = url.appending(path: name)
-            var isDirectory: ObjCBool = false
-            guard fm.fileExists(atPath: child.path, isDirectory: &isDirectory),
-                  isDirectory.boolValue else { return false }
-            return isEffectivelyEmpty(child)
         }
     }
 

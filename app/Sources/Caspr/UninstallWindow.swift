@@ -7,32 +7,20 @@ import SwiftUI
 /// hasard, et on ne doit pas tomber dessus en cherchant autre chose.
 @MainActor
 final class UninstallWindowController {
-    /// Partagé, parce que deux surfaces l'ouvrent désormais : le menu de la
-    /// barre pour la désinstallation complète, et les Réglages pour le retrait
-    /// de CrisperWhisper seul. Deux instances laisseraient deux fenêtres
-    /// ouvertes sur la même suppression.
+    /// Partagé : deux instances laisseraient deux fenêtres ouvertes sur la
+    /// même suppression.
     static let shared = UninstallWindowController()
 
     private var window: NSWindow?
-    private var scope: UninstallScope = .everything
 
-    /// - Parameter scope: tout, ou CrisperWhisper seul. La seconde portée est
-    ///   ouverte depuis les Réglages ; elle emprunte cette fenêtre plutôt
-    ///   qu'une copie, pour que le retrait passe par le code déjà éprouvé.
-    func show(scope: UninstallScope = .everything) {
-        if let window, self.scope == scope {
+    func show() {
+        if let window {
             window.showCentered()
             return
         }
 
-        // Une portée différente demande une fenêtre neuve : la sélection
-        // initiale se calcule à l'apparition.
-        close()
-        self.scope = scope
-        let window = NSWindow.caspr(
-            title: scope.removesApp ? "Désinstaller Caspr" : "Retirer CrisperWhisper"
-        ) {
-            UninstallView(onCancel: { [weak self] in self?.close() }, scope: scope)
+        let window = NSWindow.caspr(title: "Désinstaller Caspr") {
+            UninstallView(onCancel: { [weak self] in self?.close() })
         }
         self.window = window
 
@@ -49,27 +37,13 @@ final class UninstallWindowController {
 
 private struct UninstallView: View {
     let onCancel: () -> Void
-    /// Ce que cette fenêtre a le droit de proposer.
-    ///
-    /// La désinstallation complète les présente tous ; le retrait de
-    /// CrisperWhisper depuis les Réglages n'en montre que deux. Une portée
-    /// plutôt qu'une seconde fenêtre : ce sont les mêmes fonctions qui
-    /// effacent, et deux chemins vers un `rm` de plusieurs gigaoctets
-    /// finiraient par diverger — c'est exactement le défaut qu'on vient de
-    /// corriger entre l'accueil et les Réglages.
-    var scope: UninstallScope = .everything
 
     @State private var selected: Set<Uninstall.Item> = []
     @State private var report: [String]?
     @State private var initialised = false
 
     private var title: String {
-        switch (scope, report == nil) {
-        case (.everything, true): "Désinstaller Caspr"
-        case (.everything, false): "Caspr est désinstallé"
-        case (.crisperWhisper, true): "Retirer CrisperWhisper"
-        case (.crisperWhisper, false): "CrisperWhisper est retiré"
-        }
+        report == nil ? "Désinstaller Caspr" : "Caspr est désinstallé"
     }
 
     var body: some View {
@@ -93,13 +67,12 @@ private struct UninstallView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WindowBackground().ignoresSafeArea())
-        // La sélection dépend de la portée, qui n'est pas connue à
-        // l'initialisation d'un @State. Le drapeau évite de recocher ce que
-        // l'utilisateur vient de décocher si la vue réapparaît.
+        // Le drapeau évite de recocher ce que l'utilisateur vient de décocher
+        // si la vue réapparaît.
         .onAppear {
             guard !initialised else { return }
             initialised = true
-            selected = Set(scope.items.filter(scope.isCheckedByDefault))
+            selected = Set(Uninstall.Item.allCases.filter(\.checkedByDefault))
         }
     }
 
@@ -107,11 +80,8 @@ private struct UninstallView: View {
 
     private var chooser: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(scope.removesApp
-                 ? "L'application part dans tous les cas. Choisissez ce qui "
-                   + "s'en va avec elle."
-                 : "Caspr reste installé et continue de dicter avec le "
-                   + "moteur de macOS. Seul CrisperWhisper s'en va.")
+            Text("L'application part dans tous les cas. Choisissez ce qui "
+                 + "s'en va avec elle.")
                 .font(.system(size: 13))
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -122,7 +92,7 @@ private struct UninstallView: View {
                 // téléchargé, un corpus jamais écrit. Une case morte n'informe
                 // pas — elle fait douter de ce qu'on a installé, à l'instant
                 // précis où l'on veut être sûr de ce qu'on efface.
-                let present = scope.items.filter(Uninstall.isPresent)
+                let present = Uninstall.Item.allCases.filter(Uninstall.isPresent)
                 ForEach(present) { item in
                     VStack(alignment: .leading, spacing: 3) {
                         OptionCheck(title: item.label, isOn: Binding(
@@ -147,8 +117,7 @@ private struct UninstallView: View {
 
                 // Tout est déjà parti, ou rien n'a jamais été installé.
                 if present.isEmpty {
-                    Note("Rien d'autre à retirer : ni modèle téléchargé, ni "
-                         + "corpus, ni environnement Python sur cette machine.")
+                    Note("Rien d'autre à retirer sur cette machine.")
                 }
             }
 
@@ -210,7 +179,7 @@ private struct UninstallView: View {
             if report == nil {
                 Button("Annuler", action: onCancel)
                     .keyboardShortcut(.cancelAction)
-                Button(scope.removesApp ? "Désinstaller" : "Retirer") {
+                Button("Désinstaller") {
                     // RELAIS — la session ChatGPT s'efface par l'API de
                     // WebKit, avant le balayage des fichiers : c'est la seule
                     // voie qu'Apple garantisse, et elle demande d'attendre.
@@ -218,7 +187,7 @@ private struct UninstallView: View {
                         if selected.contains(.settings) {
                             await Relais.partage.deconnecter()
                         }
-                        report = Uninstall.perform(selected, removingApp: scope.removesApp)
+                        report = Uninstall.perform(selected)
                     }
                 }
                     .buttonStyle(.borderedProminent)
@@ -228,10 +197,7 @@ private struct UninstallView: View {
                     // se défait pas.
                     .tint(Style.dangerSurface)
             } else {
-                // Quitter n'a de sens que si l'application vient de partir.
-                Button(scope.removesApp ? "Quitter Caspr" : "Fermer") {
-                    if scope.removesApp { NSApp.terminate(nil) } else { onCancel() }
-                }
+                Button("Quitter Caspr") { NSApp.terminate(nil) }
                 .buttonStyle(.borderedProminent)
                 .tint(Style.accent)
                 .keyboardShortcut(.defaultAction)
@@ -240,38 +206,4 @@ private struct UninstallView: View {
         .padding(.horizontal, Style.windowPadding)
         .padding(.vertical, 18)
     }
-}
-
-/// Ce qu'une fenêtre de retrait a le droit de proposer.
-///
-/// Une portée plutôt qu'une seconde fenêtre : ce sont les mêmes fonctions qui
-/// effacent, et deux chemins vers la suppression de plusieurs gigaoctets
-/// finiraient par diverger — c'est exactement le défaut qu'on vient de
-/// corriger entre l'accueil et les Réglages.
-enum UninstallScope: Equatable {
-    case everything
-    /// CrisperWhisper seul : l'application reste, et rien de ce qui touche aux
-    /// réglages, au corpus ou aux autorisations n'est même proposé — donc rien
-    /// d'irréversible ne peut être coché par mégarde.
-    case crisperWhisper
-
-    var items: [Uninstall.Item] {
-        switch self {
-        case .everything: Uninstall.Item.allCases
-        case .crisperWhisper: [.model, .service, .engine]
-        }
-    }
-
-    /// Cochés d'avance. Pour un retrait ciblé, les poids et le service oui —
-    /// c'est ce qu'on est venu retirer. L'environnement Python non : c'est ce
-    /// qui coûte le plus à reconstruire, et son nom inquiète même quand il ne
-    /// désigne que le nôtre.
-    func isCheckedByDefault(_ item: Uninstall.Item) -> Bool {
-        switch self {
-        case .everything: item.checkedByDefault
-        case .crisperWhisper: item != .engine
-        }
-    }
-
-    var removesApp: Bool { self == .everything }
 }

@@ -15,12 +15,11 @@ import CasprCore
 /// touche jamais au micro, donc la page peut rester ouverte entre deux dictées.
 /// C'est ce qui rend le raccourci instantané au lieu de recharger chatgpt.com à
 /// chaque fois.
-/// La liste des moteurs de Caspr lui est passée en paramètre plutôt que posée
-/// à côté d'elle. C'est ce qui permet à l'exclusion de vivre entièrement ici :
-/// la vue parente ne connaît qu'un appel, et le retrait consiste à remplacer
-/// `RelaisCard { FinalEngineCard() }` par `FinalEngineCard()`. Un `if` chez le
-/// parent aurait supposé qu'il observe un état qui ne le regarde pas, et il ne
-/// se serait pas rafraîchi à la bascule.
+/// La carte de macOS lui est passée en paramètre plutôt que posée à côté
+/// d'elle. C'est ce qui permet à l'exclusion de vivre entièrement ici : la vue
+/// parente ne connaît qu'un appel. Un `if` chez le parent aurait supposé qu'il
+/// observe un état qui ne le regarde pas, et il ne se serait pas rafraîchi à
+/// la bascule.
 struct RelaisCard<Moteurs: View>: View {
     @ViewBuilder var moteurs: Moteurs
 
@@ -170,8 +169,7 @@ struct RelaisCard<Moteurs: View>: View {
                  + "boutons de la page n'auront pas été montrés une fois."
         }
         if actif {
-            return "Les moteurs ci-dessous sont sans effet tant que ce réglage est "
-                 + "actif, et le moteur local est arrêté pour libérer sa mémoire. "
+            return "Le moteur de macOS est sans effet tant que ce réglage est actif. "
                  + "La transcription est faite par les serveurs d'OpenAI : elle "
                  + "exige une connexion, et l'aperçu en direct n'est pas possible."
         }
@@ -184,9 +182,5 @@ struct RelaisCard<Moteurs: View>: View {
         if nouveau, !Relais.partage.estCalibre {
             Relais.partage.calibrerTout(relire)
         }
-        // Le moteur local s'arrête ou repart selon la bascule : garder trois
-        // gigaoctets de poids chargés pour un moteur qu'on ne peut plus appeler
-        // n'a pas de sens. `needsLocalEngine` tient déjà compte du mode.
-        EngineService.reconcile(needed: Preferences.shared.needsLocalEngine)
     }
 }

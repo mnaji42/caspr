@@ -95,17 +95,10 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
 
 ## Les points d'accroche
 
-- **`TranscriptionSettings.swift`** — une ligne. `RelaisCard { FinalEngineCard() }`
-  enveloppe la liste des moteurs, dont la carte décide l'affichage : les deux
-  s'excluent à l'écran comme en fonctionnement. Retrait : remplacer par
-  `FinalEngineCard()`.
-- **`Preferences.swift`** — `needsLocalEngine` rend `false` quand le relais est
-  actif. Corrigé là plutôt qu'aux trois endroits qui appellent
-  `EngineService.reconcile`, où un oubli aurait remis le modèle en mémoire pour
-  un moteur devenu inatteignable.
-- **`EngineStartupNotice.swift`** — le bandeau « CrisperWhisper démarre… » ne
-  s'affiche pas : le service n'étant pas lancé, il annoncerait une attente qui
-  ne finit jamais.
+- **`TranscriptionSettings.swift`** — une ligne.
+  `RelaisCard { AppleEngineCard(target: .final) }` enveloppe la carte de
+  macOS, dont elle décide l'affichage : les deux s'excluent à l'écran comme en
+  fonctionnement.
 - **`CasprApp.swift`** — la page est chargée au lancement quand le mode est
   actif, pour que la première dictée ne paie pas l'ouverture de chatgpt.com.
 - **`UninstallWindow.swift`** — la session est effacée par l'API de WebKit

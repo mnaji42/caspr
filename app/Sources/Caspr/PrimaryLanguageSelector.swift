@@ -19,7 +19,6 @@ import SwiftUI
 /// pousserait tout le reste de l'onglet hors de l'écran.
 struct PrimaryLanguageSelector: View {
     @State private var prefs = Preferences.shared
-    @State private var coordinator = LanguageSwitchCoordinator.shared
     @State private var showsCatalog = false
 
     /// Le seuil au-delà duquel les pastilles ne tiennent plus.
@@ -52,10 +51,6 @@ struct PrimaryLanguageSelector: View {
                 }
             }
 
-            // Ce qui a été replié d'autorité, dit à l'endroit où on vient de
-            // changer de langue — pas dans un journal, et pas silencieusement.
-            EngineNoticeBanner()
-
             // La note d'abord, le bouton ensuite : elle explique l'état, il
             // propose l'action. Les intervertir ferait lire la conséquence
             // avant la cause.
@@ -76,8 +71,9 @@ struct PrimaryLanguageSelector: View {
                 LanguagePicker()
             }
         }
-        .animation(.easeOut(duration: 0.2), value: coordinator.confirmation)
-        .onAppear { coordinator.probePrimaryLanguage() }
+        // Au tout premier affichage, la langue n'a peut-être jamais été
+        // sondée : « inconnue » ne dit rien à personne.
+        .onAppear { SpeechAssets.shared.probe([prefs.primaryLanguage]) }
     }
 
     /// Le bouton qui déplie le catalogue — **toute la ligne**, pas le chevron.

@@ -285,7 +285,15 @@ struct UpdateCard: View {
     /// **système**, et posait « 24.8 MB » au milieu d'une phrase française.
     private func sizeSuffix(_ update: UpdateChecker.Release) -> String {
         guard let size = update.asset?.size, size > 0 else { return "" }
-        return " (\(CrisperWhisperModel.frenchSize(size)))"
+        return " (\(Self.frenchSize(size)))"
+    }
+
+    /// « 25 Mo », « 1,62 Go ».
+    private static func frenchSize(_ bytes: Int64) -> String {
+        let mo = Double(bytes) / 1_000_000
+        if mo < 1000 { return "\(Int(mo.rounded())) Mo" }
+        return String(format: "%.2f Go", mo / 1000)
+            .replacingOccurrences(of: ".", with: ",")
     }
 
     /// « 18 août 2026 ». Le format long est explicite, et la locale est forcée

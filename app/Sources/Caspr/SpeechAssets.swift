@@ -86,6 +86,20 @@ final class SpeechAssets {
 
     // MARK: - Vérifier
 
+    /// Interroge le système sur ces langues, en tâche de fond.
+    ///
+    /// Au lancement pour toutes les langues déclarées, et à chaque changement
+    /// de langue principale pour la nouvelle. Sans ça, la prise en charge
+    /// d'une langue n'est connue qu'après avoir ouvert l'écran qui la montre,
+    /// et la toute première dictée se ferait sur un « on ne sait pas encore »
+    /// — c'est-à-dire sans repli vers la Dictée quand Apple Intelligence ne
+    /// sait pas l'écrire.
+    func probe(_ languages: [String]) {
+        Task {
+            for language in languages { await check(language) }
+        }
+    }
+
     /// Où en est cette langue, sans rien télécharger.
     func check(_ language: String) async {
         guard #available(macOS 26.0, *) else {
@@ -181,8 +195,8 @@ final class SpeechAssets {
             // fournir ce modèle : ce n'est pas un échec dont on se relève en
             // réessayant, c'est une machine où ce moteur n'existe pas. Le
             // classer en échec bloquait « Continuer » et enfermait dans une
-            // page dont rien ne sortait — alors que CrisperWhisper, lui,
-            // s'installe deux écrans plus loin et n'a besoin de rien de tout ça.
+            // page dont rien ne sortait — alors que la Dictée de macOS, elle,
+            // n'a besoin de rien de tout ça.
             if await SpeechTranscriber.supportedLocales.isEmpty {
                 Log.error("assets: le système ne propose aucune langue — "
                           + "moteur macOS indisponible sur cette machine")
@@ -199,8 +213,8 @@ final class SpeechAssets {
                     + "cette machine. C'est le cas des machines virtuelles et "
                     + "des simulateurs, où ce moteur n'est pas disponible — "
                     + "il n'y a rien à activer pour l'obtenir. Sur un Mac "
-                    + "ordinaire il fonctionne. CrisperWhisper, lui, ne "
-                    + "dépend pas de ce moteur et marchera ici.")
+                    + "ordinaire il fonctionne. La Dictée de macOS, elle, ne "
+                    + "dépend pas de ce moteur et peut marcher ici.")
                 return
             }
 

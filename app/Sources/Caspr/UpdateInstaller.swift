@@ -509,10 +509,6 @@ final class UpdateInstaller {
 /// rien pendant qu'il travaille. Une image de plusieurs dizaines de
 /// mégaoctets derrière un bouton muet passe pour un bouton cassé, et se
 /// reclique.
-///
-/// Partagé avec `EngineBootstrap`, qui récupère `uv` : les deux téléchargent
-/// un fichier unique dont il faut montrer la progression, et en avoir deux
-/// versions ferait diverger la gestion du statut HTTP et du fichier temporaire.
 final class AssetDownload: NSObject, URLSessionDownloadDelegate {
     private let destination: URL
     private let progress: @MainActor (Double) -> Void

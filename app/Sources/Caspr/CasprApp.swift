@@ -16,7 +16,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let preferences = PreferencesWindowController()
     private let onboarding = OnboardingWindowController()
-    private let engineNotice = EngineStartupNoticeController()
     private let installPrompt = InstallPromptWindowController()
     private let updateNotice = UpdateNotificationWindowController()
     private let uninstaller = UninstallWindowController.shared
@@ -26,11 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // fichier : ce qui suit suppose que les données sont à leur place.
         Rebranding.migrateIfNeeded()
         // Après le renommage, qui peut apporter des réglages de Sofler encore
-        // réglés sur CrisperWhisper ; avant tout ce qui lit `Preferences`.
+        // réglés sur l'ancien moteur local ; avant tout ce qui lit
+        // `Preferences`.
         Migration.run()
-        LanguageSwitchCoordinator.shared.probeSelectedLanguages()
-        let engine = SocketSpeechEngine()
-        controller = DictationController(engine: engine)
+        SpeechAssets.shared.probe(Preferences.shared.selectedLanguages)
+        controller = DictationController()
         controller.onStateChange = { [weak self] state in
             self?.render(state)
         }
@@ -59,15 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let prefs = Preferences.shared
-        // Un modèle de 3 Go ne reste pas chargé « au cas où » : le service
-        // local ne tourne que s'il écrit ou s'il est coché dans une collecte
-        // active. Réconcilié au lancement, puis à chaque changement.
-        EngineService.reconcile(needed: prefs.needsLocalEngine)
         Relais.partage.prechauffer()          // RELAIS —
-        // Le service met jusqu'à une minute à lire ses poids, pendant lesquelles
-        // la dictée part sur macOS sans que rien ne le dise.
-        engineNotice.openSettings = { [weak self] in self?.openPreferences() }
-        engineNotice.showIfNeeded()
 
         // Déclencheur principal : Option pressée seule.
         modifierKey = ModifierKeyMonitor(
@@ -317,16 +308,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         modifierKey?.stop()
         hotkey?.unregister()
         historyHotkey?.unregister()
-        // Le service local ne survit pas à l'application.
-        //
-        // Il tourne sous launchd, avec `RunAtLoad` et `KeepAlive` : quitter
-        // Caspr le laissait donc en place avec ses trois gigaoctets de poids
-        // en mémoire, jusqu'au redémarrage de la machine. Personne ne pouvait
-        // le deviner, et rien dans l'interface ne le montrait — l'application
-        // était fermée. C'est aussi exactement ce que le reste du code promet
-        // de ne pas faire : « un modèle de 3 Go ne reste pas chargé au cas
-        // où ». Il repart au prochain lancement si le moteur en a besoin.
-        EngineService.reconcile(needed: false)
     }
 
     // MARK: - Barre de menus
@@ -468,11 +449,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // sur l'audio de la précédente et remettaient l'état au repos
         // par-dessus un enregistrement en cours.
         if controller.hasPendingAudio, controller.isAtRest {
-            // L'aperçu d'abord, et c'est délibéré : quand le service local
-            // refuse de démarrer, réessayer échouera de la même façon, alors
-            // que le texte de macOS est déjà écrit. C'est l'issue qui aboutit
-            // dans le plus grand nombre de cas, donc celle qu'on lit en
-            // premier. Absente quand il n'y a rien à insérer — l'aperçu est
+            // L'aperçu d'abord, et c'est délibéré : quand la passe finale
+            // échoue pour une raison qui tient — un modèle absent, la Dictée
+            // éteinte —, réessayer échouera de la même façon, alors que le
+            // texte de l'aperçu est déjà écrit. C'est l'issue qui aboutit dans
+            // le plus grand nombre de cas, donc celle qu'on lit en premier. Absente quand il n'y a rien à insérer — l'aperçu est
             // coupé, ou l'on a déclenché sans parler.
             if let preview = controller.pendingPreviewText {
                 let insert = NSMenuItem(title: "Insérer l'aperçu de macOS",
@@ -667,10 +648,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Reporte les réglages sur les composants déjà en place.
     private func applyPreferences() {
         let prefs = Preferences.shared
-        // Un modèle de 3 Go ne reste pas chargé « au cas où » : le service
-        // local ne tourne que s'il écrit ou s'il est coché dans une collecte
-        // active. Réconcilié au lancement, puis à chaque changement.
-        EngineService.reconcile(needed: prefs.needsLocalEngine)
 
         // Mode, langue et lexique ne sont plus recopiés : le contrôleur les lit
         // dans les préférences au moment de s'en servir. Reste le déclencheur,

@@ -2,34 +2,21 @@ import Foundation
 import Observation
 import CasprCore
 
-/// Garantit qu'il y a toujours un moteur capable d'écrire.
+/// Garantit qu'il y a toujours une version de macOS capable d'écrire.
 ///
 /// ## Le problème qu'il résout
 ///
-/// Choisir un moteur dans les réglages écrivait le choix immédiatement, prêt ou
-/// non. Cocher « CrisperWhisper » avant la fin du téléchargement suffisait donc
-/// à casser la dictée : le contrôleur appelait le service local, le socket
-/// n'existait pas, et l'échec ne nommait pas sa cause — l'utilisateur venait de
-/// cliquer sur une option que l'interface présentait comme disponible.
+/// La version retenue peut ne pas savoir écrire ici, maintenant : Apple
+/// Intelligence sans le modèle de la langue active, une langue qu'elle ne
+/// couvre pas, la Dictée éteinte dans les Réglages Système. Sur une machine
+/// virtuelle en macOS 26, Apple Intelligence était élue sans modèle et rendait
+/// une chaîne vide, pendant que la Dictée fonctionnait très bien.
 ///
-/// Le même trou existait dans l'autre sens : supprimer les poids du seul modèle
-/// installé laissait `engine == .crisperWhisper` pointer sur un moteur devenu
-/// incapable de rien.
-///
-/// ## Deux mécanismes, et ils ne se confondent pas
-///
-/// - **Le commit transactionnel** (`isReady`) empêche d'*enregistrer* un choix
-///   qui ne marche pas encore. C'est la prévention, et elle vit dans les vues :
-///   elles manipulent un brouillon et n'appellent `commit` qu'à `.ready`.
-/// - **Le repli** (`effectiveEngine`) rattrape ce que la prévention n'a pas pu
-///   voir venir : un modèle supprimé par ailleurs, un service qui refuse de
-///   démarrer, une langue qui change et que le moteur retenu ne couvre pas.
-///   C'est la guérison, et elle vit au moment de dicter.
-///
-/// Le repli est **silencieux et temporaire** : il ne réécrit jamais la
-/// préférence. Quelqu'un qui a choisi CrisperWhisper et dont le service est
-/// arrêté doit retrouver CrisperWhisper quand il redémarre, pas découvrir que
-/// l'application a décidé à sa place de repasser sur macOS.
+/// **Le repli** (`effectiveEngine`) rattrape ces cas au moment de dicter. Il
+/// est **silencieux et temporaire** : il ne réécrit jamais la préférence.
+/// Quelqu'un qui a choisi Apple Intelligence et dicte un jour dans une langue
+/// qu'elle ne couvre pas doit la retrouver en revenant au français, pas
+/// découvrir que l'application a décidé à sa place de rester sur la Dictée.
 @MainActor
 @Observable
 final class EngineSafetyManager {
@@ -50,14 +37,9 @@ final class EngineSafetyManager {
         let language = prefs.primaryLanguage
         let wanted = prefs.engine
 
-        // `isReady`, et non `isAvailable` : pour CrisperWhisper, « disponible »
-        // ne veut dire que « installé sur cette machine ». Le service arrêté,
-        // ses poids sont toujours sur le disque, donc le repli ne se
-        // déclenchait pas — et la dictée partait vers un socket fermé pour
-        // échouer sur « le modèle est en cours de chargement », ce qui est
-        // faux : rien ne chargeait, le service était éteint. Arrêter le
-        // service pour libérer la mémoire cassait donc la dictée jusqu'à ce
-        // qu'on pense à rouvrir les réglages.
+        // `isReady`, et non `isAvailable` : pour Apple Intelligence,
+        // « disponible » est optimiste tant que le système n'a pas répondu
+        // pour la langue — cf. `isReady`.
         if isReady(wanted, for: language) { return wanted }
         if isReady(prefs.lastValidEngine, for: language) {
             return prefs.lastValidEngine
@@ -84,18 +66,10 @@ final class EngineSafetyManager {
 
     /// Ce moteur est-il prêt à écrire, ici et dans cette langue ?
     ///
-    /// C'est la condition du commit. `isAvailable` mesure déjà le gros — modèle
-    /// installé, version de macOS présente, poids téléchargés — et
-    /// CrisperWhisper demande en plus que son service réponde : des poids sur
-    /// le disque ne transcrivent rien tant que le daemon n'est pas debout.
+    /// `isAvailable` mesure déjà le gros — version de macOS présente, Dictée
+    /// allumée, langue proposée.
     func isReady(_ choice: EngineChoice, for language: String) -> Bool {
         guard choice.isAvailable(for: language) else { return false }
-        // `isLocalService`, et non une égalité : la question posée est
-        // « ce moteur a-t-il un démon à attendre ? ». Un second moteur local
-        // comparé par égalité sauterait ce contrôle et serait déclaré prêt
-        // sans service debout — exactement la panne que cette classe existe
-        // pour empêcher, réintroduite par la porte de derrière.
-        if choice.isLocalService { return EngineService.isAnswering }
         // ## Apple Intelligence exige une réponse, pas une absence de refus
         //
         // `isAvailable` est **volontairement optimiste** : tant que le système
@@ -109,23 +83,6 @@ final class EngineSafetyManager {
         // D'où la coupure entre les deux prédicats — « on peut l'afficher » et
         // « on peut lui confier ce que quelqu'un vient de dire ».
         if choice == .apple { return Language.appleSupports(language) == true }
-        return true
-    }
-
-    /// Enregistre un choix, **et seulement s'il tient**.
-    ///
-    /// Rend `false` sans rien écrire quand le moteur n'est pas prêt : l'appelant
-    /// garde alors son brouillon affiché et continue d'attendre, plutôt que de
-    /// voir sa sélection sautiller entre deux valeurs.
-    @discardableResult
-    func commit(_ choice: EngineChoice, for language: String) -> Bool {
-        guard isReady(choice, for: language) else {
-            Log.info("moteur \(choice.rawValue) pas encore prêt — choix non enregistré")
-            return false
-        }
-        let prefs = Preferences.shared
-        prefs.engine = choice
-        prefs.lastValidEngine = choice
         return true
     }
 

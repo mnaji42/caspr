@@ -72,9 +72,6 @@ final class DictationController {
     /// Fichier des notes, mémorisé même quand on écrit au curseur.
     var noteFile: URL? { Preferences.shared.noteFile }
 
-    /// Le service local. Toujours construit, jamais contacté tant qu'il n'est
-    /// pas choisi — c'est `EngineService` qui décide s'il tourne.
-    private let localEngine: any SpeechEngine
     /// Le moteur système de macOS 26, absent en dessous.
     private let systemEngine: (any SpeechEngine)?
     /// L'autre moteur système, celui de la Dictée. Présent partout où la
@@ -138,27 +135,27 @@ final class DictationController {
     /// Le moteur qui écrit réellement.
     ///
     /// Passe par `EngineSafetyManager` plutôt que de lire la préférence :
-    /// celle-ci peut désigner un moteur momentanément incapable d'écrire —
-    /// poids en cours de téléchargement, service arrêté pour libérer la
-    /// mémoire, modèle supprimé depuis. Le repli est temporaire et n'est jamais
-    /// réécrit dans les réglages : le choix de l'utilisateur revient de
-    /// lui-même dès que son moteur est de nouveau debout.
+    /// celle-ci peut désigner une version momentanément incapable d'écrire —
+    /// modèle Apple Intelligence pas encore téléchargé, Dictée éteinte. Le
+    /// repli est temporaire et n'est jamais réécrit dans les réglages : le
+    /// choix de l'utilisateur revient de lui-même dès que sa version sait de
+    /// nouveau écrire.
     private var writerChoice: EngineChoice { EngineSafetyManager.shared.effectiveEngine }
 
+    /// La Dictée en dernier recours : elle existe partout, et c'est elle qui
+    /// dira pourquoi elle ne peut pas écrire, plutôt qu'un moteur absent.
     private var writer: any SpeechEngine {
-        engine(for: writerChoice) ?? localEngine
+        engine(for: writerChoice) ?? legacyEngine
     }
 
     private func engine(for choice: EngineChoice) -> (any SpeechEngine)? {
         switch choice {
         case .apple: systemEngine
         case .appleLegacy: legacyEngine
-        case .crisperWhisper: localEngine
         }
     }
 
-    init(engine: any SpeechEngine) {
-        self.localEngine = engine
+    init() {
         if #available(macOS 26.0, *) {
             self.systemEngine = AppleSpeechEngine()
         } else {
@@ -221,8 +218,8 @@ final class DictationController {
     ///
     /// RELAIS — deux réglages n'ont aucun sens quand la dictée passe par
     /// ChatGPT, et les afficher quand même laisse croire qu'ils agissent : les
-    /// modes appartiennent à CrisperWhisper, et la langue est détectée par le
-    /// service lui-même. Le badge de langue sert alors
+    /// modes « Texte nettoyé / Mot à mot » ne s'appliquent pas à ChatGPT, et la
+    /// langue est détectée par le service lui-même. Le badge de langue sert alors
     /// à nommer le moteur réellement à l'œuvre — sans quoi la barre est
     /// indiscernable d'une dictée ordinaire.
     private var overlayStatus: RecordingOverlay.Status {
@@ -875,8 +872,8 @@ final class DictationController {
                       + "dans la fenêtre du relais."
                     : error.localizedDescription)
                 : "\(error.localizedDescription) — audio conservé, « Réessayer » dans le menu.")
-            // Les autres moteurs tournent quand même : savoir que macOS a
-            // écrit la phrase pendant que CrisperWhisper échouait est
+            // Les autres moteurs tournent quand même : savoir qu'une version
+            // de macOS a écrit la phrase pendant que l'autre échouait est
             // exactement ce qu'on vient chercher dans le corpus.
             // RELAIS — la barre reste, et s'agrandit : quand la lecture
             // échoue, le texte est encore dans la page, et c'est le seul moyen
@@ -899,23 +896,11 @@ final class DictationController {
     /// La raison, en une ligne qui tient dans la barre.
     ///
     /// Le message complet part dans le menu ; celui-ci doit se lire d'un coup
-    /// d'œil, pendant les cinq secondes où la barre reste affichée. Le cas du
-    /// modèle en cours de chargement est distingué parce que c'est le seul où
-    /// il suffit d'attendre, et que le dire évite de chercher une panne.
+    /// d'œil, pendant les cinq secondes où la barre reste affichée.
     private static func shortReason(for error: Error) -> String {
         // RELAIS — un refus de ChatGPT porte sa raison, un quota par exemple :
         // la barre la montre au lieu d'un « Réessayer » qui n'existe pas ici.
         if let courte = (error as? RelaisPage.Erreur)?.raisonCourte { return courte }
-        if case SpeechEngineError.unavailable = error, EngineService.isInstalled {
-            if EngineService.isAnswering { return "Moteur injoignable — réessayez" }
-            // « Réessayez dans un instant » sur un service qui se relance en
-            // boucle laisse attendre indéfiniment quelque chose qui n'arrivera
-            // pas. Quand le journal porte une trace, c'est une panne, et la
-            // barre doit le dire même si le détail complet part dans le menu.
-            return EngineService.recentFailure != nil
-                ? "CrisperWhisper n'a pas pu démarrer — voir le menu"
-                : "CrisperWhisper charge son modèle — réessayez dans un instant"
-        }
         return "Transcription impossible — « Réessayer » dans le menu"
     }
 
@@ -1122,8 +1107,8 @@ final class DictationController {
             // `fr-FR` : deux lignes du même moteur n'étaient donc pas
             // comparables selon qu'un aperçu avait tourné ou non. Or c'est
             // exactement le champ dont une analyse ultérieure a besoin —
-            // arbitrer CrisperWhisper contre macOS suppose de savoir sur
-            // quelle langue chaque texte a été produit.
+            // comparer deux moteurs suppose de savoir sur quelle langue
+            // chaque texte a été produit.
             let identity = await engine(for: previewEngine)?.identity
             entry.transcriptions.append(CorpusTranscription(
                 engine: identity?.engine ?? previewEngine.rawValue,

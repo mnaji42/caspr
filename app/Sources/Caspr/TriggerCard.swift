@@ -42,8 +42,8 @@ struct TriggerCard: View, ValidatingComponent {
     ///
     /// La reconnaissance vocale n'en fait pas partie — elle dépend du moteur
     /// retenu et appartient à `AppleEngineCard`. L'exiger ici bloquerait
-    /// quelqu'un qui dictera avec CrisperWhisper sur un droit dont il n'a pas
-    /// l'usage.
+    /// quelqu'un qui dictera avec Apple Intelligence sur un droit dont il n'a
+    /// pas l'usage.
     static func validate() -> ComponentValidationError? {
         let monitor = PermissionsMonitor.shared
         if monitor.micAccess != .granted { return .microphonePermissionRequired }

@@ -5,10 +5,10 @@ import CasprCore
 /// machine.
 ///
 /// Depuis septembre 2026, Caspr ne dicte plus que de deux façons : avec macOS,
-/// ou avec ChatGPT. Le code de CrisperWhisper, de la collecte et du lexique
-/// s'en va — et c'est justement pour ça que cette migration est écrite
-/// **avant** : une fois `EngineService` supprimé, plus aucun code ne saurait
-/// arrêter un démon qui se relance tout seul à chaque ouverture de session.
+/// ou avec ChatGPT. Le code de l'ancien moteur local — CrisperWhisper — est
+/// parti, et c'est justement pour ça que cette migration a été écrite
+/// **avant** : sans elle, plus aucun code ne saurait arrêter un démon qui se
+/// relance tout seul à chaque ouverture de session.
 ///
 /// ## Pas de drapeau
 ///
@@ -37,9 +37,9 @@ enum Migration {
     /// `Preferences.shared`**.
     ///
     /// L'ordre n'est pas une précaution : `Preferences` lit ses clés une fois,
-    /// à sa création. Créée avant, elle garderait CrisperWhisper en mémoire
-    /// pour toute la session, et la réconciliation qui suit le lancement
-    /// réinstallerait le démon qu'on vient de retirer.
+    /// à sa création. Créée avant, elle lirait la version de macOS avant que
+    /// celle-ci ait remplacé l'ancien moteur, et retomberait sur un défaut
+    /// plutôt que sur la version mesurée ici.
     static func run() {
         // Même verrou que `Rebranding` : un binaire lancé hors de son bundle —
         // `swift run`, un test — lit un autre domaine de réglages, et n'a
@@ -64,7 +64,7 @@ enum Migration {
 
     /// Synchrone, parce que c'est la priorité et que c'est court : le démon
     /// doit être sorti avant que quoi que ce soit touche aux fichiers qu'il
-    /// tient ouverts, et avant que `EngineService.reconcile` ne le regarde.
+    /// tient ouverts.
     private static func disarmAgents(home: URL) {
         for label in LegacyCleanup.agentLabels {
             let plist = LegacyCleanup.agentPlist(label, home: home)

@@ -23,20 +23,13 @@ protocol SpeechPreviewing: AnyObject, Sendable {
 
 /// Aperçu en direct de la dictée, par le moteur de reconnaissance de macOS.
 ///
-/// **Ce n'est pas une préversion du texte qui sera inséré.** C'est un autre
-/// moteur que CrisperWhisper : il ne reçoit pas le lexique et n'a pas le même
-/// entraînement, donc il écrira « use effect » là où le moteur final écrira
-/// `useEffect`. Il répond à « est-ce qu'on m'entend, où j'en suis dans ma
-/// phrase », pas à « la transcription finale sera-t-elle juste ». L'interface
-/// doit le dire, sans quoi l'utilisateur corrigera des erreurs qui n'existent
-/// pas dans le texte réellement inséré.
-///
-/// Faire l'aperçu avec CrisperWhisper lui-même n'est pas envisageable : son
-/// encodeur travaille sur une fenêtre d'au moins 15 s (`MIN_WINDOW_S`), donc
-/// une passe sur deux secondes de parole coûte déjà une passe complète, et
-/// comme chaque passe ré-encode tout depuis le début, le coût d'une dictée
-/// longue croît en carré de sa durée. Ce serait payer la latence finale — la
-/// seule qui compte — pour un affichage.
+/// **Ce n'est pas une préversion du texte qui sera inséré.** L'aperçu écoute
+/// en flux, et la passe finale — ou ChatGPT — relit l'enregistrement entier à
+/// la fin, avec tout le contexte de la phrase : les deux ne rendent pas le
+/// même texte. L'aperçu répond à « est-ce qu'on m'entend, où j'en suis dans
+/// ma phrase », pas à « la transcription finale sera-t-elle juste ».
+/// L'interface doit le dire, sans quoi l'utilisateur corrigera des erreurs
+/// qui n'existent pas dans le texte réellement inséré.
 @available(macOS 26.0, *)
 final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     /// Texte reconnu jusqu'ici, publié sur le main actor.
@@ -298,20 +291,12 @@ enum SpeechPreview {
     /// Faire tourner l'autre pour le seul aperçu réclamerait donc un droit ou
     /// un téléchargement dont l'utilisateur n'a aucun usage.
     ///
-    /// La condition porte sur `isSystem`, jamais sur un moteur nommé : un
-    /// quatrième moteur ajouté demain tomberait dans le cas « pas un moteur de
-    /// macOS » sans qu'on ait à y penser, alors qu'un test sur CrisperWhisper
-    /// l'aurait fait passer pour un moteur système.
-    ///
-    /// Quand ce n'est pas macOS qui écrit, l'aperçu ne peut pas être le moteur
-    /// d'écriture (cf. l'en-tête de `LivePreview` : une passe CrisperWhisper
-    /// par seconde coûterait la latence finale) : on prend alors la version la
-    /// plus fine disponible, Apple Intelligence d'abord, la Dictée sinon.
+    /// Quand la version voulue ne sait pas écrire cette langue ici, on prend
+    /// la plus fine disponible, Apple Intelligence d'abord, la Dictée sinon.
     ///
     /// - Returns: `nil` si cette machine ne sait produire aucun aperçu.
     static func engine(using wanted: EngineChoice, for language: String) -> EngineChoice? {
-        if wanted.isSystem, wanted.isAvailable(for: language) { return wanted }
-        return EngineChoice.availableSystemEngines(for: language).first
+        EngineChoice.systemEngine(preferring: wanted, for: language)
     }
 
     /// Choisit l'implémentation selon ce que la machine sait faire.

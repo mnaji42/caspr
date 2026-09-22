@@ -1,7 +1,7 @@
 import Foundation
 
 /// Les trois éléments de la page ChatGPT dont le relais a besoin.
-enum RelaisCible: String, CaseIterable, Codable {
+public enum RelaisCible: String, CaseIterable, Codable {
     case micro, stop, composeur, envoi, reponse, copier, lecture
 
     /// Ce que le repère doit être pour vouloir dire quelque chose.
@@ -11,7 +11,7 @@ enum RelaisCible: String, CaseIterable, Codable {
     /// pendant la calibration. Un bouton d'envoi qui désignerait la zone de
     /// texte n'est pas un repère imparfait : c'est un repère faux, et il vaut
     /// mieux ne rien apprendre que d'apprendre cela.
-    var genre: String {
+    public var genre: String {
         switch self {
         case .composeur: "saisie"
         case .reponse:   "texte"
@@ -19,7 +19,7 @@ enum RelaisCible: String, CaseIterable, Codable {
         }
     }
 
-    var libelle: String {
+    public var libelle: String {
         switch self {
         case .micro:     "le bouton micro"
         case .stop:      "le bouton d'arrêt (le carré, pas la flèche bleue)"
@@ -45,16 +45,16 @@ enum RelaisCible: String, CaseIterable, Codable {
 ///
 /// Un sélecteur vide signifie « pas encore appris » : le pont JavaScript
 /// retombe alors sur ses heuristiques (cf. `pont.js` dans `RelaisPage`).
-struct RelaisSelecteurs: Codable, Equatable {
-    var micro = ""
-    var stop = ""
-    var composeur = ""
+public struct RelaisSelecteurs: Codable, Equatable {
+    public var micro = ""
+    public var stop = ""
+    public var composeur = ""
     /// Les deux suivants ne servent qu'aux modes qui renvoient le texte à
     /// ChatGPT. Ils sont calibrés à part, la première fois qu'on en a besoin :
     /// imposer cinq clics à qui ne veut que transcrire serait payer d'avance
     /// pour une fonctionnalité qu'on n'utilisera peut-être jamais.
-    var envoi = ""
-    var reponse = ""
+    public var envoi = ""
+    public var reponse = ""
     /// Le bouton « copier » sous la réponse.
     ///
     /// C'est le chemin d'extraction à privilégier, et pour deux raisons qui
@@ -63,7 +63,7 @@ struct RelaisSelecteurs: Codable, Equatable {
     /// paragraphe de la réponse donnait ce seul paragraphe. Et il n'existe
     /// qu'une fois la réponse terminée : sa présence est donc le signal de fin
     /// que l'on devinait jusque-là à coups de chronomètre.
-    var copier = ""
+    public var copier = ""
     /// Le bloc qui porte le bouton « copier » de la réponse.
     ///
     /// Capturé au même clic que le bouton. La page contient un bouton
@@ -71,24 +71,24 @@ struct RelaisSelecteurs: Codable, Equatable {
     /// seul revenait à chercher lequel des deux, et toutes les façons de
     /// deviner — remonter l'arbre, prendre le dernier, exiger la visibilité —
     /// se sont trompées tour à tour. La paire ne devine rien.
-    var copierParent = ""
+    public var copierParent = ""
 
     /// Le bouton « Lire à haute voix » de ChatGPT, et le bloc qui le porte.
     ///
     /// Retenus ensemble, comme pour « copier » et pour la même raison : la page
     /// pose une barre d'actions sous chaque message, et seul le couple dit de
     /// laquelle il s'agit.
-    var lecture = ""
-    var lectureParent = ""
+    public var lecture = ""
+    public var lectureParent = ""
     /// Le bouton qui ouvre le menu où « Lire à haute voix » se cache.
     ///
     /// Vide quand le bouton est directement visible sous la réponse — ChatGPT
     /// fait les deux selon les cas, et l'on ne demande pas à l'utilisateur de
     /// savoir lequel est le sien.
-    var lectureMenu = ""
-    var lectureMenuParent = ""
+    public var lectureMenu = ""
+    public var lectureMenuParent = ""
 
-    subscript(cible: RelaisCible) -> String {
+    public subscript(cible: RelaisCible) -> String {
         get {
             switch cible {
             case .micro: micro
@@ -115,21 +115,21 @@ struct RelaisSelecteurs: Codable, Equatable {
 
     /// Vrai quand l'utilisateur a calibré au moins le micro et l'arrêt — les
     /// deux que les heuristiques ont le plus de mal à deviner.
-    var estCalibre: Bool { !micro.isEmpty && !stop.isEmpty }
+    public var estCalibre: Bool { !micro.isEmpty && !stop.isEmpty }
 
     /// Vrai quand l'aller-retour avec ChatGPT est possible.
     /// L'un ou l'autre suffit : le bouton « copier » est le chemin d'aujourd'hui,
     /// le repère de la réponse celui des configurations d'avant. Exiger le
     /// premier ferait disparaître le mode chez qui l'a calibré hier.
-    var saitDialoguer: Bool {
+    public var saitDialoguer: Bool {
         estCalibre && !envoi.isEmpty && (!copier.isEmpty || !reponse.isEmpty)
     }
 
     /// Sait-on récupérer la réponse par le bouton de ChatGPT ?
-    var saitCopier: Bool { !copier.isEmpty }
+    public var saitCopier: Bool { !copier.isEmpty }
 
     /// Sait-on faire lire la réponse à haute voix ?
-    var saitLire: Bool { !lecture.isEmpty }
+    public var saitLire: Bool { !lecture.isEmpty }
 
     // MARK: - Décodage tolérant aux champs qui n'existaient pas encore
     //
@@ -144,7 +144,7 @@ struct RelaisSelecteurs: Codable, Equatable {
     // `decodeIfPresent` rend chaque champ facultatif. Tout champ ajouté plus
     // tard doit suivre la même règle, sans exception : la sanction n'est pas
     // une erreur visible mais un réglage effacé.
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         micro = try c.decodeIfPresent(String.self, forKey: .micro) ?? ""
         stop = try c.decodeIfPresent(String.self, forKey: .stop) ?? ""
@@ -159,21 +159,5 @@ struct RelaisSelecteurs: Codable, Equatable {
         lectureMenuParent = try c.decodeIfPresent(String.self, forKey: .lectureMenuParent) ?? ""
     }
 
-    init() {}
-
-    // MARK: - Persistance
-
-    private static let cle = "relais.selecteurs"
-
-    static func charger() -> RelaisSelecteurs {
-        guard let data = UserDefaults.standard.data(forKey: cle),
-              let s = try? JSONDecoder().decode(RelaisSelecteurs.self, from: data)
-        else { return RelaisSelecteurs() }
-        return s
-    }
-
-    func enregistrer() {
-        guard let data = try? JSONEncoder().encode(self) else { return }
-        UserDefaults.standard.set(data, forKey: Self.cle)
-    }
+    public init() {}
 }

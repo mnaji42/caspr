@@ -1,4 +1,5 @@
 import SwiftUI
+import CasprCore
 
 /// Un module, tel qu'on le lit et le règle.
 ///

@@ -1,7 +1,7 @@
 import Foundation
 
 /// La place que la consigne tient dans un module.
-enum RelaisPlaceDeLaConsigne: String, Codable {
+public enum RelaisPlaceDeLaConsigne: String, Codable {
     /// Le module envoie ce qui est dicté, tel quel. Rien à régler.
     case aucune
     /// Le module en propose une, qu'on peut retirer.
@@ -18,10 +18,10 @@ enum RelaisPlaceDeLaConsigne: String, Codable {
 /// permettrait d'écrire « insertion au curseur **et** fenêtre qui prend le
 /// clavier » — c'est-à-dire le texte qui part dans ChatGPT au lieu de
 /// l'éditeur, un défaut déjà payé une fois.
-enum RelaisSortie: String, CaseIterable, Codable {
+public enum RelaisSortie: String, CaseIterable, Codable {
     case curseur, note, aucune
 
-    var libelle: String {
+    public var libelle: String {
         switch self {
         case .curseur: "Curseur"
         case .note: "Notes…"
@@ -34,10 +34,10 @@ enum RelaisSortie: String, CaseIterable, Codable {
     /// Conséquence, jamais choix. Une case « copier le résultat » à cocher à
     /// côté d'une sortie qui l'implique déjà, c'est deux réglages qui peuvent
     /// se contredire.
-    var demandeLaReponse: Bool { self != .aucune }
+    public var demandeLaReponse: Bool { self != .aucune }
 
     /// La page se referme-t-elle après ?
-    var refermeLaPage: Bool { self != .aucune }
+    public var refermeLaPage: Bool { self != .aucune }
 }
 
 /// Ce que Caspr fait d'une dictée, du micro jusqu'à la sortie.
@@ -58,12 +58,12 @@ enum RelaisSortie: String, CaseIterable, Codable {
 ///
 /// Le module reste malgré tout lisible comme une recette : on affiche les
 /// étapes actives dans l'ordre du chemin, et l'on voit ce qu'il fait.
-struct RelaisModule: Codable, Equatable, Identifiable {
+public struct RelaisModule: Codable, Equatable, Identifiable {
     /// Stable, et jamais traduit : c'est lui qu'on enregistre.
-    var identifiant: String
-    var nom: String
+    public var identifiant: String
+    public var nom: String
     /// Livré avec l'application. Ne se supprime pas ; se modifie.
-    var integre: Bool
+    public var integre: Bool
 
     /// Ce qui est ajouté devant et derrière la transcription.
     ///
@@ -72,8 +72,8 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// dans la zone de saisie de ChatGPT. On ne peut que l'encadrer. Un
     /// gabarit obligerait à réécrire l'ensemble, ce qui produisait des à-coups
     /// et un envoi parfois amputé.
-    var avant: String
-    var apres: String
+    public var avant: String
+    public var apres: String
 
     /// Quelle place la consigne tient dans ce module.
     ///
@@ -83,7 +83,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// proposer d'en faire un autre module. « Réorganiser » sans consigne ne
     /// réorganise plus rien : elle y est l'identité même. Et un module écrit
     /// par l'utilisateur choisit.
-    var consigne: RelaisPlaceDeLaConsigne
+    public var consigne: RelaisPlaceDeLaConsigne
 
     /// Ce module propose-t-il de faire lire la réponse ?
     ///
@@ -95,7 +95,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// Les trois modules livrés restent simples : seul « Discuter » l'offre,
     /// parce que sa réponse ne vit qu'à l'écran. Les modules écrits par
     /// l'utilisateur l'offrent tous — ce qu'il en fait le regarde.
-    var lectureProposee: Bool
+    public var lectureProposee: Bool
 
     /// Faire lire la réponse à haute voix — un réglage, pas une nature.
     ///
@@ -104,7 +104,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// versions de l'application. Rangé parmi les actions, il était réenregistré
     /// puis aussitôt écrasé par la définition d'usine à la lecture suivante : la
     /// case se décochait toute seule sans que rien ne le dise.
-    var ditLaReponse: Bool
+    public var ditLaReponse: Bool
 
     /// Les étapes que ce module demande, entre l'écoute et la sortie.
     ///
@@ -112,27 +112,27 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// obliger à retoucher ni le module, ni le calcul des capacités, ni le
     /// tuyau qui les exécute. L'ordre d'exécution vient de `RelaisAction`, pas
     /// d'ici — celui qui écrit un module choisit ce qu'il veut, jamais quand.
-    var actions: [RelaisAction]
+    public var actions: [RelaisAction]
 
     /// Les sorties que ce module autorise, et celle qu'il propose d'abord.
     ///
     /// Plusieurs, parce que le choix se fait au dernier moment sur la barre —
     /// comme aujourd'hui pour Curseur et Notes. Un module qui n'en autorise
     /// qu'une l'impose.
-    var sorties: [RelaisSortie]
-    var sortieParDefaut: RelaisSortie
+    public var sorties: [RelaisSortie]
+    public var sortieParDefaut: RelaisSortie
 
     /// La capture d'écran est-elle jointe par défaut ?
     ///
     /// Éteinte, toujours, et c'est un choix d'ergonomie : cliquer pour ajouter
     /// une capture se comprend, cliquer pour en éviter une s'oublie. Un module
     /// dont c'est l'usage courant peut la rallumer.
-    var ecranParDefaut: Bool
+    public var ecranParDefaut: Bool
 
     /// Ce qu'on montre de la page pendant l'écoute.
-    var affichage: RelaisAffichage
+    public var affichage: RelaisAffichage
 
-    var id: String { identifiant }
+    public var id: String { identifiant }
 
     /// Les noms qu'un enregistrement plus ancien pouvait porter.
     private enum AnciennesCles: String, CodingKey {
@@ -145,7 +145,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     // ajouté plus tard ne doit pas rendre illisibles les modules déjà
     // enregistrés. Le décodage synthétisé de Swift échoue sur une clé absente,
     // et l'on efface alors le travail de l'utilisateur sans le lui dire.
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         identifiant = try c.decode(String.self, forKey: .identifiant)
         nom = try c.decodeIfPresent(String.self, forKey: .nom) ?? identifiant
@@ -171,7 +171,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
         affichage = try c.decodeIfPresent(RelaisAffichage.self, forKey: .affichage) ?? .barre
     }
 
-    init(identifiant: String, nom: String, integre: Bool = false,
+    public init(identifiant: String, nom: String, integre: Bool = false,
          avant: String = "", apres: String = "",
          consigne: RelaisPlaceDeLaConsigne = .facultative,
          lectureProposee: Bool = true, ditLaReponse: Bool = false,
@@ -208,7 +208,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// reprendre du livré effacerait au contraire le travail de l'utilisateur à
     /// chaque mise à jour. On prend donc la nature d'un côté, les réglages de
     /// l'autre.
-    func avecLesReglagesDe(_ enregistre: RelaisModule) -> RelaisModule {
+    public func avecLesReglagesDe(_ enregistre: RelaisModule) -> RelaisModule {
         var fusion = self
         fusion.avant = enregistre.avant
         fusion.apres = enregistre.apres
@@ -229,12 +229,12 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// regarder. La contrainte n'est donc pas attachée au module « Discuter »
     /// mais à ce qui la justifie, et elle vaudra d'elle-même pour les modules
     /// que l'utilisateur écrira.
-    var affichageImpose: RelaisAffichage? {
+    public var affichageImpose: RelaisAffichage? {
         sortieParDefaut == .aucune && !ditLaReponse ? .page : nil
     }
 
     /// Ce qu'on montre réellement, contrainte comprise.
-    var affichageEffectif: RelaisAffichage { affichageImpose ?? affichage }
+    public var affichageEffectif: RelaisAffichage { affichageImpose ?? affichage }
 
     // MARK: - Ce qu'il exige de la page
 
@@ -242,14 +242,14 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     ///
     /// L'ordre vient de `RelaisAction.allCases` et non de la liste
     /// enregistrée : un module ne choisit pas quand, seulement quoi.
-    var etapes: [RelaisAction] {
+    public var etapes: [RelaisAction] {
         var demandees = Set(actions)
         if ditLaReponse { demandees.insert(.direLaReponse) }
         return RelaisAction.allCases.filter { demandees.contains($0) }
     }
 
-    var demandeUnAllerRetour: Bool { actions.contains(.demanderUneReponse) }
-    var ecranPossible: Bool { actions.contains(.joindreEcran) }
+    public var demandeUnAllerRetour: Bool { actions.contains(.demanderUneReponse) }
+    public var ecranPossible: Bool { actions.contains(.joindreEcran) }
 
     /// Tout ce qu'il faut avoir appris pour que ce module tourne.
     ///
@@ -264,7 +264,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// si bien qu'une installation qui n'avait jamais montré le bouton copier
     /// voyait ses trois modules passer « indisponibles », et leur pastille
     /// disparaître de la barre — la seule qui permette d'en changer.
-    var capacitesRequises: [RelaisCapacite] {
+    public var capacitesRequises: [RelaisCapacite] {
         var requises: Set<RelaisCapacite> = [.dicter]
         for etape in etapes { requises.formUnion(etape.capacitesRequises) }
         if demandeUnAllerRetour {
@@ -273,9 +273,9 @@ struct RelaisModule: Codable, Equatable, Identifiable {
         return RelaisCapacite.allCases.filter { requises.contains($0) }
     }
 
-    func capacitesManquantes(_ s: RelaisSelecteurs) -> [RelaisCapacite] {
+    public func capacitesManquantes(_ s: RelaisSelecteurs) -> [RelaisCapacite] {
         capacitesRequises.filter { !$0.estAcquise(s) }
     }
 
-    func estUtilisable(_ s: RelaisSelecteurs) -> Bool { capacitesManquantes(s).isEmpty }
+    public func estUtilisable(_ s: RelaisSelecteurs) -> Bool { capacitesManquantes(s).isEmpty }
 }

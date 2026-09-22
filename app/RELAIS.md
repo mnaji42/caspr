@@ -19,7 +19,10 @@ ne compile plus.
 
 ## Les composants
 
-Tout tient dans `app/Sources/Caspr/Relais/`, un fichier par responsabilité :
+Tout tient dans `app/Sources/Caspr/Relais/`, un fichier par responsabilité —
+sauf les types sans dépendance système (modules, capacités, sorties, affichage,
+structure des sélecteurs, modules livrés), rangés dans
+`app/Sources/CasprCore/Relais/` pour être sous tests :
 
 | Fichier | Responsabilité |
 |---|---|
@@ -55,10 +58,10 @@ part vers celle qui l'est. La vue web passe de l'une à l'autre ; elle vit dans
 la barre par défaut, rangée hors champ — jamais retirée de l'écran, le système
 suspendant une fenêtre qu'il croit cachée.
 | `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
-| `RelaisSelecteurs.swift` | Les sélecteurs CSS appris, et leur persistance. |
+| `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
 | `RelaisAttente.swift` | L'échéance **unique** d'une dictée, fixée à l'arrêt de l'écoute sur la durée parlée, et la phase en cours que la barre affiche. Toutes les attentes après l'arrêt la consomment ; aucune n'a plus son propre budget. |
 | `RelaisCard.swift` | La bascule dans Réglages › Moteur IA. |
-| `RelaisMode.swift` | Les modes de dictée et l'emballage des prompts. |
+| `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
 
 ### Les modes
 
@@ -162,9 +165,10 @@ inachevée » à qui vient de la terminer. C'est arrivé en 0.13.0.
 
 ## Les règles tenues
 
-**Rien n'entre dans `CasprCore`.** Un cas `.relais` dans `EngineChoice` aurait
-obligé à le traiter dans les réglages, `EngineSafetyManager`, le corpus, les
-statistiques, les recommandations — et à défaire tout cela ensuite.
+**Ce qui est pur vit dans `CasprCore`, et y est testé.** La règle inverse —
+rien n'y entrait — protégeait la possibilité de retirer le relais, abandonnée
+depuis que ChatGPT est l'une des deux voies du produit. Ce qui décide des
+modules proposés, et ce qui relit un calibrage, n'avait aucun test.
 
 **Rien n'entre dans `Preferences`.** Les réglages du relais vivent dans
 `UserDefaults` sous le préfixe `relais.`, lus depuis ce dossier seulement.

@@ -12,7 +12,7 @@ import Foundation
 /// étaient calculées depuis des drapeaux du module, si bien qu'ajouter une
 /// action obligeait à retoucher le calcul. Ici, une action nouvelle déclare ce
 /// qu'elle exige et tout le reste suit.
-enum RelaisCapacite: String, CaseIterable, Codable {
+public enum RelaisCapacite: String, CaseIterable, Codable {
     /// Ouvrir le micro, l'arrêter, lire et écrire la zone de saisie.
     ///
     /// **Le socle.** Tout module s'en sert, aucun ne peut s'en passer : c'est
@@ -29,7 +29,7 @@ enum RelaisCapacite: String, CaseIterable, Codable {
     /// Joindre une capture de l'écran au message.
     case capturerEcran
 
-    var libelle: String {
+    public var libelle: String {
         switch self {
         case .dicter: "Dicter"
         case .envoyer: "Envoyer"
@@ -40,7 +40,7 @@ enum RelaisCapacite: String, CaseIterable, Codable {
     }
 
     /// Comment on l'obtient, dit à qui ne l'a pas encore.
-    var commentAcquerir: String {
+    public var commentAcquerir: String {
         switch self {
         case .dicter:
             "Montrer le micro, l'arrêt et la zone de texte."
@@ -56,9 +56,9 @@ enum RelaisCapacite: String, CaseIterable, Codable {
     }
 
     /// Le socle est exigé de tous et ne se propose pas.
-    var estSocle: Bool { self == .dicter }
+    public var estSocle: Bool { self == .dicter }
 
-    func estAcquise(_ s: RelaisSelecteurs) -> Bool {
+    public func estAcquise(_ s: RelaisSelecteurs) -> Bool {
         switch self {
         case .dicter: s.estCalibre
         case .envoyer: !s.envoi.isEmpty
@@ -89,7 +89,7 @@ enum RelaisCapacite: String, CaseIterable, Codable {
 /// attend. Découper cela en autant d'actions donnerait une liste que personne
 /// ne voudrait cocher, et dont la plupart des combinaisons n'auraient aucun
 /// sens. On en veut peu, et qu'elles disent quelque chose.
-enum RelaisAction: String, CaseIterable, Codable {
+public enum RelaisAction: String, CaseIterable, Codable {
     /// Joindre une capture de l'écran, avant d'envoyer.
     case joindreEcran
     /// Encadrer la transcription, l'envoyer, et attendre la réponse.
@@ -103,7 +103,7 @@ enum RelaisAction: String, CaseIterable, Codable {
     /// Faire lire la réponse à haute voix.
     case direLaReponse
 
-    var libelle: String {
+    public var libelle: String {
         switch self {
         case .joindreEcran: "Joindre l'écran"
         case .demanderUneReponse: "Envoyer à ChatGPT"
@@ -111,7 +111,7 @@ enum RelaisAction: String, CaseIterable, Codable {
         }
     }
 
-    var capacitesRequises: [RelaisCapacite] {
+    public var capacitesRequises: [RelaisCapacite] {
         switch self {
         case .joindreEcran: [.capturerEcran]
         case .demanderUneReponse: [.envoyer]
@@ -126,7 +126,7 @@ extension RelaisSortie {
     ///
     /// Écrire quelque part suppose d'avoir rapatrié la réponse ; n'écrire nulle
     /// part n'exige rien de plus que le socle.
-    var capacitesRequises: [RelaisCapacite] {
+    public var capacitesRequises: [RelaisCapacite] {
         demandeLaReponse ? [.recuperer] : []
     }
 }

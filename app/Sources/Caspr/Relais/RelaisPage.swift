@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import CasprCore
 
 /// La barre : la fenêtre qui héberge la page hors des moments de réglage.
 ///

@@ -1,4 +1,5 @@
 import SwiftUI
+import CasprCore
 
 /// La bascule du relais, en tête de l'onglet Moteur IA.
 ///

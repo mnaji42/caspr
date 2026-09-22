@@ -115,13 +115,16 @@ cat > "$STAGE/Contents/Info.plist" <<PLIST
          ce qui est indispensable puisque le texte doit atterrir dans l'app
          que l'utilisateur a devant lui. -->
     <key>LSUIElement</key>                <true/>
+    <!-- Vrai pour chacune des deux voies : c'est le micro de Caspr que la page
+         ChatGPT du relais emprunte, et ce qu'elle entend part chez ChatGPT.
+         Promettre « jamais envoyé ailleurs » serait faux dès le relais allumé. -->
     <key>NSMicrophoneUsageDescription</key>
-    <string>Caspr transcrit votre voix en texte. L'audio est traité sur votre Mac et n'est jamais envoyé ailleurs.</string>
-    <!-- Uniquement pour l'aperçu en direct affiché dans la barre pendant la
-         dictée, qui passe par le moteur de reconnaissance de macOS. La
-         transcription réelle, elle, ne l'utilise pas. -->
+    <string>Caspr transcrit votre voix en texte. Avec macOS, l'audio ne quitte pas votre Mac ; avec ChatGPT, il passe par votre propre compte ChatGPT.</string>
+    <!-- Seule la Dictée de macOS (SFSpeechRecognizer) demande ce droit :
+         quand elle transcrit à la place d'Apple Intelligence, ou quand c'est
+         elle qui tient l'aperçu en direct. Elle est forcée sur l'appareil. -->
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Caspr affiche pendant la dictée un aperçu de ce qu'il entend, reconnu sur votre Mac. Rien n'est envoyé ailleurs.</string>
+    <string>Caspr s'en sert quand la Dictée de macOS transcrit à la place d'Apple Intelligence, et pour l'aperçu affiché pendant que vous parlez. La reconnaissance a lieu sur votre Mac.</string>
 </dict>
 </plist>
 PLIST

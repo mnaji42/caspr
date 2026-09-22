@@ -137,7 +137,8 @@ final class Relais: ObservableObject {
     private func pageActive() -> RelaisPage {
         if let page { return page }
         let neuve = RelaisPage()
-        neuve.surFermeture = { [weak self] in self?.abandonnerCalibration() }
+        neuve.surFermeture = { [weak self] in self?.fenetreFermee() }
+        neuve.surMort = { [weak self] in self?.surPageInterrompue?() }
         page = neuve
         return neuve
     }
@@ -180,8 +181,24 @@ final class Relais: ObservableObject {
     /// Retenue pour pouvoir l'attendre : elle tourne au repos, donc elle est
     /// finie depuis longtemps quand on rappuie — mais « longtemps » n'est pas
     /// « toujours », et rappuyer dans la seconde ne doit pas recharger la page
-    /// sous une dictée qui commence.
+    /// sous une dictée qui commence. Remise à `nil` par la tâche elle-même
+    /// quand elle se termine : c'est ce que l'appui observe.
     private var preparation: Task<Void, Never>?
+    private var numeroPreparation = 0
+
+    /// Une préparation décidée à la fin d'un échec, et remise à plus tard.
+    ///
+    /// Un échec de lecture laisse la transcription dans la page et ouvre la
+    /// grande fenêtre pour qu'on l'y copie. Préparer tout de suite, c'était
+    /// vider ou recharger cette page sous les yeux de qui venait la chercher —
+    /// l'inverse de ce que le message d'échec promettait. La préparation
+    /// attend donc que l'utilisateur en ait fini : qu'il ferme la fenêtre, ou
+    /// qu'il rappuie sur la touche.
+    private var preparationDifferee = false
+
+    /// L'appui devra-t-il attendre la page ? La barre de Caspr le dit alors,
+    /// plutôt que de laisser l'écran muet pendant qu'elle se prépare.
+    var preparationEnCours: Bool { preparation != nil || preparationDifferee }
 
     /// Laisse la page prête pour la prochaine dictée, maintenant qu'on ne s'en
     /// sert plus.
@@ -207,31 +224,139 @@ final class Relais: ObservableObject {
     ///   ait abouti ou non : on en ouvre une neuve ;
     /// - **sinon** — le cas de « Brut », qui n'envoie rien : il suffit de vider
     ///   la zone de saisie du texte qu'on vient de dicter.
-    func preparerLaProchaine() {
-        // Remplacer la précédente : deux chemins peuvent demander la
-        // préparation à quelques millisecondes d'écart — la fin d'une dictée et
-        // la sortie d'une discussion — et la seconde doit simplement prendre la
-        // place de la première.
-        preparation?.cancel()
-        preparation = Task { [weak self] in
+    ///
+    /// Et quand la page ne répond plus du tout, on la recharge : une page
+    /// figée ne doit pas devenir la panne de la dictée suivante. **Seulement
+    /// dans ce cas.** Une zone qui refuse de se vider sur une page qui répond
+    /// n'est pas une page à jeter — c'est souvent une transcription encore en
+    /// cours, qu'un rechargement détruirait ; `demarrer()` vide de toute façon
+    /// la zone avant d'écouter.
+    ///
+    /// `apresEchec` remet la préparation à plus tard (cf.
+    /// `preparationDifferee`).
+    ///
+    /// Chaque étape est bornée, parce que l'appui attend cette tâche avant
+    /// même d'ouvrir l'écoute : une seule attente sans fin ici, et la barre
+    /// « chargeait » indéfiniment, avant que rien n'ait été enregistré.
+    func preparerLaProchaine(apresEchec: Bool = false) {
+        guard !apresEchec else {
+            preparation?.cancel()
+            preparation = nil
+            preparationDifferee = true
+            return
+        }
+        lancerPreparation { [weak self] page in
             guard let self, !enDiscussion else { return }
-            let page = pageActive()
-            if await page.tientUneConversation() {
+            switch await page.tientUneConversation() {
+            case true?:
+                page.charger()
+                let prete = await page.attendreComposeurPret(secondes: 30)
+                guard !prete, !Task.isCancelled else { return }
+                // La page vient d'être rechargée : il n'y a rien à y perdre, et
+                // un second essai rattrape un chargement resté en route.
+                Log.error("relais : la page rechargée est restée sans zone de saisie — "
+                          + "nouveau rechargement")
                 page.charger()
                 _ = await page.attendreComposeurPret(secondes: 30)
-            } else {
+            case false?:
                 await page.viderComposeur()
+            case nil:
+                guard !Task.isCancelled else { return }
+                Log.error("relais : la page ne répond plus — rechargement au repos")
+                page.charger()
+                _ = await page.attendreComposeurPret(secondes: 30)
             }
         }
     }
 
+    /// Recharge la page au repos, discussion ou non.
+    ///
+    /// Pour une page figée, et pour elle seule : le fil qu'elle portait est
+    /// perdu de toute façon, et la garder sous prétexte qu'une discussion est
+    /// ouverte condamnait chaque appui au même échec, cinq secondes plus tard,
+    /// sous un message qui promettait un rechargement jamais fait.
+    private func rechargerAuRepos() {
+        lancerPreparation { page in
+            Log.error("relais : la page ne répond plus — rechargement au repos")
+            page.charger()
+            _ = await page.attendreComposeurPret(secondes: 30)
+        }
+    }
+
+    private func lancerPreparation(_ travail: @escaping @MainActor (RelaisPage) async -> Void) {
+        // Remplacer la précédente : deux chemins peuvent demander la
+        // préparation à quelques millisecondes d'écart — la fin d'une dictée et
+        // la sortie d'une discussion — et la seconde doit simplement prendre la
+        // place de la première. L'annulation interrompt aussi un appel au pont
+        // resté en suspens.
+        preparation?.cancel()
+        preparationDifferee = false
+        numeroPreparation &+= 1
+        let numero = numeroPreparation
+        let page = pageActive()
+        preparation = Task { [weak self] in
+            await travail(page)
+            guard let self, numeroPreparation == numero else { return }
+            preparation = nil
+        }
+    }
+
+    /// Attend que la page soit prête, sans jamais retenir la touche de dictée.
+    ///
+    /// `Task.value` ignore l'annulation : attendre la préparation par lui,
+    /// c'était laisser l'appui suspendu jusqu'à quarante secondes sur une page
+    /// figée, sans que la touche puisse l'interrompre. On observe donc la fin
+    /// de la tâche, et l'annulation de l'appui fait cesser l'attente — elle
+    /// seule. La préparation, elle, continue : l'appui suivant la trouvera
+    /// finie ou l'attendra à son tour.
+    ///
+    /// Une préparation différée après un échec s'exécute ici : rappuyer, c'est
+    /// dire qu'on en a fini avec le texte laissé dans la page.
+    private func attendreLaPreparation() async throws {
+        if preparationDifferee { preparerLaProchaine() }
+        while preparation != nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    /// La grande fenêtre a été fermée par l'utilisateur.
+    ///
+    /// C'est aussi le moment de faire la préparation remise après un échec :
+    /// fermer la fenêtre où l'on venait récupérer son texte, c'est dire qu'on
+    /// l'a récupéré.
+    private func fenetreFermee() {
+        abandonnerCalibration()
+        guard preparationDifferee, occupation == .libre else { return }
+        preparerLaProchaine()
+        // Une discussion a survécu à l'échec : Échap, laissé à la fenêtre le
+        // temps de la récupération, redevient la sortie du fil.
+        if enDiscussion { surRecuperationFinie?() }
+    }
+
+    /// Appelé quand la fenêtre ouverte pour récupérer un texte est fermée,
+    /// une discussion toujours ouverte.
+    var surRecuperationFinie: (() -> Void)?
+
+    /// Appelé quand la page meurt pendant que la dictée écoute.
+    var surPageInterrompue: (() -> Void)?
+
     func demarrer() async throws {
-        debut = Date()
         // La page a été préparée quand la dictée précédente s'est achevée : il
         // n'y a rien à décider ici, seulement à s'assurer que ce travail est
         // fini. Il l'est, sauf si l'on rappuie dans la seconde.
-        await preparation?.value
-        try await pageActive().demarrer()
+        try await attendreLaPreparation()
+        debut = Date()
+        avertissement = nil
+        do {
+            try await pageActive().demarrer()
+        } catch RelaisPage.Erreur.pontMuet {
+            // Une page figée au démarrage n'atteint jamais la fin du cycle, où
+            // la préparation a lieu : sans ceci, chaque appui retrouverait la
+            // même page figée. Elle est rechargée au repos, pour le suivant —
+            // en discussion aussi.
+            rechargerAuRepos()
+            throw RelaisPage.Erreur.pontMuet
+        }
     }
 
     func arreterEtLire(secondesDictees: Double) async throws -> String {
@@ -323,6 +448,14 @@ final class Relais: ObservableObject {
     func terminerDiscussion() {
         guard enDiscussion else { return }
         enDiscussion = false
+        // Un échec vient de laisser son texte dans la fenêtre, ouverte pour
+        // qu'on l'y copie : ni la cacher, ni la recharger. C'est sa fermeture
+        // qui fera la préparation remise (cf. `fenetreFermee`) — la faire ici
+        // effaçait le texte que le message d'échec disait récupérable.
+        guard !preparationDifferee else {
+            Log.info("relais : discussion terminée, page laissée à sa récupération")
+            return
+        }
         page?.cacher()
         NSApp.hide(nil)
         // Le fil qu'on vient de quitter n'est plus la page prête : il faut en
@@ -366,13 +499,18 @@ final class Relais: ObservableObject {
                 try await pageActive()
                     .envoyerSansAttendre((avant: module.avant, apres: module.apres))
                 Log.info("relais : \(module.identifiant) — envoyé, réponse à l'écran")
-                if module.ditLaReponse {
-                    await pageActive().faireLireLaReponse(patienceSecondes: 180)
+                // Un refus — un quota — se dit dans la barre : sans quoi on
+                // attend une voix qui ne viendra pas, et l'on redemande.
+                if module.ditLaReponse,
+                   let refus = await pageActive().faireLireLaReponse(patienceSecondes: 180) {
+                    avertissement = RelaisPage.Erreur.refusParChatGPT(refus).raisonCourte
                 }
             } catch is CancellationError { throw CancellationError() }
             catch {
                 Log.error("relais : \(module.identifiant) n'a pas pu envoyer "
                           + "(\(error.localizedDescription))")
+                avertissement = (error as? RelaisPage.Erreur)?.raisonCourte
+                    ?? "\(module.nom) n'a pas pu envoyer"
             }
             return ""
         }
@@ -384,9 +522,12 @@ final class Relais: ObservableObject {
                                      patienceSecondes: patience)
             guard !texte.isEmpty else {
                 Log.error("relais : réponse vide, transcription brute conservée")
+                avertissement = "ChatGPT a rendu une réponse vide"
                 return brut
             }
             if module.ditLaReponse {
+                // La réponse est déjà là : ce qui fait défaut ici, c'est le
+                // son seul, et le texte remanié s'insère quand même.
                 await pageActive().faireLireLaReponse(patienceSecondes: 30)
             }
             Log.info("relais : \(module.identifiant) — \(brut.count) → \(texte.count) caractères")
@@ -398,8 +539,27 @@ final class Relais: ObservableObject {
         } catch {
             Log.error("relais : \(module.identifiant) a échoué (\(error.localizedDescription)) "
                       + "— transcription brute conservée")
+            // Le brut est rendu, mais pas en silence : il s'insère là où l'on
+            // attendait un texte remanié, et rien ne distinguait l'un de
+            // l'autre. Un quota atteint surtout doit se lire — sans quoi on
+            // relance, et le même refus revient.
+            if case RelaisPage.Erreur.refusParChatGPT = error,
+               let courte = (error as? RelaisPage.Erreur)?.raisonCourte {
+                avertissement = courte
+            } else {
+                avertissement = "\(module.nom) n'a pas abouti"
+            }
             return brut
         }
+    }
+
+    /// Pourquoi la dernière transformation a rendu le brut, s'il y a lieu.
+    private var avertissement: String?
+
+    /// Rend l'avertissement de la dictée qui s'achève, et l'oublie.
+    func prendreAvertissement() -> String? {
+        defer { avertissement = nil }
+        return avertissement
     }
 
     /// Adopte la page ouverte dans la fenêtre comme point de départ.
@@ -590,9 +750,12 @@ final class Relais: ObservableObject {
 
             La suite démarrera toute seule dès que la conversation s'affichera.
             """)
-        for _ in 0..<600 {                                  // dix minutes
+        // Dix minutes d'horloge, et non six cents tours : un tour dont l'appel
+        // attend son délai en dure six.
+        let limite = Date.now.addingTimeInterval(600)
+        while Date.now < limite {
             try? await Task.sleep(for: .seconds(1))
-            guard actif else { return false }
+            guard actif, !Task.isCancelled else { return false }
             if await page.etatConnexion(patience: 1) == .connecte { return true }
         }
         return false
@@ -638,7 +801,8 @@ final class Relais: ObservableObject {
                 valeur.isEmpty ? "\(nom) : (non calibré — heuristique)" : "\(nom) : \(valeur)"
             }
             Self.alerter("Diagnostic du relais", """
-                Session : \(connexion == .connecte ? "connectée" : "pas connectée")
+                Session : \(connexion == .connecte ? "connectée"
+                            : connexion == .inconnu ? "la page ne répond pas" : "pas connectée")
                 Page : \(ecoute ? "en train d'écouter" : "au repos")
                 Micro tenu par la page : \(micro ? "oui" : "non")
 

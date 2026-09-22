@@ -274,8 +274,16 @@ final class RecordingOverlay {
     ///
     /// Sur une longue dictée le traitement prend plusieurs secondes ; sans ce
     /// retour, on croit à un échec et on relance.
-    func showProcessing() {
-        guard let panel else { return }
+    ///
+    /// - Parameter label: ce qu'on attend. Le relais s'en sert aussi avant
+    ///   l'écoute, quand la page ChatGPT n'est pas encore prête.
+    func showProcessing(_ label: String = "Transcription…") {
+        let panel = self.panel ?? makePanel()
+        self.panel = panel
+        // Le relais l'affiche aussi avant l'écoute, juste après un échec dont
+        // la fermeture programmée l'aurait retirée en pleine attente.
+        dismissal?.cancel()
+        dismissal = nil
         timer?.invalidate()
         container?.isHidden = true
         textRow?.isHidden = true
@@ -294,12 +302,13 @@ final class RecordingOverlay {
         // deux, et la carte se retrouverait haute de deux lignes pour un
         // message qui n'en occupe qu'une.
         statusLabel.maximumNumberOfLines = 1
-        statusLabel.stringValue = "Transcription…"
+        statusLabel.stringValue = label
         panel.setContentSize(NSSize(width: Self.cardWidth,
                                     height: 2 * Self.padding + 20))
         cardSheen?.frame = card?.bounds ?? .zero
         position(panel)
         card?.layer?.borderColor = Self.accent.withAlphaComponent(0.40).cgColor
+        panel.orderFrontRegardless()
         startProcessingGlow()
     }
 

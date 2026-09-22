@@ -156,6 +156,16 @@ final class DictationController {
         self.legacyEngine = LegacySpeechEngine()
         overlay.levelProvider = { [weak self] in self?.recorder.level ?? 0 }
         overlay.onCancel = { [weak self] in self?.cancel() }
+        // RELAIS — la page peut mourir pendant qu'on parle.
+        Relais.partage.surPageInterrompue = { [weak self] in self?.pageRelaisInterrompue() }
+        // RELAIS — Échap revient à la discussion une fois le texte récupéré.
+        Relais.partage.surRecuperationFinie = { [weak self] in
+            guard let self, escapeMonitor == nil else { return }
+            switch state {
+            case .idle, .failed: captureEscape()
+            case .recording, .processing: break
+            }
+        }
         // RELAIS — le choix se fait sur la barre, au moment de parler.
         overlay.onSelectModeIndex = { [weak self] index in
             guard let self else { return }
@@ -278,10 +288,24 @@ final class DictationController {
     // dessus, la barre restait sur « Transcription… » sans autre issue que de
     // quitter l'application.
     private var relaisTache: Task<Void, Never>?
+    // RELAIS — le démarrage en cours, retenu pour que la touche l'interrompe.
+    //
+    // Avant l'écoute, l'appui attend que la page soit prête — jusqu'à
+    // quelques dizaines de secondes quand elle a dû être rechargée. L'état
+    // est encore au repos pendant ce temps : sans prise sur cette tâche,
+    // rappuyer ne l'interrompait pas, et se faisait même refuser pour
+    // « dictée en cours ».
+    private var relaisDemarrage: Task<Void, Never>?
 
     func toggle() {
         switch state {
         case .idle, .failed:
+            // RELAIS — la touche interrompt l'attente du démarrage, comme
+            // celle de la transcription.
+            if let demarrage = relaisDemarrage {
+                demarrage.cancel()
+                return
+            }
             // RELAIS — c'est le mode qui décide, pas la touche : les deux
             // s'excluent, et il n'y a qu'un seul déclencheur.
             relaisEnCours = Relais.partage.actif
@@ -302,7 +326,14 @@ final class DictationController {
                                 + "voir Réglages › Moteur IA.")
                 return
             }
-            Task { await startRecording() }
+            if relaisEnCours {
+                relaisDemarrage = Task {
+                    await startRecording()
+                    relaisDemarrage = nil
+                }
+            } else {
+                Task { await startRecording() }
+            }
         case .recording:
             relaisTache = Task { await finishRecording() }        // RELAIS —
         case .processing:
@@ -324,7 +355,17 @@ final class DictationController {
 
     func cancel() {
         // RELAIS — hors dictée, Échap met fin à la discussion ouverte.
-        if state == .idle, Relais.partage.enDiscussion {
+        //
+        // Après un échec aussi : une dictée ratée en pleine discussion laisse
+        // l'état sur `.failed`, et Échap, seule sortie d'une discussion sans
+        // fenêtre, devenait inerte.
+        let auRepos: Bool
+        switch state {
+        case .idle, .failed: auRepos = true
+        case .recording, .processing: auRepos = false
+        }
+        if auRepos, Relais.partage.enDiscussion {
+            relaisDemarrage?.cancel()
             quitterLaDiscussion()
             Feedback.cancelled()
             return
@@ -406,7 +447,15 @@ final class DictationController {
                 // et la page, enfin à l'écran, cesse d'être différée par le
                 // système.
                 Relais.partage.afficherBarre()
+                // La page se prépare encore : on le dit, plutôt que de laisser
+                // l'écran muet le temps qu'elle soit prête.
+                if Relais.partage.preparationEnCours {
+                    overlay.showProcessing("ChatGPT se prépare…")
+                }
                 try await Relais.partage.demarrer()
+                // Interrompu à l'instant où la page commençait à écouter :
+                // l'annulation l'emporte, la page est arrêtée plus bas.
+                try Task.checkCancellation()
             } else {
                 try recorder.start()
             }
@@ -428,11 +477,52 @@ final class DictationController {
                 startPreview()
             }
             Feedback.recordingStarted()
+        } catch is CancellationError {
+            // RELAIS — la touche a interrompu l'attente du démarrage. La page
+            // a pu se mettre à écouter entre-temps : on l'arrête, comme Échap
+            // le fait pendant l'enregistrement.
+            Relais.partage.rendreLaMain()
+            relaisEnCours = false
+            Task { await Relais.partage.interrompre() }
+            overlay.hide()
+            Feedback.cancelled()
+            state = .idle
         } catch {
+            // RELAIS — la barre dit pourquoi, quand la raison tient en une
+            // ligne ; elle s'efface sinon, au lieu de rester sur « ChatGPT se
+            // prépare… » devant une dictée qui n'aura pas lieu.
+            if relaisEnCours {
+                if let courte = (error as? RelaisPage.Erreur)?.raisonCourte {
+                    overlay.showFailure(courte)
+                } else {
+                    overlay.hide()
+                }
+            }
             Relais.partage.rendreLaMain()          // RELAIS —
             relaisEnCours = false
             state = .failed(error.localizedDescription)
         }
+    }
+
+    /// RELAIS — WebKit a tué la page pendant qu'on parlait.
+    ///
+    /// La page est déjà rechargée, et le son qu'elle captait est perdu avec
+    /// elle. Continuer d'afficher l'écoute, c'était laisser parler dans le
+    /// vide jusqu'à l'appui d'arrêt ; on échoue donc tout de suite, en le
+    /// disant. Les autres phases le découvrent seules : l'attente de la
+    /// transcription relève la mort à son tour suivant, et le démarrage au
+    /// clic suivant.
+    private func pageRelaisInterrompue() {
+        guard relaisEnCours, state == .recording else { return }
+        let erreur = RelaisPage.Erreur.pageInterrompue
+        Log.error("relais : la page est morte pendant l'écoute")
+        relaisEnCours = false
+        Relais.partage.rendreLaMain()
+        // Échap reste pris en discussion : c'est par lui qu'on en sort.
+        if !Relais.partage.enDiscussion { releaseEscape() }
+        Relais.partage.masquerBarre()
+        overlay.showFailure(erreur.raisonCourte ?? "La page ChatGPT s'est fermée")
+        state = .failed(erreur.localizedDescription)
     }
 
     private func finishRecording() async {
@@ -501,6 +591,9 @@ final class DictationController {
         // RELAIS — le relais se conforme au protocole des moteurs, donc tout ce
         // qui suit (insertion, historique, échecs, barre) marche sans le savoir.
         let parRelais = relaisEnCours
+        // RELAIS — vrai quand l'échec laisse la transcription dans la page, à
+        // récupérer dans la fenêtre qu'on ouvre pour cela.
+        var texteLaisseDansLaPage = false
         // RELAIS — rendue ici parce que c'est la sortie commune à tous les
         // chemins : réussite, texte vide, échec, annulation. La rendre à
         // chaque endroit serait la promesse d'en oublier un, et un oubli
@@ -508,6 +601,17 @@ final class DictationController {
         defer {
             relaisEnCours = false
             Relais.partage.rendreLaMain()
+            // RELAIS — et la page est rendue prête pour la prochaine, pendant
+            // qu'on ne s'en sert pas. Sauf si l'on vient d'y laisser un texte
+            // à récupérer : la préparer maintenant le détruirait sous les yeux
+            // de qui vient le chercher. Elle attend alors qu'on en ait fini.
+            //
+            // Avant de quitter la discussion, et non après : c'est ce report
+            // qui dit à la sortie de la discussion de laisser la fenêtre
+            // ouverte sur le texte.
+            if parRelais {
+                Relais.partage.preparerLaProchaine(apresEchec: texteLaisseDansLaPage)
+            }
             // RELAIS — délivrer ailleurs, c'est quitter la discussion.
             //
             // Basculer de « Discuter » vers un module qui écrit au curseur
@@ -520,9 +624,19 @@ final class DictationController {
             if parRelais, Relais.partage.sortieCourante != .aucune {
                 quitterLaDiscussion()
             }
-            // RELAIS — et la page est rendue prête pour la prochaine, pendant
-            // qu'on ne s'en sert pas.
-            if parRelais { Relais.partage.preparerLaProchaine() }
+            // RELAIS — une discussion qui survit à la dictée garde Échap pour
+            // en sortir. L'arrêt de l'écoute l'a rendu, et seule la réussite
+            // le reprenait : après un échec, plus rien ne fermait le fil.
+            //
+            // Sauf quand l'échec a laissé son texte dans la fenêtre : elle a
+            // le clavier, et Échap y appartient au système. Repris par Caspr,
+            // il fermait la discussion et rechargeait la page avant que le
+            // texte n'ait été copié. Il revient quand on ferme la fenêtre
+            // (cf. `surRecuperationFinie`).
+            if parRelais, !texteLaisseDansLaPage, Relais.partage.enDiscussion,
+               escapeMonitor == nil {
+                captureEscape()
+            }
         }
         let moteur: any SpeechEngine = parRelais ? RelaisEngine() : writer
         do {
@@ -537,8 +651,15 @@ final class DictationController {
             // un filet pour retrouver un texte qu'une insertion aurait perdu,
             // et une conversation n'est pas une dictée qu'on range.
             if parRelais, Relais.partage.sortieCourante == .aucune {
-                overlay.hide()
-                state = .idle
+                // Sauf un refus — un quota, un envoi impossible : sans voix
+                // ni texte à insérer, la barre est le seul endroit où le lire.
+                if let avertissement = Relais.partage.prendreAvertissement() {
+                    overlay.showFailure("ChatGPT n'a pas répondu", hint: avertissement)
+                    state = .failed("ChatGPT n'a pas répondu — \(avertissement).")
+                } else {
+                    overlay.hide()
+                    state = .idle
+                }
                 entrerEnDiscussion()
                 return
             }
@@ -620,7 +741,16 @@ final class DictationController {
             // qu'un service tiers a transcrit.
             if !parRelais { EngineSafetyManager.shared.confirmWorking(writerChoice) }
             Log.info("transcrit en \(Int(result.latency.wallMs)) ms, \(text.count) caractères")
-            state = .idle
+            // RELAIS — la transformation a échoué et c'est le brut qui vient
+            // d'être inséré : le dire, là où l'on regarde. Sans quoi un texte
+            // non remanié passe pour la réponse de ChatGPT, et un quota
+            // atteint pour une consigne mal suivie.
+            if parRelais, let avertissement = Relais.partage.prendreAvertissement() {
+                overlay.showFailure("Transcription brute insérée", hint: avertissement)
+                state = .failed("Transcription brute insérée — \(avertissement).")
+            } else {
+                state = .idle
+            }
             // Après l'insertion, jamais avant : la collecte ne doit rien
             // coûter au temps que l'utilisateur attend.
             if !parRelais {                                        // RELAIS —
@@ -648,11 +778,17 @@ final class DictationController {
             // le détail, mais on ne consulte pas un menu qu'on n'a pas de
             // raison d'ouvrir : sans ça, un échec se lit comme « je m'y suis
             // mal pris ».
+            // RELAIS — sauf quand la page est morte : celle qu'on ouvrirait
+            // est neuve, et le texte a disparu avec l'ancienne.
+            let texteRecuperable = parRelais
+                && (error as? RelaisPage.Erreur)?.laissePeutEtreLeTexte ?? true
             overlay.showFailure(Self.shortReason(for: error),
                                 hint: Self.rescueHint(preview: previewText))
             state = .failed(parRelais
-                ? "\(error.localizedDescription) — le texte est peut-être encore "
-                  + "dans la fenêtre du relais."
+                ? (texteRecuperable
+                    ? "\(error.localizedDescription) — le texte est peut-être encore "
+                      + "dans la fenêtre du relais."
+                    : error.localizedDescription)
                 : "\(error.localizedDescription) — audio conservé, « Réessayer » dans le menu.")
             // Les autres moteurs tournent quand même : savoir que macOS a
             // écrit la phrase pendant que CrisperWhisper échouait est
@@ -665,7 +801,12 @@ final class DictationController {
             // d'écouter.
             if parRelais {
                 releaseEscape()
-                Relais.partage.ouvrirFenetre()
+                if texteRecuperable {
+                    texteLaisseDansLaPage = true
+                    Relais.partage.ouvrirFenetre()
+                } else {
+                    Relais.partage.masquerBarre()
+                }
             } else {
                 collect(samples: samples, primary: nil, mode: used,
                         outcome: .failed, failure: error.localizedDescription)
@@ -680,6 +821,9 @@ final class DictationController {
     /// modèle en cours de chargement est distingué parce que c'est le seul où
     /// il suffit d'attendre, et que le dire évite de chercher une panne.
     private static func shortReason(for error: Error) -> String {
+        // RELAIS — un refus de ChatGPT porte sa raison, un quota par exemple :
+        // la barre la montre au lieu d'un « Réessayer » qui n'existe pas ici.
+        if let courte = (error as? RelaisPage.Erreur)?.raisonCourte { return courte }
         if case SpeechEngineError.unavailable = error, EngineService.isInstalled {
             if EngineService.isAnswering { return "Moteur injoignable — réessayez" }
             // « Réessayez dans un instant » sur un service qui se relance en

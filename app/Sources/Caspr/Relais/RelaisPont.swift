@@ -12,6 +12,11 @@ extension RelaisPage {
 
       const esc = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : s;
 
+      // Les réponses de ChatGPT, et elles seules : le rôle est posé sur chaque
+      // message par son auteur, là où `article` porte aussi ceux de
+      // l'utilisateur.
+      const REPONSES = '[data-message-author-role="assistant"]';
+
       // Filet de secours tant que l'utilisateur n'a pas calibré, et rien de
       // plus : ce sont des paris sur des libellés d'accessibilité, pas un
       // contrat. Le chemin normal est le sélecteur appris.
@@ -44,7 +49,7 @@ extension RelaisPage {
           'button[aria-label*="send" i]',
         ],
         reponse: [
-          '[data-message-author-role="assistant"]',
+          REPONSES,
           'article',
         ],
         copier: [
@@ -164,8 +169,13 @@ extension RelaisPage {
       // élément qui n'existera plus à la dictée suivante : le clic part dans le
       // vide sans que rien ne le signale. Un `data-testid` ou un libellé
       // d'accessibilité, eux, sont écrits par la page pour durer.
+      //
+      // Un numéro final dit la même chose autrement : `conversation-turn-6`
+      // désigne le sixième message, qui n'est pas celui du fil suivant — et
+      // pris pour le bloc d'une réponse, il faisait chercher le bouton
+      // « copier » sous le message de l'utilisateur.
       const idEngendre = (id) => !id
-        || /radix|^[:_]|_r_|^«|\d{3,}/i.test(id);
+        || /radix|^[:_]|_r_|^«|\d{3,}|[-_]\d+$/i.test(id);
 
       // Un repère ne vaut que s'il retrouve l'élément qu'on a cliqué.
       //
@@ -191,8 +201,10 @@ extension RelaisPage {
       function reperesDe(el, genre) {
         const guillemets = (v) => v.replace(/"/g, '\\"');
         const candidats = [];
+        // Le même garde-fou que pour l'identifiant : un `data-testid` est
+        // écrit pour durer, sauf quand la page y met un numéro d'ordre.
         const testid = el.getAttribute('data-testid');
-        if (testid) candidats.push('[data-testid="' + guillemets(testid) + '"]');
+        if (!idEngendre(testid)) candidats.push('[data-testid="' + guillemets(testid) + '"]');
         if (!idEngendre(el.id)) candidats.push('#' + esc(el.id));
         const aria = el.getAttribute('aria-label');
         if (aria) candidats.push('[aria-label="' + guillemets(aria) + '"]');
@@ -254,6 +266,70 @@ extension RelaisPage {
         }
         return '';
       }
+
+      // Les motifs d'un échec que ChatGPT écrit en toutes lettres.
+      //
+      // Étroits, délibérément. Accepter n'importe quelle alerte visible faisait
+      // prendre pour un échec de dictée la bannière « Limite d'utilisation
+      // hebdomadaire bientôt atteinte », qui porte le même rôle et reste
+      // affichée des jours durant : chaque dictée aurait été interrompue. Ce
+      // qu'un motif ne connaît pas se reconnaît autrement — à ce qu'il est
+      // apparu depuis la demande (cf. `erreur`).
+      const MOTIFS_ECHEC = /n'a pas compris|pas compris|didn.t catch|try again|réessayer/i;
+
+      // Les textes des alertes affichées. `role="alert"` est un rôle
+      // d'accessibilité normalisé, et non une classe générée.
+      const alertesVisibles = () => [...document.querySelectorAll('[role="alert"]')]
+        .filter((el) => el.getClientRects().length > 0)
+        .map((el) => (el.innerText || '').trim())
+        .filter((t) => t);
+
+      // Les échecs écrits hors de toute alerte, pour les pages qui n'en posent
+      // pas.
+      //
+      // Cherchés là où ils peuvent être seulement : le dernier message de la
+      // conversation, et le formulaire de la zone de saisie. Parcourir tous
+      // les `div, span, p` du document, c'était lire `innerText` sur des
+      // milliers d'éléments — chaque lecture force la page à recalculer sa
+      // disposition — plusieurs fois par seconde, sur une conversation qu'on
+      // attendait justement de voir avancer.
+      const echecsEcrits = () => {
+        const zones = [];
+        const tours = document.querySelectorAll('article');
+        if (tours.length) zones.push(tours[tours.length - 1]);
+        else {
+          const messages = document.querySelectorAll('[data-message-author-role]');
+          if (messages.length) zones.push(messages[messages.length - 1]);
+        }
+        const formulaires = document.querySelectorAll('main form');
+        if (formulaires.length) zones.push(formulaires[formulaires.length - 1]);
+        const textes = [];
+        for (const zone of zones) {
+          for (const el of zone.querySelectorAll('div, span, p')) {
+            const t = (el.innerText || '').trim();
+            if (t && t.length < 120 && MOTIFS_ECHEC.test(t)
+                && el.getClientRects().length > 0) textes.push(t);
+          }
+        }
+        return textes;
+      };
+
+      // ChatGPT est-il en train d'écrire sa réponse ?
+      //
+      // Le bouton qui arrête la génération le dit sans calibration : il
+      // n'existe que pendant l'écriture. Aucun repère appris ne le désigne ;
+      // les libellés d'arrêt que le filet connaît déjà — « stop », « arrêt »
+      // — le désignent aussi, et on les réutilise, hors des messages, où la
+      // page pose d'autres boutons.
+      const generationEnCours = () => {
+        for (const s of HEURISTIQUES.stop) {
+          for (const el of document.querySelectorAll(s)) {
+            if (el.closest('article, [data-message-author-role]')) continue;
+            if (visible(el) && convient('bouton', el)) return true;
+          }
+        }
+        return false;
+      };
 
       window.__relais = {
         cliquer(cible, selecteur) {
@@ -426,18 +502,21 @@ extension RelaisPage {
           return { ok: false, raison: 'pas de bouton copier' };
         },
 
-        // La réponse est-elle terminée ?
+        // Où en est la réponse attendue ?
         //
-        // Sa barre d'actions n'apparaît qu'une fois la génération finie : sa
-        // présence est le signal, et c'est le même que celui qui sert à copier.
-        // On le lit sans cliquer, pour les modules qui n'ont rien à rapatrier
-        // mais doivent attendre la fin — faire lire à haute voix un texte encore
-        // en train de s'écrire n'aurait pas de sens.
-        reponsePrete(selParent) {
-          if (!selParent) return { ok: false };
-          let blocs = [];
-          try { blocs = [...document.querySelectorAll(selParent)]; } catch (e) {}
-          return { ok: blocs.some((b) => b.getClientRects().length > 0) };
+        // Sans aucun repère appris, pour les modules qui n'ont rien à
+        // rapatrier mais doivent attendre la fin — faire lire à haute voix un
+        // texte encore en train de s'écrire n'aurait pas de sens. `avant` est
+        // le nombre de réponses relevé à l'envoi : tant qu'il n'a pas augmenté,
+        // la dernière réponse est celle d'avant, et elle est finie depuis
+        // longtemps. Le texte est rendu pour que Swift juge de sa stabilité.
+        etatReponse(avant) {
+          const reponses = document.querySelectorAll(REPONSES);
+          const enCours = generationEnCours();
+          if (reponses.length <= avant) return { ok: true, nouvelle: false, enCours };
+          const t = reponses[reponses.length - 1].innerText || '';
+          return { ok: true, nouvelle: true, enCours,
+                   texte: t.replace(/\u00a0/g, ' ').trim() };
         },
 
         // Clique un bouton, éventuellement cadré dans un bloc.
@@ -466,29 +545,6 @@ extension RelaisPage {
           return { ok: true };
         },
 
-        // Clique le **dernier** élément qui corresponde, et dit s'il existait.
-        //
-        // Le dernier, parce qu'une conversation en compte un par réponse. Le
-        // fil est neuf à chaque passe, donc il n'y en a qu'un — mais s'en
-        // remettre à cette certitude, c'est se préparer à lire la réponse
-        // d'avant le jour où un rechargement n'aura pas abouti.
-        cliquerDernier(cible, selecteur) {
-          let elements = [];
-          if (selecteur) {
-            try { elements = [...document.querySelectorAll(selecteur)]; } catch (e) {}
-          }
-          if (!elements.length) {
-            for (const s of (HEURISTIQUES[cible] || [])) {
-              elements = [...document.querySelectorAll(s)];
-              if (elements.length) break;
-            }
-          }
-          const visibles = elements.filter((el) => el.isConnected);
-          if (!visibles.length) return { ok: false, raison: 'introuvable' };
-          visibles[visibles.length - 1].click();
-          return { ok: true };
-        },
-
         // La **dernière** réponse de la conversation.
         //
         // La dernière et non la première : un fil neuf n'en contient qu'une,
@@ -509,7 +565,15 @@ extension RelaisPage {
           const visibles = elements.filter((el) => el.getClientRects().length > 0);
           if (!visibles.length) return { ok: false, raison: 'introuvable' };
           const t = visibles[visibles.length - 1].innerText || '';
-          return { ok: true, texte: t.replace(/ /g, ' ').trim() };
+          return { ok: true, texte: t.replace(/\u00a0/g, ' ').trim() };
+        },
+
+        // Ce que la page affiche avant qu'on lui demande quelque chose : ses
+        // alertes et ses échecs écrits, et le nombre de réponses de ChatGPT.
+        releve() {
+          return { ok: true,
+                   alertes: [...alertesVisibles(), ...echecsEcrits()],
+                   reponses: document.querySelectorAll(REPONSES).length };
         },
 
         // L'erreur que ChatGPT affiche lui-même.
@@ -519,27 +583,36 @@ extension RelaisPage {
         // bloquée sur « Transcription… », sans autre issue que de quitter
         // l'application.
         //
-        // On vise `role="alert"`, qui est un rôle d'accessibilité normalisé et
-        // non une classe générée, et on se rabat sur le texte pour les langues
-        // où il ne serait pas posé.
-        erreur() {
-          const motifs = /n'a pas compris|pas compris|didn.t catch|try again|réessayer/i;
-          // Le motif s'applique aussi aux `role="alert"`, et c'est le point.
-          // Accepter n'importe quelle alerte visible faisait prendre pour un
-          // échec de dictée la bannière « Limite d'utilisation hebdomadaire
-          // bientôt atteinte », qui porte le même rôle et reste affichée des
-          // jours durant : chaque dictée aurait été interrompue.
-          for (const el of document.querySelectorAll('[role="alert"]')) {
-            const t = (el.innerText || '').trim();
-            if (t && motifs.test(t) && el.getClientRects().length > 0) {
-              return { ok: true, message: t };
+        // `connues` est le relevé fait avant la demande : ce qui y figure
+        // n'est pas une réponse à cette demande-ci, et n'interrompt rien. Une
+        // bannière permanente reste donc muette.
+        //
+        // Un échec **reconnu** — un motif, apparu depuis le relevé — compte
+        // toujours, et `reconnue` le dit. Une alerte nouvelle qu'aucun motif
+        // ne connaît — un plafond atteint à l'instant, formulé dans n'importe
+        // quelle langue — ne compte que si `nouvelles` le demande ; et, quand
+        // `avant` est donné (le nombre de réponses à l'envoi), seulement si
+        // ChatGPT ne répond pas : aucune réponse nouvelle, aucune génération
+        // en cours. Une bannière « limite bientôt atteinte » apparue pendant
+        // que la réponse s'écrit ne dit rien de cette réponse ; la prendre
+        // pour un refus faisait jeter une réponse juste.
+        erreur(connues, nouvelles, avant) {
+          const deja = new Set(connues || []);
+          for (const t of alertesVisibles()) {
+            if (!deja.has(t) && MOTIFS_ECHEC.test(t)) {
+              return { ok: true, message: t, reconnue: true };
             }
           }
-          for (const el of document.querySelectorAll('div, span, p')) {
-            const t = (el.innerText || '').trim();
-            if (t && t.length < 120 && motifs.test(t) && el.getClientRects().length > 0) {
-              return { ok: true, message: t };
-            }
+          for (const t of echecsEcrits()) {
+            if (!deja.has(t)) return { ok: true, message: t, reconnue: true };
+          }
+          if (!nouvelles) return { ok: true, message: '' };
+          if (avant >= 0 && (document.querySelectorAll(REPONSES).length > avant
+                             || generationEnCours())) {
+            return { ok: true, message: '' };
+          }
+          for (const t of alertesVisibles()) {
+            if (!deja.has(t)) return { ok: true, message: t, reconnue: false };
           }
           return { ok: true, message: '' };
         },
@@ -622,11 +695,46 @@ extension RelaisPage {
           // Un bouton de connexion, lui, ne s'affiche jamais une fois la
           // session ouverte. C'est une preuve négative, et c'est ce qui la rend
           // fiable : on ne peut pas la confondre avec un état transitoire.
+          //
+          // Reconnu d'abord à sa structure, qui ne dépend d'aucune langue. Lu
+          // à son libellé, il n'était connu qu'en français et en anglais — et
+          // un compte réglé dans une autre langue passait pour connecté devant
+          // l'écran même qui lui proposait de se connecter. Deux signes : un
+          // lien vers les pages de connexion, celles-là mêmes que `auth`
+          // reconnaît à leur adresse ; ou un élément que la page nomme
+          // connexion ou inscription dans son `data-testid`, écrit pour ses
+          // propres tests et donc jamais traduit. Le libellé reste en repli.
+          //
+          // Les pages de connexion **de ChatGPT** seulement : son propre
+          // domaine, ou son serveur d'authentification. Un lien vers le
+          // `/signup` de n'importe quel site passait pour un bouton de
+          // connexion — et une réponse qui en citait un suffisait à déclarer
+          // déconnectée une session ouverte, à chaque appui.
+          const versConnexion = (a) => {
+            try {
+              const u = new URL(a.href, location.href);
+              if (/log-?out|sign-?out/i.test(u.pathname)) return false;
+              const serveurAuth = /^auth[^.]*\./.test(u.hostname)
+                && /(^|\.)(openai|chatgpt)\.com$/.test(u.hostname);
+              return serveurAuth || (u.origin === location.origin
+                && /^\/(auth\/)?(log-?in|sign-?up)\b/i.test(u.pathname));
+            } catch (e) { return false; }
+          };
+          // Au début du nom seulement : une offre d'abonnement affichée à qui
+          // est connecté peut fort bien contenir « signup » plus loin.
+          const nommeConnexion = (el) =>
+            /^(log-?in|sign-?up)\b/i.test(el.getAttribute('data-testid') || '');
           const invite = /^(se connecter|connexion|log ?in|sign ?up|s'inscrire|inscription)/i;
           let deconnecte = false;
           for (const el of document.querySelectorAll('button, a')) {
             if (el.getClientRects().length === 0) continue;
-            if (invite.test((el.innerText || '').trim())) { deconnecte = true; break; }
+            // Rien de ce qu'écrit la conversation : un message peut porter un
+            // lien ou un libellé « Sign up » sans que la page, elle, demande
+            // quoi que ce soit — la même exclusion que `generationEnCours`.
+            if (el.closest('article, [data-message-author-role]')) continue;
+            if ((el.tagName === 'A' && el.hasAttribute('href') && versConnexion(el))
+                || nommeConnexion(el)
+                || invite.test((el.innerText || '').trim())) { deconnecte = true; break; }
           }
 
           return {
@@ -635,7 +743,12 @@ extension RelaisPage {
             // La page porte-t-elle une conversation ? C'est ce qui décide, une
             // fois la dictée finie, s'il faut en ouvrir une neuve pour la
             // prochaine ou s'il suffit de vider la zone de saisie.
-            conversation: /^\/c\//.test(chemin),
+            //
+            // Dans un projet aussi — `/g/<projet>/c/<id>` —, qui est justement
+            // le point de départ que les réglages recommandent. Ne reconnaître
+            // que `/c/…` y laissait le fil ouvert d'une dictée à l'autre, et le
+            // contexte s'y accumulait.
+            conversation: /^(\/g\/[^/]+)?\/c\/[^/]+/.test(chemin),
             connecte: !auth && !deconnecte && (composeur || stop || micro),
             deconnecte,
             // La zone absente *et* l'arrêt présent : la page écoute.

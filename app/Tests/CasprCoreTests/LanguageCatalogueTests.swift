@@ -37,13 +37,14 @@ struct LanguageCatalogueTests {
         #expect(catalogue.languages.first?.code == "fr-FR")
     }
 
-    /// Un fichier d'une version antérieure portait `crisperWhisperBases`. Une
-    /// clé en trop ne doit rien casser : c'est ce qui permet d'en retirer une
-    /// du décodeur sans exiger que tous les fichiers suivent au même instant.
+    /// Un fichier d'une version antérieure portait la couverture de l'ancien
+    /// moteur local, sous une clé que le décodeur ne lit plus. Une clé en trop
+    /// ne doit rien casser : c'est ce qui permet d'en retirer une du décodeur
+    /// sans exiger que tous les fichiers suivent au même instant.
     @Test("Une clé inconnue est ignorée")
     func unknownKeysAreIgnored() throws {
         let json = #"""
-        {"crisperWhisperBases": ["fr"], "languages": [
+        {"retiredCoverage": ["fr"], "languages": [
           {"code": "fr-FR", "name": "Français", "region": "France", "flag": "🇫🇷",
            "frenchName": "français", "estimatedModelMegabytes": 65, "rank": 0}]}
         """#

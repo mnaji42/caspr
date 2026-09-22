@@ -23,8 +23,8 @@ import WebKit
 ///
 /// 1. **Rien n'entre dans `CasprCore`.** Pas de cas `.relais` dans
 ///    `EngineChoice` : il faudrait le traiter dans les réglages, le
-///    gestionnaire de sécurité, le corpus, les statistiques — autant d'endroits
-///    à défaire ensuite.
+///    gestionnaire de sécurité, les statistiques — autant d'endroits à défaire
+///    ensuite.
 /// 2. **Rien n'entre dans `Preferences`.** Les réglages du relais sont dans
 ///    `UserDefaults` sous le préfixe `relais.`, lus ici seulement.
 /// 3. **Rien n'est construit tant que ce n'est pas activé.** La WKWebView et la
@@ -1010,8 +1010,6 @@ final class Relais: ObservableObject {
 @MainActor
 struct RelaisEngine: SpeechEngine {
     var displayName: String { "ChatGPT (relais)" }
-
-    var identity: EngineIdentity { EngineIdentity(engine: "relais", model: "chatgpt-web") }
 
     func isReady() async -> Bool { Relais.partage.estCalibre }
 

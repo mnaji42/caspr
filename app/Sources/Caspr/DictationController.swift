@@ -86,20 +86,9 @@ final class DictationController {
     /// le veut. `nil` le reste du temps.
     private var preview: (any SpeechPreviewing)?
 
-    /// Dernier texte rendu par l'aperçu pour la dictée en cours, et le moteur
-    /// qui l'a produit.
-    ///
-    /// Les deux vont ensemble, et c'est le sujet d'un bug corrigé : le texte
-    /// était archivé sous « apple » quel que soit l'aperçu réellement employé,
-    /// donc une machine sans Apple Intelligence consignait du `SFSpeechRecognizer`
-    /// sous le nom du moteur de macOS 26. Un corpus qui se trompe de moteur ne
-    /// répond plus à la seule question pour laquelle il existe.
+    /// Dernier texte rendu par l'aperçu pour la dictée en cours : le recours
+    /// qui reste quand la passe finale échoue (cf. `pendingPreview`).
     private var previewText = ""
-    private var previewEngine: EngineChoice?
-
-    /// Seconde passe du moteur pour la collecte. Annulable : elle ne doit
-    /// jamais retarder une nouvelle dictée.
-    private var secondPassTask: Task<Void, Never>?
 
     let history = TranscriptionHistory()
 
@@ -107,15 +96,6 @@ final class DictationController {
     /// vive uniquement, et libéré dès qu'une insertion réussit ou que
     /// l'utilisateur y renonce.
     private var pendingAudio: [Float]?
-
-    /// Le fichier déjà archivé pour cet audio-là, s'il y en a un.
-    ///
-    /// Depuis que les échecs entrent dans le corpus, une dictée ratée puis
-    /// relancée produit deux lignes — ce qui est la vérité — mais elles
-    /// décrivent le **même** enregistrement. Sans cette mémoire, « Réessayer »
-    /// écrirait une seconde copie de plusieurs mégaoctets, sur la
-    /// fonctionnalité même qui existe pour ne rien perdre.
-    private var pendingAudioFile: String?
 
     /// Ce que l'aperçu en direct avait déjà écrit, quand la passe finale a
     /// échoué.
@@ -509,12 +489,7 @@ final class DictationController {
                 try recorder.start()
             }
             Log.info("enregistrement démarré")
-            // Une collecte encore en cours cède la place : le moteur ne traite
-            // qu'une requête à la fois, et la dictée qui commence est
-            // prioritaire sur l'archivage de la précédente.
-            secondPassTask?.cancel()
             previewText = ""
-            previewEngine = nil
             // Avant d'afficher la barre : elle grise le bouton Notes tant
             // qu'un sélecteur serait impossible, et lit l'état pour le savoir.
             // Échap est pris au passage (cf. `ajusterEchap`).
@@ -760,10 +735,8 @@ final class DictationController {
                 // configuré rend le vide aussi sûrement qu'un micro coupé, et
                 // dans ce cas jeter la dictée oblige à tout redire — ce que
                 // cette application s'interdit partout ailleurs.
-                // RELAIS — rien à conserver ni à archiver : il n'y a pas
-                // d'audio de notre côté, « Réessayer » rejouerait le vide, et
-                // le corpus n'a que faire d'une dictée qu'un service tiers
-                // n'a pas entendue.
+                // RELAIS — rien à conserver : il n'y a pas d'audio de notre
+                // côté, et « Réessayer » rejouerait le vide.
                 if !parRelais {
                     pendingAudio = samples
                     pendingPreview = previewText
@@ -779,12 +752,6 @@ final class DictationController {
                     : "Le moteur a répondu sans rien transcrire "
                       + "(\(Preferences.shared.engine.fullLabel)) — "
                       + "audio conservé, « Réessayer » ci-dessous.")
-                // Archivé comme le reste : c'est l'observation la plus utile
-                // du corpus, et c'était la seule qu'il jetait.
-                if !parRelais {                                    // RELAIS —
-                    collect(samples: samples, primary: result, mode: used,
-                            outcome: .empty)
-                }
                 return
             }
             if parRelais { Relais.partage.masquerBarre() }         // RELAIS —
@@ -810,7 +777,6 @@ final class DictationController {
             // tout ce qui reste de ce cycle. L'état appartient au suivant.
             guard numero == cycle else { return }
             pendingAudio = nil
-            pendingAudioFile = nil
             pendingPreview = nil
             // Ce moteur vient de prouver qu'il sait écrire ici : c'est sur lui
             // que le repli se rabattra si un autre choix échoue plus tard. La
@@ -818,8 +784,7 @@ final class DictationController {
             // un moteur qui répond « disponible » peut encore échouer à la
             // première phrase.
             // RELAIS — le repli ne doit rien apprendre d'un moteur qui n'est
-            // pas un choix de l'utilisateur, et le corpus ne collecte pas ce
-            // qu'un service tiers a transcrit.
+            // pas un choix de l'utilisateur.
             if !parRelais { EngineSafetyManager.shared.confirmWorking(writerChoice) }
             Log.info("transcrit en \(Int(result.latency.wallMs)) ms, \(text.count) caractères")
             // RELAIS — la transformation a échoué et c'est le brut qui vient
@@ -831,12 +796,6 @@ final class DictationController {
                 state = .failed("Transcription brute insérée — \(avertissement).")
             } else {
                 state = .idle
-            }
-            // Après l'insertion, jamais avant : la collecte ne doit rien
-            // coûter au temps que l'utilisateur attend.
-            if !parRelais {                                        // RELAIS —
-                collect(samples: samples, primary: result, mode: used,
-                        outcome: .inserted)
             }
         } catch is CancellationError {                             // RELAIS —
             // L'abandon a tout défait (cf. `abandonnerLeCycleRelais`).
@@ -872,23 +831,15 @@ final class DictationController {
                       + "dans la fenêtre du relais."
                     : error.localizedDescription)
                 : "\(error.localizedDescription) — audio conservé, « Réessayer » dans le menu.")
-            // Les autres moteurs tournent quand même : savoir qu'une version
-            // de macOS a écrit la phrase pendant que l'autre échouait est
-            // exactement ce qu'on vient chercher dans le corpus.
             // RELAIS — la barre reste, et s'agrandit : quand la lecture
             // échoue, le texte est encore dans la page, et c'est le seul moyen
             // de le récupérer. Elle redevient donc utilisable au clavier, pour
             // qu'un ⌘C y soit possible. Rien n'est rechargé, et rien ne se
             // collera à la dictée suivante — celle-ci vide la zone avant
             // d'écouter.
-            if parRelais {
-                if texteRecuperable {
-                    texteLaisseDansLaPage = true
-                    Relais.partage.ouvrirFenetre()
-                }
-            } else {
-                collect(samples: samples, primary: nil, mode: used,
-                        outcome: .failed, failure: error.localizedDescription)
+            if parRelais, texteRecuperable {
+                texteLaisseDansLaPage = true
+                Relais.partage.ouvrirFenetre()
             }
         }
     }
@@ -978,181 +929,6 @@ final class DictationController {
         Preferences.shared.destination = .caret
     }
 
-    // MARK: - Collecte
-
-    /// Archive la dictée, puis la complète avec les autres moteurs demandés.
-    ///
-    /// Le texte du moteur système est gratuit quand l'aperçu tournait : il a
-    /// été produit pendant que l'utilisateur parlait. Tout le reste demande
-    /// une passe supplémentaire, lancée **après** insertion.
-    /// - Parameters:
-    ///   - primary: ce que le moteur d'écriture a rendu, ou `nil` s'il a
-    ///     échoué avant de rendre quoi que ce soit.
-    ///   - outcome: l'issue réelle. Un échec s'archive comme un succès, avec
-    ///     les autres moteurs lancés en seconde passe — c'est précisément là
-    ///     que la comparaison devient tranchante.
-    private func collect(samples: [Float], primary: TranscriptionResult?,
-                         mode used: TranscriptionMode,
-                         outcome: CorpusEntry.Outcome,
-                         failure: String? = nil) {
-        let prefs = Preferences.shared
-        guard prefs.corpusEnabled else { return }
-
-        let id = Corpus.makeIdentifier()
-        // Le moteur qui a **réellement** écrit, pas celui qui est coché : un
-        // repli silencieux archivé sous le nom du moteur demandé rendrait le
-        // corpus menteur sur la seule chose qu'il sert à mesurer.
-        let choice = writerChoice
-        var entry = CorpusEntry(
-            id: id,
-            date: Date(),
-            durationSeconds: Double(samples.count) / AudioRecorder.targetSampleRate,
-            // Code court ici, locale complète à côté. Cf. `CorpusEntry`.
-            language: Locale(identifier: language).language.languageCode?.identifier
-                ?? language,
-            locale: language,
-            appVersion: UpdateChecker.currentVersion,
-            destination: target.isLocked ? "notes" : "curseur",
-            lexicon: choice.honoursLexicon ? lexicon : nil,
-            transcriptions: [],
-            storedOutcome: outcome,
-            failure: failure)
-
-        if prefs.corpusKeepsAudio {
-            // Réutilisé quand l'utilisateur relance la même dictée depuis le
-            // menu : une tentative ratée puis réussie fait deux lignes, ce qui
-            // est la vérité, mais elles décrivent le **même** audio. L'écrire
-            // deux fois coûterait deux mégaoctets par minute pour un doublon
-            // exact, sur la fonctionnalité même qui existe pour ne rien perdre.
-            if let existing = pendingAudioFile {
-                entry.audioFile = existing
-            } else {
-                entry.audioFile = Corpus.shared.writeAudio(samples, id: id)
-                if outcome != .inserted { pendingAudioFile = entry.audioFile }
-            }
-        }
-
-        // Figé ici, et pas à l'archivage : l'archivage a lieu plusieurs
-        // centaines de millisecondes plus tard, et si l'utilisateur réenchaîne
-        // une dictée d'ici là, `previewText` a déjà été réinitialisé puis
-        // rempli par la nouvelle. Constaté dans le corpus — une entrée portait
-        // comme texte Apple le début de la dictée suivante. À ce point-ci la
-        // reconnaissance système est finalisée depuis longtemps : elle l'était
-        // avant même que la transcription ne rende la main.
-        //
-        // Le moteur de l'aperçu est figé avec son texte, pour la même raison et
-        // parce qu'il n'est pas devinable : il dépend du moteur d'écriture et
-        // de ce que la machine sait faire.
-        let preview = previewText
-        let previewEngine = previewEngine
-        let pending = prefs.enginesToCollect().subtracting([choice])
-        secondPassTask = Task { [weak self] in
-            await self?.completeAndArchive(entry, samples: samples,
-                                           primary: primary, insertedMode: used,
-                                           writer: choice, pending: pending,
-                                           preview: preview,
-                                           previewEngine: previewEngine)
-        }
-    }
-
-    /// Complète l'archive avec ce qui manque, puis écrit la ligne.
-    ///
-    /// Chaque moteur supplémentaire occupe la machine : ces passes sont donc
-    /// lancées après insertion, et abandonnées dès qu'une nouvelle dictée
-    /// démarre. Ce qui n'a pas été produit est **consigné** dans `skipped` —
-    /// une transcription manquante ne doit jamais être confondue avec un
-    /// moteur qu'on n'avait pas coché.
-    private func completeAndArchive(_ entry: CorpusEntry, samples: [Float],
-                                    primary: TranscriptionResult?,
-                                    insertedMode: TranscriptionMode,
-                                    writer choice: EngineChoice,
-                                    pending: Set<EngineChoice>,
-                                    preview: String,
-                                    previewEngine: EngineChoice?) async {
-        var entry = entry
-        let identity = await (engine(for: choice)?.identity
-                              ?? EngineIdentity(engine: choice.rawValue, model: nil))
-
-        // Rien à consigner quand le moteur a échoué avant de rendre un
-        // résultat : l'entrée n'aura que les transcriptions des autres, et
-        // `failure` dit pourquoi celle-ci manque.
-        if let primary {
-            entry.transcriptions.append(CorpusTranscription(
-                engine: identity.engine, model: identity.model,
-                mode: choice.hasModes ? insertedMode.rawValue : nil,
-                text: primary.text, latencyMs: primary.latency.wallMs,
-                // Une chaîne vide n'a rien inséré, et le prétendre fausserait
-                // toute analyse qui cherche « ce que l'utilisateur a vu ».
-                inserted: entry.outcome == .inserted))
-        }
-
-        // Le second mode du moteur qui vient d'écrire, quand il en a deux.
-        var remaining: [(EngineChoice, TranscriptionMode?)] = []
-        if choice.hasModes {
-            let other: TranscriptionMode = insertedMode == .intended ? .verbatim : .intended
-            remaining.append((choice, other))
-        }
-        for engine in pending.sorted(by: { $0.rawValue < $1.rawValue }) {
-            remaining.append((engine, engine.hasModes ? .intended : nil))
-        }
-
-        // L'aperçu a déjà transcrit avec l'un des moteurs de macOS : on ne le
-        // refait pas tourner pour rien. Lequel, on ne le devine pas — il suit
-        // le moteur d'écriture et ce que la machine sait faire — d'où
-        // `previewEngine`, figé avec le texte à la source.
-        if !preview.isEmpty, let previewEngine,
-           let index = remaining.firstIndex(where: { $0.0 == previewEngine }) {
-            // La locale, pas `nil`. Ce raccourci écrivait « apple » sans rien
-            // d'autre, alors que la seconde passe, elle, enregistre bien
-            // `fr-FR` : deux lignes du même moteur n'étaient donc pas
-            // comparables selon qu'un aperçu avait tourné ou non. Or c'est
-            // exactement le champ dont une analyse ultérieure a besoin —
-            // comparer deux moteurs suppose de savoir sur quelle langue
-            // chaque texte a été produit.
-            let identity = await engine(for: previewEngine)?.identity
-            entry.transcriptions.append(CorpusTranscription(
-                engine: identity?.engine ?? previewEngine.rawValue,
-                model: identity?.model, mode: nil,
-                text: preview, latencyMs: nil, inserted: false))
-            remaining.remove(at: index)
-        }
-
-        for (choice, mode) in remaining {
-            try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled, state == .idle else {
-                entry.skipped.append("\(choice.rawValue): dictée enchaînée")
-                continue
-            }
-            // Demandé avant d'essayer, et mesuré : `legacyEngine` existe
-            // toujours, même là où la Dictée n'a aucun modèle. Sans ce test on
-            // apprendrait l'indisponibilité par une exception, après avoir fait
-            // attendre la machine — et la raison archivée serait un message
-            // d'erreur au lieu du fait.
-            guard choice.isAvailable(for: entry.requestLocale),
-                  let engine = engine(for: choice) else {
-                entry.skipped.append("\(choice.rawValue): indisponible")
-                continue
-            }
-            do {
-                let result = try await engine.transcribe(TranscriptionRequest(
-                    samples: samples, mode: mode ?? .intended,
-                    language: entry.requestLocale,
-                    lexicon: choice.honoursLexicon ? entry.lexicon : nil))
-                let identity = await engine.identity
-                entry.transcriptions.append(CorpusTranscription(
-                    engine: identity.engine, model: identity.model,
-                    mode: mode?.rawValue, text: result.text,
-                    latencyMs: result.latency.wallMs, inserted: false))
-            } catch {
-                NSLog("caspr: corpus — %@ a échoué : %@", choice.rawValue,
-                      error.localizedDescription)
-                entry.skipped.append("\(choice.rawValue): \(error.localizedDescription)")
-            }
-        }
-
-        Corpus.shared.append(entry)
-    }
-
     // MARK: - Aperçu en direct
 
     /// Branche l'aperçu sur le flux micro, si le système et l'utilisateur le
@@ -1175,8 +951,8 @@ final class DictationController {
                 if previewText.isEmpty, !text.isEmpty {
                     Log.info("aperçu : premier texte reçu")
                 }
-                // Retenu pour la collecte : c'est la transcription d'un moteur
-                // de macOS sur exactement le même audio.
+                // Retenu pour le recours : si la passe finale échoue, c'est
+                // un texte de macOS sur exactement le même audio.
                 self.previewText = text
                 self.overlay.setPreviewText(text)
             },
@@ -1188,14 +964,13 @@ final class DictationController {
             overlay.setPreviewNotice("aperçu indisponible sur cette machine")
             return
         }
-        self.preview = made.preview
-        previewEngine = made.engine
-        recorder.onBuffer = { [weak preview = made.preview] buffer in
+        self.preview = made
+        recorder.onBuffer = { [weak preview = made] buffer in
             preview?.append(buffer)
         }
         // Détaché : le premier lancement peut télécharger le modèle système,
         // et la dictée ne doit pas attendre.
-        Task { await made.preview.start(language: language) }
+        Task { await made.start(language: language) }
     }
 
     private func stopPreview() {
@@ -1270,7 +1045,6 @@ final class DictationController {
             }
             history.add(text, mode: mode)
             pendingAudio = nil
-            pendingAudioFile = nil
             pendingPreview = nil
             // Une dictée a pu commencer pendant l'insertion : son état n'est
             // pas le nôtre.
@@ -1282,7 +1056,6 @@ final class DictationController {
     func discardPending() {
         guard isAtRest else { return }
         pendingAudio = nil
-        pendingAudioFile = nil
         pendingPreview = nil
         state = .idle
     }

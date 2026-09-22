@@ -36,13 +36,10 @@ final class Preferences {
         static let noteFile = "caspr.notes.file"
         static let destination = "caspr.dictation.destination"
         static let livePreview = "caspr.preview.live"
-        static let corpus = "caspr.corpus.enabled"
-        static let corpusAudio = "caspr.corpus.audio"
         static let engine = "caspr.engine"              // hérité, migré vers apple
         static let finalAppleTechnology = "caspr.engine.apple"
         static let liveTechnology = "caspr.engine.live"
         static let shortcut = "caspr.shortcut"
-        static let corpusEngines = "caspr.corpus.engines"
         static let onboarded = "caspr.onboarded"
         /// Le nom de l'étape, et non plus son numéro — cf. `onboardingScreen`.
         static let onboardingScreen = "caspr.onboarding.screen"
@@ -287,8 +284,8 @@ final class Preferences {
 
     /// Nom historique de la langue principale.
     ///
-    /// Conservé parce que tout ce qui transcrit le lit — moteurs, aperçu,
-    /// corpus — et que ces appels ne gagneraient rien à être réécrits : « la
+    /// Conservé parce que tout ce qui transcrit le lit — moteurs, aperçu — et
+    /// que ces appels ne gagneraient rien à être réécrits : « la
     /// langue » y désigne bien la langue courante. Il rend une locale complète
     /// (`fr-FR`) et non un code court (`fr`) : `SpeechTranscriber` et
     /// `SFSpeechRecognizer` ont leurs modèles par région.
@@ -460,59 +457,13 @@ final class Preferences {
         didSet { defaults.set(lastValidEngine.rawValue, forKey: Key.lastValidEngine) }
     }
 
-    /// Moteurs à faire tourner **en plus** pour la collecte, après insertion.
-    ///
-    /// C'est ce qui permet de comparer sans changer d'outil : on dicte avec
-    /// une version de macOS, on archive aussi ce qu'aurait écrit l'autre.
-    var corpusEngines: Set<EngineChoice> {
-        didSet {
-            defaults.set(corpusEngines.map(\.rawValue), forKey: Key.corpusEngines)
-        }
-    }
-
-    /// Moteurs qui produiront une transcription pour cette dictée.
-    ///
-    /// Filtrés sur ce que la machine sait faire, dans la langue en cours. Sans
-    /// ce filtre, une case cochée pour un moteur que cette machine n'aura
-    /// jamais écrivait `skipped: "apple: indisponible"` à **chaque** dictée,
-    /// indéfiniment. Or `skipped` sert à repérer l'accident — une passe
-    /// abandonnée parce qu'on a réenchaîné, un moteur qui a échoué — et une
-    /// ligne qui se répète toujours à l'identique le noie.
-    ///
-    /// Le moteur d'écriture, lui, y figure quoi qu'il arrive : c'est lui qui
-    /// vient d'écrire, sa transcription existe déjà.
-    func enginesToCollect() -> Set<EngineChoice> {
-        guard corpusEnabled else { return [engine] }
-        return corpusEngines
-            .filter { $0.isAvailable(for: language) }
-            .union([engine])
-    }
-
-    // MARK: - Collecte
-
-    /// Archive chaque dictée avec les textes des trois moteurs.
-    ///
-    /// Coûte une seconde passe du moteur par dictée, lancée après insertion et
-    /// abandonnée si on réenchaîne — la latence de dictée ne se négocie pas.
-    var corpusEnabled: Bool {
-        didSet { defaults.set(corpusEnabled, forKey: Key.corpus) }
-    }
-
-    /// Conserve aussi l'audio. Séparé de la collecte parce que le coût en
-    /// place n'a rien à voir : ~2 Mo par minute contre quelques kilo-octets
-    /// de texte. Faux par défaut.
-    var corpusKeepsAudio: Bool {
-        didSet { defaults.set(corpusKeepsAudio, forKey: Key.corpusAudio) }
-    }
-
     private init() {
         // Reprend-on une installation antérieure au multi-langues ?
         //
-        // La question n'est pas rhétorique : deux défauts changent avec cette
-        // version, et les changer sous les pieds de quelqu'un qui utilise déjà
-        // Caspr modifierait la qualité de ses transcriptions au milieu d'une
-        // collecte en cours — exactement ce que le corpus existe pour mesurer.
-        // On ne peut pas se contenter de l'absence des nouvelles clés : une
+        // La question n'est pas rhétorique : des défauts ont changé pour les
+        // installations neuves, et les changer sous les pieds de quelqu'un qui
+        // utilise déjà Caspr modifierait ses transcriptions sans qu'il ait rien
+        // touché. On ne peut pas se contenter de l'absence des nouvelles clés : une
         // installation neuve ne les a pas non plus. C'est la présence des
         // **anciennes** qui tranche.
         let isExistingInstall = defaults.object(forKey: Key.migratedSchema) == nil
@@ -595,15 +546,9 @@ final class Preferences {
         destination = Destination(rawValue: defaults.string(forKey: Key.destination) ?? "")
             ?? .caret
         livePreviewEnabled = defaults.object(forKey: Key.livePreview) as? Bool ?? true
-        // Fermée par défaut — rien n'est archivé sans un geste explicite.
-        // Mais une fois ouverte, complète : conserver l'audio et transcrire
-        // avec tous les moteurs, parce qu'une collecte amputée ne répond pas
-        // à la question qu'on se pose en l'activant.
         onboarded = defaults.bool(forKey: Key.onboarded)
         onboardingScreen = defaults.string(forKey: Key.onboardingScreen)
         checksForUpdates = defaults.bool(forKey: Key.updateCheck)
-        corpusEnabled = defaults.bool(forKey: Key.corpus)
-        corpusKeepsAudio = defaults.object(forKey: Key.corpusAudio) as? Bool ?? true
         if let stored = defaults.dictionary(forKey: Key.shortcut),
            let code = stored["keyCode"] as? Int,
            let modifiers = stored["modifiers"] as? Int,
@@ -633,10 +578,6 @@ final class Preferences {
             ?? resolvedApple
 
         ignoredUpdateVersion = defaults.string(forKey: Key.ignoredUpdate)
-
-        corpusEngines = defaults.stringArray(forKey: Key.corpusEngines)
-            .map { Set($0.compactMap(EngineChoice.init(rawValue:))) }
-            ?? Set(EngineChoice.allCases)
     }
 
     /// Point de départ quand l'utilisateur passe à sa propre liste : le même

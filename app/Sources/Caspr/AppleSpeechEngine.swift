@@ -34,12 +34,6 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
     /// Locale réellement retenue, renseignée après la première transcription.
     private var resolvedLocale: String?
 
-    var identity: EngineIdentity {
-        get async {
-            EngineIdentity(engine: "apple", model: resolvedLocale)
-        }
-    }
-
     var displayName: String {
         get async { "\(EngineChoice.apple.fullLabel) · \(resolvedLocale ?? "—")" }
     }
@@ -101,7 +95,7 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
         let started = Date()
         let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
 
-        let collected = Task { () -> String in
+        let gathered = Task { () -> String in
             var text = ""
             for try await result in transcriber.results where result.isFinal {
                 text += String(result.text.characters)
@@ -120,9 +114,9 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
 
         // ## Ce `try?` valait un bug muet, et il l'a produit
         //
-        // La collecte échoue quand l'analyseur n'a pas de modèle à faire
-        // tourner — le cas d'une machine en macOS 26 sans Apple Intelligence.
-        // L'erreur était avalée, la chaîne vide rendue, et
+        // La lecture des résultats échoue quand l'analyseur n'a pas de modèle
+        // à faire tourner — le cas d'une machine en macOS 26 sans Apple
+        // Intelligence. L'erreur était avalée, la chaîne vide rendue, et
         // `TranscriptionResult` s'annonçait comme un **succès**. Le contrôleur
         // n'avait donc rien d'autre à dire que « Rien n'a été entendu », ce qui
         // désigne le micro alors que la panne est dans le moteur. Mesuré sur la
@@ -132,7 +126,7 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
         // Un moteur qui ne peut pas travailler doit le dire. Le silence est
         // réservé au vrai silence : un flux qui se termine sans résultat rend
         // une chaîne vide sans lever, et ce cas-là reste traité comme avant.
-        let text = try await collected.value
+        let text = try await gathered.value
         let elapsed = Date().timeIntervalSince(started) * 1000
 
         return TranscriptionResult(

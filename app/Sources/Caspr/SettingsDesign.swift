@@ -27,11 +27,12 @@ enum Style {
     /// turquoise vif tombe sous le seuil de contraste lisible.
     static let onAccent = Color(hex: 0x042F2E)
 
-    /// L'ambre de la collecte, sur la barre d'enregistrement.
-    static let collecting = Color(hex: 0xFB923C)
+    /// L'orange de ce qui reste à faire : une autorisation pas encore
+    /// accordée, un état système à corriger.
+    static let pending = Color(hex: 0xFB923C)
     /// L'ambre des avertissements, dans les réglages. Distinct du précédent :
-    /// « ceci est archivé » et « attention » ne disent pas la même chose et ne
-    /// doivent pas se confondre d'un coup d'œil.
+    /// « il reste une étape » et « attention » ne disent pas la même chose et
+    /// ne doivent pas se confondre d'un coup d'œil.
     static let warning = Color(hex: 0xF59E0B)
     /// Le rouge du **texte** — `--danger`. Clair, pour rester lisible sur le
     /// fond sombre.

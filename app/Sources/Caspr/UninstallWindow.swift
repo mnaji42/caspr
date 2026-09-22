@@ -89,7 +89,7 @@ private struct UninstallView: View {
             Card {
                 // Seulement ce qui est réellement là. Les absents étaient
                 // listés puis grisés : on proposait de retirer un modèle jamais
-                // téléchargé, un corpus jamais écrit. Une case morte n'informe
+                // téléchargé, un service jamais installé. Une case morte n'informe
                 // pas — elle fait douter de ce qu'on a installé, à l'instant
                 // précis où l'on veut être sûr de ce qu'on efface.
                 let present = Uninstall.Item.allCases.filter(Uninstall.isPresent)
@@ -106,7 +106,7 @@ private struct UninstallView: View {
                             .foregroundStyle(.secondary)
                             .padding(.leading, 20)
 
-                        Note(item.explanation, warning: item.irreversible && selected.contains(item))
+                        Note(item.explanation)
                             .padding(.leading, 20)
                     }
 
@@ -118,17 +118,6 @@ private struct UninstallView: View {
                 // Tout est déjà parti, ou rien n'a jamais été installé.
                 if present.isEmpty {
                     Note("Rien d'autre à retirer sur cette machine.")
-                }
-            }
-
-            if selected.contains(.corpus), Corpus.shared.statistics().count > 0 {
-                SectionLabel("attention")
-                Card {
-                    Note("Vous avez coché **\(Corpus.shared.statistics().count) "
-                         + "dictées archivées**. Elles vont à la corbeille, "
-                         + "donc elles sont récupérables tant que vous ne "
-                         + "l'avez pas vidée — mais rien ne permettrait de les "
-                         + "reconstituer ensuite.", warning: true)
                 }
             }
 
@@ -158,15 +147,6 @@ private struct UninstallView: View {
                 }
             }
 
-            if !selected.contains(.corpus), Corpus.shared.statistics().count > 0 {
-                SectionLabel("ce qui reste")
-                Card {
-                    Note("Vos dictées archivées sont toujours là, dans "
-                         + "`~/Library/Application Support/Caspr`. "
-                         + "Réinstaller Caspr les retrouvera.")
-                }
-            }
-
             Note("Merci de l'avoir essayé.")
         }
     }
@@ -191,10 +171,10 @@ private struct UninstallView: View {
                     }
                 }
                     .buttonStyle(.borderedProminent)
-                    // Rouge, et non l'ambre de la collecte : « ceci est
-                    // archivé » et « ceci part » ne sont pas le même registre,
-                    // et c'est le seul bouton de l'application dont l'effet ne
-                    // se défait pas.
+                    // Rouge, et non l'ambre des avertissements : « attention »
+                    // et « ceci part » ne sont pas le même registre, et c'est
+                    // le seul bouton de l'application dont l'effet ne se
+                    // défait pas.
                     .tint(Style.dangerSurface)
             } else {
                 Button("Quitter Caspr") { NSApp.terminate(nil) }

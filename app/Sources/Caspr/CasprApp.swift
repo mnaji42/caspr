@@ -539,8 +539,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         // Le menu s'arrête aux gestes du quotidien. Tout ce qui se règle une
-        // fois puis s'oublie — aperçu, collecte, sons, historique, vocabulaire
-        // — vit dans les Réglages : un menu de barre qu'on doit parcourir pour
+        // fois puis s'oublie — aperçu, sons, historique, langues — vit dans
+        // les Réglages : un menu de barre qu'on doit parcourir pour
         // retrouver une case à cocher a cessé d'être un menu.
         if !Permissions.allGranted {
             let permsItem = NSMenuItem(
@@ -723,23 +723,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 struct CasprApp {
     static func main() {
-        // Le mode banc court-circuite l'interface : on transcrit, on écrit, on
-        // rend la main. Il est là parce que les moteurs de macOS ne sont
-        // mesurables que depuis une identité de code autorisée — cf.
-        // `CorpusBatch`.
-        if CorpusBatch.estDemande {
-            // On laisse AppKit piloter la boucle d'exécution, et on pose le
-            // travail dessus. La version précédente faisait tourner
-            // `RunLoop.current` depuis l'acteur principal tout en y planifiant
-            // une tâche : interblocage, et SIGABRT dès la première dictée. Les
-            // moteurs de macOS ont besoin d'une vraie boucle vivante — c'est
-            // par elle que le framework Speech livre ses résultats.
-            let app = NSApplication.shared
-            app.setActivationPolicy(.prohibited)
-            Task { @MainActor in exit(await CorpusBatch.run()) }
-            app.run()
-            exit(0)
-        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate

@@ -77,8 +77,8 @@ private struct UpdateNotificationView: View {
             Text("Vous utilisez la \(UpdateChecker.buildLabel). Tout se passe "
                  + "ici : le téléchargement, la vérification que la nouvelle "
                  + "version porte la même signature que celle-ci, le "
-                 + "remplacement et le redémarrage. Vos réglages, votre corpus "
-                 + "et vos autorisations restent en place.")
+                 + "remplacement et le redémarrage. Vos réglages, votre "
+                 + "historique et vos autorisations restent en place.")
                 .font(.system(size: 12))
                 .foregroundStyle(Style.textSecondary)
                 .lineSpacing(2)

@@ -204,10 +204,6 @@ final class LegacySpeechEngine: SpeechEngine, @unchecked Sendable {
 
     // MARK: - SpeechEngine
 
-    var identity: EngineIdentity {
-        get async { EngineIdentity(engine: "apple-legacy", model: resolvedLocale) }
-    }
-
     var displayName: String {
         get async { "\(EngineChoice.appleLegacy.fullLabel) · \(resolvedLocale ?? "—")" }
     }

@@ -77,13 +77,10 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     /// « Cannot use modules with unallocated locales […] This will be an error
     /// in a future release ».
     ///
-    /// Correction d'une attribution erronée : plusieurs entrées du corpus au
-    /// texte système très court avaient été mises sur le compte de cette
-    /// omission. Vérification faite, ces textes n'étaient pas tronqués mais
-    /// **étrangers** — des fragments d'autres dictées, dus à une course sur
-    /// `previewText`, corrigée ailleurs. La réservation reste nécessaire
-    /// parce que le framework la réclame, pas parce qu'on lui a mesuré cet
-    /// effet-là.
+    /// Elle reste nécessaire parce que le framework la réclame, pas parce
+    /// qu'on lui a mesuré un effet : des textes d'aperçu très courts lui
+    /// avaient été imputés, et c'était en fait une course sur `previewText`,
+    /// corrigée ailleurs.
     ///
     /// Le nombre de réservations est plafonné par le système
     /// (`maximumReservedLocales`) : on libère les autres avant de prendre
@@ -306,24 +303,17 @@ enum SpeechPreview {
     /// chaque mot en direct. Deux implémentations du même protocole règlent
     /// ça sans que le contrôleur de dictée en sache quoi que ce soit : il
     /// demande un aperçu, il en reçoit un.
-    ///
-    /// Le moteur retenu est **rendu avec l'aperçu**, et non deviné par
-    /// l'appelant. C'est ce que la collecte archive : le texte de l'aperçu
-    /// était consigné sous « apple » quoi qu'il arrive, si bien qu'une machine
-    /// sans Apple Intelligence enregistrait du `SFSpeechRecognizer` sous le nom
-    /// de l'autre moteur — exactement la distinction que le corpus existe pour
-    /// établir.
     @MainActor
     static func make(using wanted: EngineChoice, for language: String,
                      onText: @escaping @MainActor @Sendable (String) -> Void,
                      onFailure: @escaping @MainActor @Sendable (String) -> Void)
-    -> (engine: EngineChoice, preview: any SpeechPreviewing)? {
+    -> (any SpeechPreviewing)? {
         switch engine(using: wanted, for: language) {
         case .apple:
             guard #available(macOS 26.0, *) else { return nil }
-            return (.apple, LivePreview(onText: onText, onFailure: onFailure))
+            return LivePreview(onText: onText, onFailure: onFailure)
         case .appleLegacy:
-            return (.appleLegacy, LegacyLivePreview(onText: onText, onFailure: onFailure))
+            return LegacyLivePreview(onText: onText, onFailure: onFailure)
         default:
             return nil
         }

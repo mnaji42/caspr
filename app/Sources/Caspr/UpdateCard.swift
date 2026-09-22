@@ -387,7 +387,7 @@ struct UpdateCard: View {
             Note("Tout se passe ici : le téléchargement, la vérification que la "
                  + "nouvelle version porte bien la même signature que celle-ci, "
                  + "le remplacement et le redémarrage. Vos réglages, votre "
-                 + "corpus, le modèle et les autorisations restent en place.")
+                 + "historique et les autorisations restent en place.")
         }
     }
 

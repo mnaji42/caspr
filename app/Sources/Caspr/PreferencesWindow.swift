@@ -38,11 +38,9 @@ struct PreferencesView: View {
     /// vaut pour toute l'application*, *comment on déclenche*, *avec quoi ça
     /// transcrit*, puis ce qui a été dicté.
     ///
-    /// Il y en avait six. Le Lexique ne réglait que l'ancien moteur local — les deux
-    /// moteurs de macOS l'ignorent, c'est mesuré — et la Collecte archivait des
-    /// dictées pour départager des moteurs qui ne sont plus proposés. Tous deux
-    /// sont partis avec lui : la migration du lancement efface leurs réglages,
-    /// et un onglet qui les réécrirait serait défait au lancement suivant.
+    /// Il y en avait six. Les deux autres ne servaient que l'ancien moteur
+    /// local — l'un le réglait, l'autre le comparait aux moteurs de macOS — et
+    /// sont partis avec lui : la migration du lancement efface leurs réglages.
     enum Tab: String, CaseIterable {
         case general, recording, engine, history
 

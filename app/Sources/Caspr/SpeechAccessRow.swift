@@ -16,8 +16,8 @@ import SwiftUI
 ///
 /// Elle apparaît donc **à côté du moteur qui la consomme**, et seulement quand
 /// ce moteur est réellement en jeu. `PermissionsMonitor.requiresSpeech` en juge
-/// sur trois usages possibles : la Dictée écrit, elle tourne pour la collecte,
-/// ou c'est elle qui assure l'aperçu en direct.
+/// sur deux usages possibles : la Dictée écrit, ou c'est elle qui assure
+/// l'aperçu en direct.
 struct SpeechAccessRow: View {
     /// Explique à quoi sert le droit. Vrai à l'accueil ; faux dans les
     /// Réglages, où l'on vient réparer, pas lire un exposé.

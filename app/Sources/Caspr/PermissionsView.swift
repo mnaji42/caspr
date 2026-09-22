@@ -47,16 +47,11 @@ final class PermissionsMonitor {
 
     /// Le droit de reconnaissance vocale est-il en jeu ici ?
     ///
-    /// Trois façons de faire tourner la Dictée, et il suffit d'une : elle
-    /// écrit, la collecte l'exécute après insertion, ou c'est elle qui assure
-    /// l'aperçu en direct. La version précédente ne voyait que la première et
-    /// une approximation de la troisième — quelqu'un qui écrivait avec
-    /// Apple Intelligence tout en archivant avec la Dictée n'avait jamais
-    /// l'occasion d'accorder le droit dont sa collecte dépendait.
+    /// Deux façons de faire tourner la Dictée, et il suffit d'une : elle
+    /// écrit, ou c'est elle qui assure l'aperçu en direct.
     var requiresSpeech: Bool {
         let prefs = Preferences.shared
-        // Contient toujours le moteur d'écriture, plus ceux de la collecte.
-        if prefs.enginesToCollect().contains(.appleLegacy) { return true }
+        if prefs.engine == .appleLegacy { return true }
         // La permission de reconnaissance vocale suit **le moteur de l'aperçu**,
         // qui est celui qui l'utilise. La déduire du moteur d'écriture la
         // demandait au mauvais moment : réglé sur Dictée pour l'aperçu et sur
@@ -212,7 +207,7 @@ struct StatusRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .foregroundStyle(ok ? Style.accent : Style.collecting)
+                .foregroundStyle(ok ? Style.accent : Style.pending)
                 .font(.system(size: 15))
             Text(label).font(.system(size: 13, weight: .medium))
             Text(detail).font(.system(size: 12)).foregroundStyle(.secondary)

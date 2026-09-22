@@ -26,11 +26,11 @@ import CasprCore
 ///
 /// **Rien n'est effacé définitivement : tout part à la corbeille.** C'est la
 /// convention de macOS, et surtout c'est ce qui sépare une erreur d'un
-/// désastre — le corpus représente des centaines de dictées réelles que rien
-/// ne permet de reconstituer. Un `rm -rf` mal coché serait irréversible ;
-/// une corbeille se rouvre.
-/// `@MainActor` parce que tout ce que ce type interroge l'est — le corpus,
-/// les autorisations, l'historique — et qu'il n'est appelé que par une
+/// désastre. Un `rm -rf` mal coché serait irréversible ; une corbeille se
+/// rouvre.
+///
+/// `@MainActor` parce que tout ce que ce type interroge l'est — les
+/// autorisations, l'historique — et qu'il n'est appelé que par une
 /// fenêtre. Les lectures de disque qu'il fait sont courtes et ponctuelles :
 /// les sortir du fil principal compliquerait sans rien gagner.
 @MainActor
@@ -44,7 +44,6 @@ enum Uninstall {
         case service
         case engine
         case logs
-        case corpus
         case model
 
         var id: String { rawValue }
@@ -56,7 +55,6 @@ enum Uninstall {
             case .service: "Ancien moteur local — service"
             case .engine: "Ancien moteur local — Python et ses bibliothèques"
             case .logs: "Journaux et fichiers temporaires"
-            case .corpus: "Dictées archivées"
             case .model: "Ancien moteur local — modèle"
             }
         }
@@ -85,10 +83,6 @@ enum Uninstall {
                     + "d'un gigaoctet."
             case .logs:
                 "Sans valeur une fois l'application partie."
-            case .corpus:
-                "Vos dictées et leur audio. **Rien ne permet de les "
-                    + "reconstituer.** Décochez si vous comptez réinstaller, "
-                    + "ou si vous voulez les garder pour vous."
             case .model:
                 "Les poids que l'ancien moteur local avait téléchargés depuis "
                     + "Hugging Face. Seuls les siens : les autres modèles du "
@@ -100,21 +94,16 @@ enum Uninstall {
         /// Coché d'avance ?
         ///
         /// Ce qui ne sert plus à rien, oui : le service et les poids de
-        /// l'ancien moteur local ne servent à aucune version de Caspr. Le
-        /// corpus, non — il est irremplaçable, et un désinstalleur qui coche
-        /// par défaut la seule chose qu'on ne peut pas récupérer est un piège.
-        /// L'environnement Python non plus : sur une machine de développement,
-        /// il vit dans le dépôt de travail, où l'on s'en sert encore pour
+        /// l'ancien moteur local ne servent à aucune version de Caspr.
+        /// L'environnement Python, non : sur une machine de développement, il
+        /// vit dans le dépôt de travail, où l'on s'en sert encore pour
         /// relancer l'ancien moteur à la main.
         var checkedByDefault: Bool {
             switch self {
             case .settings, .permissions, .service, .logs, .model: true
-            case .engine, .corpus: false
+            case .engine: false
             }
         }
-
-        /// Les avertit-on plus fort ?
-        var irreversible: Bool { self == .corpus }
     }
 
     // MARK: - Emplacements
@@ -190,20 +179,15 @@ enum Uninstall {
     private static var preferencesFile: URL {
         home.appending(path: "Library/Preferences/\(bundleIdentifier).plist")
     }
-    /// Contient le corpus, et chez qui l'avait installé la déclaration de
-    /// l'ancien moteur local : c'est tout ce que Caspr garde à long terme.
+    /// Ne contient plus, chez qui l'avait installé, que la déclaration et
+    /// l'environnement de l'ancien moteur local.
     ///
-    /// Il n'est jamais retiré d'un bloc. Ce qu'il contient appartient à trois
-    /// cases différentes, et les jeter ensemble a déjà eu une conséquence
-    /// concrète : `engine.json` ne partait qu'avec les dictées archivées,
-    /// c'est-à-dire seulement si l'on cochait la seule case que l'interface
-    /// laisse décochée exprès. Le dossier lui-même s'en va à la fin, s'il ne
-    /// reste rien dedans.
+    /// Il n'est jamais retiré d'un bloc : ce qu'il contient appartient à des
+    /// cases différentes, et un fichier que cette version ne connaît pas n'a
+    /// pas à partir sans qu'on l'ait coché. Le dossier lui-même s'en va à la
+    /// fin, s'il ne reste rien dedans.
     private static var supportDirectory: URL {
         LegacyCleanup.supportDirectory(home: home)
-    }
-    private static var corpusDirectory: URL {
-        supportDirectory.appending(path: "corpus")
     }
 
     /// La déclaration que l'installation de l'ancien moteur local laissait :
@@ -269,9 +253,7 @@ enum Uninstall {
 
         // Dépôt de travail d'un développeur : seul l'environnement s'en va.
         // Remonter d'un cran et jeter le dossier parent effacerait le code
-        // source et tout ce qui n'y est pas commité — et depuis que le moteur
-        // peut s'installer dans « Application Support », ce parent-là serait
-        // le dossier qui contient le corpus.
+        // source et tout ce qui n'y est pas commité.
         let venv = projectURL.appending(path: ".venv")
         if fm.fileExists(atPath: venv.path) {
             found.append((venv, "bibliothèques Python du moteur"))
@@ -353,10 +335,6 @@ enum Uninstall {
             return size(of: paths.map(\.url))
         case .logs:
             return size(of: [logsDirectory] + cacheDirectories)
-        case .corpus:
-            let stats = Corpus.shared.statistics()
-            guard stats.count > 0 else { return "aucune dictée" }
-            return "\(stats.count) dictées · \(size(of: [corpusDirectory]))"
         case .model:
             return size(of: modelLocations.map(\.url))
         }
@@ -376,7 +354,6 @@ enum Uninstall {
         case .logs:
             return fm.fileExists(atPath: logsDirectory.path)
                 || cacheDirectories.contains { fm.fileExists(atPath: $0.path) }
-        case .corpus: return Corpus.shared.statistics().count > 0
         case .model: return !modelLocations.isEmpty
         }
     }
@@ -405,10 +382,10 @@ enum Uninstall {
             for path in enginePaths {
                 report.append(trash(path.url, path.label))
             }
-            // Le descripteur part avec le moteur qu'il décrit. Il était rangé
-            // avec les dictées archivées, donc il survivait à toute
-            // désinstallation raisonnable — et une réinstallation retrouvait
-            // une déclaration pointant vers un moteur qui n'existait plus.
+            // Le descripteur part avec le moteur qu'il décrit. Laissé seul, il
+            // survivait à toute désinstallation raisonnable — et une
+            // réinstallation retrouvait une déclaration pointant vers un
+            // moteur qui n'existait plus.
             report.append(trash(engineDescriptor, "déclaration du moteur"))
         }
 
@@ -429,10 +406,6 @@ enum Uninstall {
                 : "✓ fichiers temporaires — mis à la corbeille")
         }
 
-        if items.contains(.corpus) {
-            report.append(trash(corpusDirectory, "dictées archivées"))
-        }
-
         if items.contains(.model) {
             // Un dossier et un verrou par variante : autant de lignes
             // identiques, qu'une seule suffit à dire.
@@ -442,7 +415,6 @@ enum Uninstall {
             report.append(contentsOf: Set(lines).sorted())
         }
 
-        // Après le corpus : les réglages disent où il se trouvait.
         if items.contains(.settings) {
             report.append(trash(preferencesFile, "réglages et historique"))
             // RELAIS — la session ChatGPT part avec les réglages.
@@ -484,7 +456,7 @@ enum Uninstall {
             report.append("✓ autorisations révoquées")
         }
 
-        // Le dossier de support lui-même, une fois ses trois occupants partis.
+        // Le dossier de support lui-même, une fois ses occupants partis.
         // Sans ce balayage, une désinstallation complète laisserait une
         // coquille vide, un dossier `backups` que plus rien n'écrit et un
         // `.DS_Store` — c'est-à-dire l'impression tenace, en rouvrant le

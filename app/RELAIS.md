@@ -116,8 +116,8 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
   touche de dictée (`showProcessing(_:progress:)`).
 - **`DictationController.swift`** — l'essentiel : un drapeau posé au début du
   cycle, une branche qui n'ouvre pas le micro, une autre qui choisit
-  `RelaisEngine` plutôt que le moteur configuré, et trois exclusions (collecte,
-  gestionnaire de repli, réglages de barre sans objet).
+  `RelaisEngine` plutôt que le moteur configuré, et deux exclusions
+  (gestionnaire de repli, réglages de barre sans objet).
 
 ## Quatre règles à ne jamais oublier
 
@@ -191,10 +191,6 @@ et le raccourci reste instantané.
 
 ## Ce qu'il ne fait délibérément pas
 
-**Aucune collecte.** Le corpus sert à arbitrer des moteurs mesurables sur les
-mêmes dictées ; un service tiers dont on ignore le modèle et la version y
-fausserait les comparaisons.
-
 **Aucun apprentissage du repli.** `EngineSafetyManager` ne doit se souvenir que
 de moteurs que l'utilisateur a réellement choisis.
 
@@ -202,6 +198,6 @@ de moteurs que l'utilisateur a réellement choisis.
 qui casse tout. La barre le dit au lieu d'afficher une attente sans fin.
 
 **Aucun banc d'essai.** Le relais n'accepte pas d'audio enregistré : la page
-veut un micro en direct. Rejouer les 129 dictées du corpus contre ChatGPT
-supposerait de les diffuser en temps réel, soit deux heures d'horloge pour une
-seule série.
+veut un micro en direct. Rejouer des dictées enregistrées contre ChatGPT
+supposerait de les diffuser en temps réel : une heure de parole, une heure
+d'horloge, pour une seule série.

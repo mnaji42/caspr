@@ -3,7 +3,7 @@ import SwiftUI
 /// La bascule d'une fonctionnalité entière : titre, explication, interrupteur.
 ///
 /// Le composant universel de toutes les bascules de Caspr — aperçu en direct,
-/// sons, historique, collecte, démarrage, mises à jour automatiques. Il existe
+/// sons, historique, démarrage, mises à jour automatiques. Il existe
 /// parce que ces réglages étaient écrits à la main à chaque endroit, avec des
 /// tailles de police et des espacements qui avaient dérivé : le même
 /// interrupteur paraissait plus important dans un onglet que dans un autre,
@@ -13,8 +13,8 @@ import SwiftUI
 ///
 /// La distinction n'est pas décorative, et `FeatureSwitch` la portait déjà :
 /// une case à cocher se lit « ce détail est retenu », un interrupteur « cette
-/// fonctionnalité est en marche ». Les confondre fait activer une collecte de
-/// données en croyant cocher une préférence. Les sous-options gardent donc
+/// fonctionnalité est en marche ». Les confondre fait mettre en marche toute
+/// une fonctionnalité en croyant cocher une préférence. Les sous-options gardent donc
 /// `OptionCheck`.
 struct SettingsToggleRow: View {
     let title: String
@@ -96,8 +96,8 @@ struct SettingsToggleRow: View {
                           description: "Deux clics discrets, au démarrage et à l'arrêt.",
                           isOn: $sons, isCard: false)
 
-        SettingsToggleRow(title: "Archiver mes dictées",
-                          description: "Collecte locale, pour comparer les moteurs.",
+        SettingsToggleRow(title: "Conserver l'historique",
+                          description: "Les dernières transcriptions, pour les réinsérer.",
                           note: "Réglage verrouillé pendant une dictée en cours.",
                           noteIsWarning: true,
                           isOn: $verrou, disabled: true)

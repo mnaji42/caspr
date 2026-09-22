@@ -1,24 +1,5 @@
 {
-  "_lisezMoi": "Catalogue des langues proposées. Les locales d'Apple Intelligence et de la Dictée de macOS ne figurent pas ici : elles dépendent de la machine et de la version du système, et sont demandées au système à l'exécution. `crisperWhisperBases` dépend des poids du modèle, donc de ce fichier — la liste est volontairement restreinte à ce qui a été constaté utilisable, Whisper en annonçant 99 dont la queue de distribution donne des résultats qu'on ne veut proposer à personne. `rank` fixe l'ordre d'affichage : les langues distinctes d'abord, les variantes régionales ensuite.",
-  "crisperWhisperBases": [
-    "fr",
-    "en",
-    "es",
-    "de",
-    "it",
-    "pt",
-    "nl",
-    "ja",
-    "zh",
-    "ru",
-    "ar",
-    "ko",
-    "pl",
-    "sv",
-    "tr",
-    "uk",
-    "hi"
-  ],
+  "_lisezMoi": "Catalogue des langues proposées. Les locales d'Apple Intelligence et de la Dictée de macOS ne figurent pas ici : elles dépendent de la machine et de la version du système, et sont demandées au système à l'exécution. `rank` fixe l'ordre d'affichage : les langues distinctes d'abord, les variantes régionales ensuite.",
   "languages": [
     {
       "code": "fr-FR",

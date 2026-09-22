@@ -225,23 +225,26 @@ struct LanguagePicker: View, ValidatingComponent {
 
     // MARK: - Ce que cette machine sait faire
 
-    /// Un moteur, au moins un, sait-il transcrire cette langue ici ?
+    /// Cette langue peut-elle être dictée ici ?
     ///
-    /// Trois chances, et il en suffit d'une : le moteur de macOS 26 propose la
-    /// locale, la Dictée sait la traiter hors ligne, ou les poids de
-    /// CrisperWhisper la couvrent — ces derniers ne dépendant ni de la machine
-    /// ni d'un téléchargement par langue.
+    /// Sous macOS, deux chances, et il en suffit d'une : le moteur de macOS 26
+    /// propose la locale, ou la Dictée sait la traiter hors ligne.
+    ///
+    /// **Sous ChatGPT, rien n'est grisé.** Le relais ne dépend d'aucun modèle
+    /// de cette machine : c'est le transcripteur de ChatGPT qui écoute. Griser
+    /// une langue que macOS ne sait pas écrire dirait « indisponible » à
+    /// quelqu'un qui peut la dicter tout de suite.
     private func isUsable(_ language: Language) -> Bool {
+        if Relais.partage.actif { return true }                    // RELAIS —
         if !measured { return true }
         if systemLocales.contains(language.code) { return true }
-        if language.isCoveredByCrisperWhisper { return true }
         return LegacySpeechEngine.isAvailable(for: language.code)
     }
 
     private func indisponibilityReason(_ language: Language) -> String {
-        "Aucun moteur ne transcrit le \(language.displayName) sur cette "
-            + "machine : macOS ne propose pas cette locale, la Dictée n'a pas "
-            + "ses modèles, et les poids de CrisperWhisper ne la couvrent pas."
+        "macOS ne transcrit pas le \(language.displayName) sur cette machine : "
+            + "Apple Intelligence ne propose pas cette locale, et la Dictée n'a "
+            + "pas ses modèles."
     }
 }
 

@@ -6,25 +6,11 @@ import CasprCore
 ///
 /// ## Deux codes, et ils ne sont pas interchangeables
 ///
-/// Une langue porte ici **deux** identifiants, parce que deux mondes les
-/// réclament dans des formats différents et qu'en confondre un seul dégrade la
-/// transcription sans rien dire :
-///
 /// - `code` est la locale complète (`fr-FR`). C'est ce que réclament
 ///   `SpeechTranscriber` et `SFSpeechRecognizer` : les modèles de macOS sont
 ///   fournis *par région*, et `fr-CA` n'est pas `fr-FR`.
-/// - `base` est le code ISO-639-1 (`fr`). C'est ce que réclame Whisper, qui
-///   compose le jeton `<|fr|>` pour forcer la langue au décodeur.
-///
-/// Envoyer `fr-FR` à Whisper ne provoque **aucune erreur** : `<|fr-FR|>`
-/// n'existe pas dans son vocabulaire, `convert_tokens_to_ids` rend le jeton
-/// inconnu, et le préfixe de décodage forcé part corrompu. La transcription
-/// continue, simplement moins bonne — le pire mode de panne pour ce projet.
-/// D'où la conversion, faite une seule fois, à la frontière du socket
-/// (cf. `SocketSpeechEngine`).
-///
-/// `base` est aussi ce qu'archive le corpus, pour que les dictées d'avant le
-/// multi-langues restent comparables à celles d'après. Cf. `CorpusEntry`.
+/// - `base` est le code ISO-639-1 (`fr`). Il sert à reconnaître deux régions
+///   d'une même langue, et à la nommer en deux lettres sur la barre.
 struct Language: Identifiable, Hashable, Sendable {
     /// Locale complète — `fr-FR`. Sert d'identité et de clé de persistance.
     let code: String
@@ -122,65 +108,38 @@ extension Language {
     /// Intelligence et celles de la Dictée de macOS. Elles dépendent de la
     /// machine et de la version du système — 30 et 63 sur ce Mac — et une liste
     /// figée mentirait au premier utilisateur dont le Mac diffère. Elles sont
-    /// demandées au système à l'exécution. `crisperWhisperBases`, en revanche,
-    /// dépend des poids du modèle : sa place est bien dans le fichier.
-    static let catalog: [Language] = Catalogue.loaded.languages
+    /// demandées au système à l'exécution.
+    static let catalog: [Language] = Catalogue.read()
 
-    /// Les langues que les poids de CrisperWhisper savent transcrire.
-    static var crisperWhisperBases: Set<String> { Catalogue.loaded.crisperBases }
-
-    /// Le fichier, lu une fois.
-    struct Catalogue {
-        let languages: [Language]
-        let crisperBases: Set<String>
-
-        static let loaded = Catalogue.read()
-
-        private struct Document: Decodable {
-            struct Row: Decodable {
-                let code: String
-                let name: String
-                let region: String
-                let flag: String
-                let frenchName: String
-                let estimatedModelMegabytes: Int64
-                let rank: Int
-            }
-            let crisperWhisperBases: [String]
-            let languages: [Row]
-        }
-
-        private static func read() -> Catalogue {
+    /// Le fichier, lu une fois. Son format est dans CasprCore
+    /// (`LanguageCatalogue`), où un test décode le vrai fichier.
+    enum Catalogue {
+        static func read() -> [Language] {
             guard let url = Bundle.main.url(forResource: "languages",
                                             withExtension: "json"),
                   let data = try? Data(contentsOf: url),
-                  let doc = try? JSONDecoder().decode(Document.self, from: data)
+                  let doc = try? LanguageCatalogue.decode(data)
             else {
                 // Un repli minimal plutôt qu'une application sans langue. Il
                 // signale l'anomalie sans empêcher de dicter : c'est une erreur
                 // d'empaquetage, pas une raison de refuser de démarrer.
                 Log.error("languages.json introuvable ou illisible — "
                           + "catalogue réduit au français et à l'anglais")
-                return Catalogue(
-                    languages: [
-                        Language(code: "fr-FR", name: "Français", region: "France",
-                                 flag: "🇫🇷", frenchName: "français",
-                                 estimatedModelBytes: 65_000_000),
-                        Language(code: "en-US", name: "English",
-                                 region: "United States", flag: "🇺🇸",
-                                 frenchName: "anglais",
-                                 estimatedModelBytes: 58_000_000),
-                    ],
-                    crisperBases: ["fr", "en"])
+                return [
+                    Language(code: "fr-FR", name: "Français", region: "France",
+                             flag: "🇫🇷", frenchName: "français",
+                             estimatedModelBytes: 65_000_000),
+                    Language(code: "en-US", name: "English",
+                             region: "United States", flag: "🇺🇸",
+                             frenchName: "anglais",
+                             estimatedModelBytes: 58_000_000),
+                ]
             }
-            let rows = doc.languages.sorted { $0.rank < $1.rank }
-            return Catalogue(
-                languages: rows.map {
-                    Language(code: $0.code, name: $0.name, region: $0.region,
-                             flag: $0.flag, frenchName: $0.frenchName,
-                             estimatedModelBytes: $0.estimatedModelMegabytes * 1_000_000)
-                },
-                crisperBases: Set(doc.crisperWhisperBases))
+            return doc.languages.map {
+                Language(code: $0.code, name: $0.name, region: $0.region,
+                         flag: $0.flag, frenchName: $0.frenchName,
+                         estimatedModelBytes: $0.estimatedModelMegabytes * 1_000_000)
+            }
         }
     }
 
@@ -254,18 +213,6 @@ extension Language {
 // MARK: - Ce que cette machine sait faire
 
 extension Language {
-    /// Les langues que CrisperWhisper couvre, en codes ISO-639-1.
-    ///
-    /// Les poids embarquent leurs langues : il n'y a rien à télécharger par
-    /// langue, et la liste ne dépend pas de la machine. Restreinte à ce qui a
-    /// été constaté utilisable — Whisper en annonce 99, mais la queue de
-    /// distribution donne des résultats qu'on ne veut proposer à personne.
-
-    /// CrisperWhisper sait-il travailler dans cette langue ?
-    var isCoveredByCrisperWhisper: Bool {
-        Self.crisperWhisperBases.contains(base)
-    }
-
     // MARK: - Ce qu'Apple Intelligence propose, mémorisé
 
     private static let appleSupportLock = NSLock()

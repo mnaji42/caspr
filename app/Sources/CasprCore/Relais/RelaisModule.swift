@@ -279,3 +279,35 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
 
     public func estUtilisable(_ s: RelaisSelecteurs) -> Bool { capacitesManquantes(s).isEmpty }
 }
+
+// MARK: - Relire une liste enregistrée
+
+extension RelaisModule {
+    /// Relit la liste enregistrée sous `relais.modules`, module par module.
+    ///
+    /// Décodée d'un bloc, la liste échouait tout entière dès qu'**un** module
+    /// portait une valeur que cette version ne connaît pas — une action
+    /// renommée (`envoyer` est devenu `demanderUneReponse`), un affichage
+    /// ajouté par une version plus récente. Le catalogue retombait alors sur
+    /// les modules d'usine : les réglages des modules livrés et tous les
+    /// modules écrits par l'utilisateur disparaissaient, pour un seul champ
+    /// illisible. Seul le module fautif est perdu désormais.
+    ///
+    /// Une donnée qui n'est pas une liste rend une liste vide, que l'appelant
+    /// traite comme l'absence d'enregistrement.
+    public static func liste(depuis data: Data) -> [RelaisModule] {
+        guard let lus = try? JSONDecoder().decode([Lisible].self, from: data)
+        else { return [] }
+        return lus.compactMap(\.module)
+    }
+
+    /// Un élément de la liste qui ne lève jamais : c'est ce qui fait avancer
+    /// le décodage au module suivant quand celui-ci est illisible.
+    private struct Lisible: Decodable {
+        let module: RelaisModule?
+
+        init(from decoder: Decoder) throws {
+            module = try? RelaisModule(from: decoder)
+        }
+    }
+}

@@ -35,10 +35,9 @@ extension RelaisCatalogue {
     /// personne n'ait à réinitialiser quoi que ce soit — et qu'un réglage déjà
     /// fait n'est jamais écrasé par la valeur d'usine.
     static var tous: [RelaisModule] {
-        guard let data = UserDefaults.standard.data(forKey: cleModules),
-              let enregistres = try? JSONDecoder().decode([RelaisModule].self, from: data),
-              !enregistres.isEmpty
-        else { return livres }
+        guard let data = UserDefaults.standard.data(forKey: cleModules) else { return livres }
+        let enregistres = RelaisModule.liste(depuis: data)
+        guard !enregistres.isEmpty else { return livres }
         // Un module livré garde sa définition et reprend les réglages qu'on lui
         // a faits ; un module écrit par l'utilisateur est repris tel quel ; un
         // module livré absent de l'enregistrement est ajouté.

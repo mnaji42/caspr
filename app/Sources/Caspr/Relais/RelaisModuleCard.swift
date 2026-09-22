@@ -26,6 +26,22 @@ struct RelaisModuleCard: View {
         Card {
             entete
             recette
+            // Offerte par le module, et seulement s'il l'offre : la lecture à
+            // haute voix marche partout, mais les trois modules livrés restent
+            // simples. La case n'apparaît de toute façon que si Caspr sait le
+            // faire.
+            if module.lectureProposee,
+               RelaisCapacite.direAHauteVoix.estAcquise(selecteurs) {
+                OptionCheck(title: "Faire lire la réponse à haute voix par ChatGPT",
+                            isOn: Binding(
+                                get: { module.ditLaReponse },
+                                set: { actif in
+                                    var maj = module
+                                    maj.ditLaReponse = actif
+                                    RelaisCatalogue.remplacer(maj)
+                                    surChangement()
+                                }))
+            }
             if module.affichageImpose != nil {
                 Note("La réponse n'existe qu'à l'écran : ce module l'affiche en grand, "
                      + "et ce choix ne se règle pas. Il se libérera le jour où le module "
@@ -39,10 +55,13 @@ struct RelaisModuleCard: View {
             // Rien à déplier pour un module qui n'envoie rien : son seul
             // réglage est l'affichage, et il est déjà dans l'en-tête. Un bouton
             // qui ouvre un panneau vide se lit comme une promesse non tenue.
-            if module.demandeUnAllerRetour {
+            // Pas de panneau pour un module qui envoie ce qu'on dit tel quel :
+            // il n'y a rien à y régler, et l'ouvrir sur du vide se lit comme une
+            // promesse non tenue.
+            if module.consigne != .aucune {
                 Divider().opacity(0.25)
                 bascule
-                if deplie { consigne }
+                if deplie { consigneReglages }
             }
         }
     }
@@ -115,7 +134,7 @@ struct RelaisModuleCard: View {
             if !deplie {
                 avant = module.avant
                 apres = module.apres
-                avecConsigne = module.consigneEssentielle || !avant.isEmpty || !apres.isEmpty
+                avecConsigne = module.consigne == .essentielle || !avant.isEmpty || !apres.isEmpty
             }
             withAnimation(.easeOut(duration: 0.18)) { deplie.toggle() }
         } label: {
@@ -137,11 +156,11 @@ struct RelaisModuleCard: View {
     }
 
     @ViewBuilder
-    private var consigne: some View {
+    private var consigneReglages: some View {
         // Une case plutôt que deux champs toujours ouverts : la plupart des
         // modules n'ont pas de consigne, et deux zones de texte vides occupent
         // l'écran sans rien dire.
-        if !module.consigneEssentielle {
+        if module.consigne == .facultative {
             OptionCheck(title: "Ajouter une consigne autour de ce qui est dicté",
                         isOn: Binding(get: { avecConsigne },
                                       set: { actif in
@@ -149,7 +168,7 @@ struct RelaisModuleCard: View {
                                           if !actif { avant = ""; apres = "" }
                                       }))
         }
-        if avecConsigne || module.consigneEssentielle {
+        if avecConsigne || module.consigne == .essentielle {
             Note("Le texte dicté est glissé entre ces deux blocs.")
             champ("Avant", texte: $avant)
             champ("Après", texte: $apres)

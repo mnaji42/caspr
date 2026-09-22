@@ -61,51 +61,169 @@ extension RelaisPage {
 
       const visible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
 
-      function trouver(cible, selecteur) {
-        if (selecteur) {
-          try {
-            const el = document.querySelector(selecteur);
-            // Présence, et non visibilité, pour un sélecteur calibré.
-            //
-            // WebKit ne dispose pas la page tant que sa fenêtre n'a jamais été
-            // affichée, et la nôtre naît hors champ : `getClientRects()` rend
-            // alors une liste vide pour des éléments pourtant bien là. Le
-            // bouton micro y survivait — il existe au chargement, donc il a été
-            // disposé une fois — mais le bouton d'arrêt, créé au clic, restait
-            // invisible au sens de cette fonction. D'où l'échec systématique à
-            // la première dictée, et la réussite de toutes les suivantes :
-            // cliquer soi-même le carré affiche la fenêtre, ce qui force la
-            // mise en page pour de bon.
-            //
-            // Un sélecteur calibré désigne un élément que l'utilisateur a
-            // cliqué lui-même : rien ne justifie de lui redemander ses
-            // dimensions.
-            if (el && el.isConnected) return el;
-          } catch (e) { /* sélecteur devenu invalide : on tente les heuristiques */ }
+      // Ce qu'un repère doit désigner pour vouloir dire quelque chose.
+      //
+      // Un sélecteur n'est pas une adresse : c'est une question posée à la
+      // page, et plusieurs éléments peuvent y répondre. ChatGPT pose le même
+      // libellé d'accessibilité sur la zone de saisie **et** sur le bloc qui
+      // l'entoure ; retenir le libellé sans rien vérifier faisait désigner le
+      // bloc. On écrivait alors dedans sans effet visible, et surtout on le
+      // relisait vide — un bloc n'a pas de texte à lui. La dictée arrivait bien
+      // dans ChatGPT, et Caspr concluait « rien n'a été entendu ».
+      //
+      // D'où le genre : une zone de saisie doit être une zone de saisie, un
+      // bouton doit être un bouton. Le genre sert trois fois — pour retrouver
+      // un élément, pour juger un repère au moment où on l'apprend, et pour
+      // écarter les clics hors sujet pendant la calibration — et c'est la même
+      // idée les trois fois : un repère ne vaut que s'il désigne encore la
+      // même chose qu'au moment où on l'a appris.
+      const GENRE = {
+        micro: 'bouton', stop: 'bouton', envoi: 'bouton',
+        copier: 'bouton', lecture: 'bouton',
+        composeur: 'saisie',
+        reponse: 'texte',
+      };
+
+      // Ce sur quoi un clic compte, selon ce qu'on cherche. Cliquer le texte
+      // qu'on vient de taper n'est pas cliquer le bouton d'envoi.
+      const CLIQUABLE = {
+        saisie: '[contenteditable="true"], textarea, input',
+        bouton: 'button, [role="button"], [role="menuitem"]',
+      };
+
+      const convient = (genre, el) => {
+        if (!el) return false;
+        if (genre === 'saisie') {
+          return el.isContentEditable
+            || el.tagName === 'TEXTAREA' || el.tagName === 'INPUT';
         }
+        if (genre === 'bouton') {
+          return el.tagName === 'BUTTON'
+            || el.getAttribute('role') === 'button'
+            || el.getAttribute('role') === 'menuitem';
+        }
+        return true;
+      };
+
+      // Le filet tant que rien n'a été appris. Des paris sur des libellés, pas
+      // un contrat.
+      function heuristique(cible) {
         for (const s of (HEURISTIQUES[cible] || [])) {
           for (const el of document.querySelectorAll(s)) {
-            if (visible(el)) return el;
+            if (visible(el) && convient(GENRE[cible], el)) return el;
           }
         }
         return null;
       }
 
-      // Un sélecteur qui a une chance de survivre au prochain déploiement.
-      // Par ordre de solidité : identifiant, data-testid, aria-label. Le
-      // chemin structurel n'est qu'un dernier recours — il casse au moindre
-      // remaniement, mais recalibrer coûte trois clics.
-      function selecteurStable(el) {
-        if (el.id) return '#' + esc(el.id);
+      function trouver(cible, selecteur) {
+        // Un repère appris qui ne trouve rien veut dire **absent**, et non
+        // « cherchons quelque chose qui lui ressemble ».
+        //
+        // C'est la leçon d'une dictée perdue trois fois de suite. Pendant
+        // l'enregistrement, ChatGPT retire la zone de saisie de la page :
+        // `#prompt-textarea` ne désigne alors plus rien, ce qui est normal et
+        // momentané. On se rabattait sur les heuristiques, qui cherchent « une
+        // zone éditable » — et la conversation en contenait une autre, le
+        // document que ChatGPT avait produit à la réorganisation précédente.
+        // Chaque dictée rendait donc ce document au lieu de ce qu'on venait de
+        // dire, en une seconde et demie et au caractère près. Rien ne le
+        // signalait : le texte était plausible, il était simplement d'avant.
+        //
+        // Les heuristiques restent le filet de qui n'a pas encore calibré, et
+        // c'est tout. Un repère appris qui casse pour de bon donne un échec
+        // explicite, et recalibrer coûte six clics.
+        //
+        // Présence, et non visibilité, pour un sélecteur calibré : WebKit ne
+        // dispose pas la page tant que sa fenêtre n'a jamais été affichée, et
+        // la nôtre naît hors champ — `getClientRects()` rend alors une liste
+        // vide pour des éléments pourtant bien là. Le bouton d'arrêt, créé au
+        // clic, y échouait systématiquement à la première dictée. Un sélecteur
+        // calibré désigne un élément que l'utilisateur a cliqué lui-même : rien
+        // ne justifie de lui redemander ses dimensions.
+        if (!selecteur) return heuristique(cible);
+        try {
+          // Le premier qui **convienne**, et non le premier tout court : la
+          // page pose le même libellé sur la zone de saisie et sur le bloc qui
+          // l'entoure, et `querySelector` rendrait le bloc.
+          for (const el of document.querySelectorAll(selecteur)) {
+            if (el.isConnected && convient(GENRE[cible], el)) return el;
+          }
+        } catch (e) {
+          // Sélecteur devenu invalide : il ne dit plus rien du tout, alors que
+          // « ne trouve rien » disait quelque chose.
+          return heuristique(cible);
+        }
+        return null;
+      }
+
+      // Un identifiant engendré par la page ne désigne rien demain.
+      //
+      // Les bibliothèques de composants en fabriquent à chaque rendu —
+      // `#radix-_r_6s_` et ses semblables. Retenu comme repère, il vise un
+      // élément qui n'existera plus à la dictée suivante : le clic part dans le
+      // vide sans que rien ne le signale. Un `data-testid` ou un libellé
+      // d'accessibilité, eux, sont écrits par la page pour durer.
+      const idEngendre = (id) => !id
+        || /radix|^[:_]|_r_|^«|\d{3,}/i.test(id);
+
+      // Un repère ne vaut que s'il retrouve l'élément qu'on a cliqué.
+      //
+      // C'est la vérification qui manquait, et son absence a coûté cher :
+      // l'attribut existait, on en tirait un sélecteur, et personne ne
+      // demandait jamais ce que ce sélecteur désignait vraiment. Le libellé de
+      // la zone de saisie était aussi porté par le bloc qui l'entoure, posé
+      // plus haut dans le document ; c'est donc le bloc qu'on retenait, et
+      // toutes les dictées se lisaient vides.
+      //
+      // On juge le repère avec la règle qui servira à s'en servir — les
+      // éléments du bon genre, dans l'ordre du document — et on ne le garde
+      // que si l'élément cliqué en fait partie. Plusieurs réponses sont
+      // permises : la page pose un bouton « copier » sous chaque message, et
+      // c'est le bloc parent, retenu au même clic, qui dira lequel.
+      function repereValide(selecteur, el, genre) {
+        let candidats = [];
+        try { candidats = [...document.querySelectorAll(selecteur)]; }
+        catch (e) { return false; }
+        return candidats.filter((c) => convient(genre, c)).includes(el);
+      }
+
+      function reperesDe(el, genre) {
+        const guillemets = (v) => v.replace(/"/g, '\\"');
+        const candidats = [];
         const testid = el.getAttribute('data-testid');
-        if (testid) return '[data-testid="' + testid.replace(/"/g, '\\"') + '"]';
+        if (testid) candidats.push('[data-testid="' + guillemets(testid) + '"]');
+        if (!idEngendre(el.id)) candidats.push('#' + esc(el.id));
         const aria = el.getAttribute('aria-label');
-        if (aria) return '[aria-label="' + aria.replace(/"/g, '\\"') + '"]';
+        if (aria) candidats.push('[aria-label="' + guillemets(aria) + '"]');
+        for (const c of candidats) {
+          if (repereValide(c, el, genre)) return c;
+        }
+        return '';
+      }
+
+      // Un sélecteur qui a une chance de survivre au prochain déploiement.
+      //
+      // Par ordre de solidité : `data-testid`, identifiant, libellé
+      // d'accessibilité.
+      //
+      // Le libellé passe en dernier parce qu'il est écrit dans la langue de
+      // l'interface : `[aria-label="Discuter avec ChatGPT"]` ne désigne plus
+      // rien le jour où l'on passe ChatGPT en anglais, là où `#prompt-textarea`
+      // tient. L'identifiant, lui, ne vient en second que depuis qu'on écarte
+      // ceux que les bibliothèques de composants fabriquent à chaque rendu :
+      // c'était la seule raison de s'en méfier.
+      //
+      // Le chemin structurel n'est qu'un dernier recours — il casse au moindre
+      // remaniement, mais recalibrer coûte trois clics.
+      function selecteurStable(el, genre) {
+        const repere = reperesDe(el, genre);
+        if (repere) return repere;
 
         const parts = [];
         let n = el;
         while (n && n.nodeType === 1 && parts.length < 6) {
-          if (n.id) { parts.unshift('#' + esc(n.id)); break; }
+          if (!idEngendre(n.id)) { parts.unshift('#' + esc(n.id)); break; }
           let part = n.tagName.toLowerCase();
           const p = n.parentElement;
           if (p) {
@@ -118,20 +236,20 @@ extension RelaisPage {
         return parts.join(' > ');
       }
 
-      // Le premier ancêtre qui porte un identifiant stable.
+      // Le premier ancêtre qui porte un repère valide.
       //
       // Capturé en même temps que l'élément lui-même, il permet de désigner
       // « ce bouton, dans ce bloc » plutôt que « un bouton qui ressemble à
       // celui-ci ». Pour le bouton « copier », la différence est décisive : la
       // page en contient un par message, et seule la paire dit lequel.
+      //
+      // Aucun genre exigé : un bloc n'est ni un bouton ni une zone de saisie,
+      // il lui suffit d'être retrouvable.
       function selecteurAncetre(el) {
         let n = el.parentElement;
         for (let i = 0; i < 5 && n; i++) {
-          if (n.id) return '#' + esc(n.id);
-          const testid = n.getAttribute('data-testid');
-          if (testid) return '[data-testid="' + testid.replace(/"/g, '\\"') + '"]';
-          const aria = n.getAttribute('aria-label');
-          if (aria) return '[aria-label="' + aria.replace(/"/g, '\\"') + '"]';
+          const repere = reperesDe(n, 'bloc');
+          if (repere) return repere;
           n = n.parentElement;
         }
         return '';
@@ -308,6 +426,46 @@ extension RelaisPage {
           return { ok: false, raison: 'pas de bouton copier' };
         },
 
+        // La réponse est-elle terminée ?
+        //
+        // Sa barre d'actions n'apparaît qu'une fois la génération finie : sa
+        // présence est le signal, et c'est le même que celui qui sert à copier.
+        // On le lit sans cliquer, pour les modules qui n'ont rien à rapatrier
+        // mais doivent attendre la fin — faire lire à haute voix un texte encore
+        // en train de s'écrire n'aurait pas de sens.
+        reponsePrete(selParent) {
+          if (!selParent) return { ok: false };
+          let blocs = [];
+          try { blocs = [...document.querySelectorAll(selParent)]; } catch (e) {}
+          return { ok: blocs.some((b) => b.getClientRects().length > 0) };
+        },
+
+        // Clique un bouton, éventuellement cadré dans un bloc.
+        //
+        // Le cadrage sert quand la page en contient plusieurs exemplaires — un
+        // par message. Sans cadrage, on prend le dernier visible : c'est le cas
+        // d'un élément de menu, que la page pose ailleurs dans le document et
+        // qui n'existe qu'un à la fois.
+        cliquerBouton(selParent, selBouton) {
+          if (!selBouton) return { ok: false, raison: 'pas de sélecteur' };
+          let candidats = [];
+          try {
+            if (selParent) {
+              const blocs = [...document.querySelectorAll(selParent)]
+                .filter((b) => b.getClientRects().length > 0);
+              const bloc = blocs[blocs.length - 1];
+              candidats = bloc ? [...bloc.querySelectorAll(selBouton)] : [];
+            } else {
+              candidats = [...document.querySelectorAll(selBouton)];
+            }
+          } catch (e) { return { ok: false, raison: String(e) }; }
+          const vus = candidats.filter((b) => b.getClientRects().length > 0);
+          const cible = (vus.length ? vus : candidats).pop();
+          if (!cible) return { ok: false, raison: 'introuvable' };
+          cible.click();
+          return { ok: true };
+        },
+
         // Clique le **dernier** élément qui corresponde, et dit s'il existait.
         //
         // Le dernier, parce qu'une conversation en compte un par réponse. Le
@@ -437,10 +595,12 @@ extension RelaisPage {
         // et qu'on n'est pas sur un écran d'authentification. Un cookie serait
         // plus direct mais son nom est un détail d'implémentation d'OpenAI,
         // qui n'a rien promis à personne à son sujet.
-        etat(selMicro, selStop) {
-          const zone = document.querySelector(
-            '#prompt-textarea, div[contenteditable="true"]'
-          );
+        etat(selMicro, selStop, selComposeur) {
+          // Par le repère appris, et non par « une zone éditable quelconque » :
+          // une conversation qui contient un document produit par ChatGPT en
+          // offre une seconde, et la page se déclarait alors « pas en train
+          // d'enregistrer » pendant qu'elle enregistrait.
+          const zone = trouver('composeur', selComposeur);
           const composeur = !!zone && zone.getClientRects().length > 0;
           const stop = !!trouver('stop', selStop);
           const micro = !!trouver('micro', selMicro);
@@ -472,6 +632,10 @@ extension RelaisPage {
           return {
             ok: true,
             url: location.href,
+            // La page porte-t-elle une conversation ? C'est ce qui décide, une
+            // fois la dictée finie, s'il faut en ouvrir une neuve pour la
+            // prochaine ou s'il suffit de vider la zone de saisie.
+            conversation: /^\/c\//.test(chemin),
             connecte: !auth && !deconnecte && (composeur || stop || micro),
             deconnecte,
             // La zone absente *et* l'arrêt présent : la page écoute.
@@ -487,7 +651,7 @@ extension RelaisPage {
         // Le clic n'est pas intercepté : il atteint la page. Sans quoi
         // désigner le bouton d'arrêt serait impossible, puisqu'il n'existe
         // qu'une fois l'enregistrement démarré.
-        calibrer() {
+        calibrer(genre) {
           return new Promise((resolve) => {
             const surClic = (ev) => {
               // Seuls les clics de la main comptent.
@@ -502,12 +666,24 @@ extension RelaisPage {
               // Une barrière logique empêche les deux flux de se croiser ;
               // celle-ci rend l'accident impossible même si elle cédait.
               if (!ev.isTrusted) return;
+
+              // Un clic hors sujet ne compte pas — on continue d'écouter.
+              //
+              // À l'étape du bouton d'envoi, on demande d'abord d'écrire
+              // quelque chose : le premier clic de l'utilisateur tombe donc
+              // dans la zone de texte, et il était retenu comme s'il désignait
+              // le bouton. La calibration passait à l'étape suivante en ayant
+              // appris la zone de saisie à la place de la flèche bleue.
+              //
+              // Ignorer plutôt que refuser : on ne peut pas prévenir de ce
+              // qu'on n'a pas demandé, et l'utilisateur cliquera le bon
+              // élément juste après, ce qui est exactement ce qu'on attend.
+              const el = ev.target.closest(CLIQUABLE[genre] || '*');
+              if (!convient(genre, el)) return;
+
               terminer();
-              const el = ev.target.closest(
-                'button, [role="button"], [contenteditable="true"], textarea, input'
-              ) || ev.target;
               resolve({ ok: true,
-                        selecteur: selecteurStable(el),
+                        selecteur: selecteurStable(el, genre),
                         parent: selecteurAncetre(el) });
             };
             const terminer = () => {
@@ -563,17 +739,18 @@ extension RelaisPage {
             let menu = null;
             const surClic = (ev) => {
               if (!ev.isTrusted) return;
-              const el = ev.target.closest('button, [role="button"], [role="menuitem"]')
-                || ev.target;
+              const el = ev.target.closest(CLIQUABLE.bouton);
+              if (!convient('bouton', el)) return;
               const ouvreUnMenu = el.getAttribute('aria-haspopup')
                 || el.getAttribute('aria-expanded') !== null;
               if (ouvreUnMenu && !menu) {
-                menu = { selecteur: selecteurStable(el), parent: selecteurAncetre(el) };
+                menu = { selecteur: selecteurStable(el, 'bouton'),
+                         parent: selecteurAncetre(el) };
                 return;                      // on attend le vrai bouton
               }
               terminer();
               resolve({ ok: true,
-                        selecteur: selecteurStable(el),
+                        selecteur: selecteurStable(el, 'bouton'),
                         parent: selecteurAncetre(el),
                         menu: menu ? menu.selecteur : '',
                         menuParent: menu ? menu.parent : '' });

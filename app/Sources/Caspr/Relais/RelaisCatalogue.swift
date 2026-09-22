@@ -49,6 +49,7 @@ enum RelaisAffichage: String, CaseIterable, Codable {
 enum RelaisCatalogue {
     static let brut = RelaisModule(
         identifiant: "brut", nom: "Brut", integre: true,
+        consigne: .aucune, lectureProposee: false,
         actions: [],
         sorties: [.curseur, .note], sortieParDefaut: .curseur,
         affichage: .barre)
@@ -57,7 +58,7 @@ enum RelaisCatalogue {
         identifiant: "reorganiser", nom: "Réorganiser", integre: true,
         avant: RelaisPrompt.reorganiser + "\n\n=== DÉBUT DE LA TRANSCRIPTION ===\n",
         apres: "\n=== FIN DE LA TRANSCRIPTION ===",
-        consigneEssentielle: true,
+        consigne: .essentielle, lectureProposee: false,
         actions: [.demanderUneReponse],
         sorties: [.curseur, .note], sortieParDefaut: .curseur,
         affichage: .barre)
@@ -74,6 +75,7 @@ enum RelaisCatalogue {
     /// rapprocherait d'un module de rédaction, qui est un autre besoin.
     static let discuter = RelaisModule(
         identifiant: "discuter", nom: "Discuter", integre: true,
+        consigne: .aucune,
         actions: [.demanderUneReponse],
         sorties: [.aucune], sortieParDefaut: .aucune,
         affichage: .page)

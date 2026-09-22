@@ -307,14 +307,22 @@ final class RelaisPage: NSObject {
     /// diffère les rendus d'une fenêtre qu'il croit cachée, ce qui retardait
     /// l'apparition du bouton d'arrêt.
     func afficherBarre() {
-        // Une discussion garde sa grande fenêtre pendant la dictée.
+        let module = RelaisCatalogue.courant
+        let affichage = module.affichageEffectif
+
+        // La grande fenêtre, et pour deux conditions réunies.
         //
-        // Déplacer la vue vers la barre puis la ramener à chaque tour ferait
-        // clignoter la conversation et lui ferait perdre le clavier — or c'est
-        // ce clavier qui permet de répondre par écrit entre deux dictées. La
-        // grande fenêtre peut le prendre, la barre jamais : c'est la séparation
-        // des deux fenêtres qui règle la question, sans drapeau à tenir.
-        if RelaisCatalogue.courant.sortieParDefaut == .aucune {
+        // **Le module ne délivre nulle part** : elle seule peut prendre le
+        // clavier, et le clavier ne sert qu'à répondre par écrit dans la
+        // conversation. Un module qui écrit au curseur ne doit jamais l'ouvrir
+        // — le texte partirait dans ChatGPT.
+        //
+        // **Et l'affichage demandé est « Page »** : c'était la condition
+        // manquante. Une discussion réglée sur « Rien » ouvrait quand même sa
+        // fenêtre, alors que ne rien afficher est justement ce qu'on choisit
+        // quand la réponse est lue à haute voix — on parle, on écoute, et il
+        // n'y a rien à regarder.
+        if module.sortieParDefaut == .aucune, affichage == .page {
             montrer()
             return
         }
@@ -323,7 +331,6 @@ final class RelaisPage: NSObject {
         // rectangle gris là où l'on attendait sa disparition.
         fenetre.orderOut(nil)
         rendreLaVueALaBarre()
-        let affichage = RelaisCatalogue.courant.affichageEffectif
         let compact = affichage == .barre
 
         // La page doit être **rendue**, même quand on ne veut rien voir.
@@ -402,8 +409,9 @@ final class RelaisPage: NSObject {
     func etatConnexion(patience: Int = 12) async -> Connexion {
         for essai in 0..<max(patience, 1) {
             let r = try? await appeler(
-                "return window.__relais.etat(micro, stop);",
-                ["micro": selecteurs.micro, "stop": selecteurs.stop])
+                "return window.__relais.etat(micro, stop, composeur);",
+                ["micro": selecteurs.micro, "stop": selecteurs.stop,
+                 "composeur": selecteurs.composeur])
             if let r {
                 if r["connecte"] as? Bool == true { return .connecte }
                 if r["authentification"] as? Bool == true { return .deconnecte }
@@ -444,9 +452,22 @@ final class RelaisPage: NSObject {
     /// enregistrait toujours, si bien que le geste suivant relançait une
     /// dictée par-dessus au lieu de l'arrêter.
     func estEnEnregistrement() async -> Bool {
-        let r = try? await appeler("return window.__relais.etat(micro, stop);",
-                                   ["micro": selecteurs.micro, "stop": selecteurs.stop])
+        let r = try? await appeler("return window.__relais.etat(micro, stop, composeur);",
+                                   ["micro": selecteurs.micro, "stop": selecteurs.stop,
+                                    "composeur": selecteurs.composeur])
         return r?["enregistrement"] as? Bool == true
+    }
+
+    /// La page porte-t-elle une conversation ?
+    ///
+    /// Posée à la page, et non déduite du module qui vient de tourner : une
+    /// réorganisation qui échoue à mi-chemin a tout de même envoyé son message,
+    /// et c'est la page qui le sait.
+    func tientUneConversation() async -> Bool {
+        let r = try? await appeler("return window.__relais.etat(micro, stop, composeur);",
+                                   ["micro": selecteurs.micro, "stop": selecteurs.stop,
+                                    "composeur": selecteurs.composeur])
+        return r?["conversation"] as? Bool == true
     }
 
     /// Clique le micro. La page commence à écouter.
@@ -642,15 +663,22 @@ final class RelaisPage: NSObject {
     /// repris le contrôle : le texte y était bien déposé, puis effacé par le
     /// rendu qui suivait. L'utilisateur se retrouvait devant une zone vide,
     /// sans bouton d'envoi à désigner, et sans rien qui explique pourquoi.
+    ///
+    /// Par les heuristiques, et non par le repère qu'on vient d'apprendre : on
+    /// est au milieu d'une calibration, et s'appuyer sur ce qu'elle est en
+    /// train de remplacer est précisément ce qui a produit le message « le
+    /// message d'essai n'a pas pu être écrit » devant une zone où il était
+    /// pourtant écrit. Le repère désignait le bloc autour de la zone ; on
+    /// relisait donc un conteneur, qui n'a pas de texte à lui.
     func preparerCalibrationEnvoi() async -> Bool {
         charger()
-        guard await attendreComposeur(secondes: 30) else { return false }
+        guard await attendreComposeur(secondes: 30, selecteur: "") else { return false }
         for essai in 0..<12 {                                   // jusqu'à 6 s
             _ = try? await appeler("return window.__relais.ecrire(sel, texte);",
-                                   ["sel": selecteurs.composeur, "texte": Self.essai])
+                                   ["sel": "", "texte": Self.essai])
             try? await Task.sleep(for: .milliseconds(500))
             let lu = try? await appeler("return window.__relais.lire(sel);",
-                                        ["sel": selecteurs.composeur])
+                                        ["sel": ""])
             if let texte = lu?["texte"] as? String, !texte.isEmpty {
                 if essai > 0 { Log.info("relais : message d'essai écrit au \(essai + 1)e essai") }
                 return true
@@ -723,7 +751,11 @@ final class RelaisPage: NSObject {
             ? try await copierReponse(patienceSecondes: patienceSecondes,
                                       empreinteEnvoyee: empreinte(encadrement.avant))
             : try await attendreReponse(patienceSecondes: patienceSecondes)
-        charger()          // fil neuf pour la prochaine dictée
+        // Pas de rechargement ici : la page neuve est ouverte à l'appui
+        // suivant, pour toutes les dictées et au même endroit. En recharger une
+        // seconde fois depuis ce chemin-ci, c'était une deuxième politique de
+        // fil neuf — celle qui ne s'appliquait qu'aux réorganisations réussies,
+        // et laissait donc la conversation en place quand elles échouaient.
         return reponse
     }
 
@@ -784,6 +816,49 @@ final class RelaisPage: NSObject {
         selecteurs.enregistrer()
     }
 
+    /// Attend que la réponse soit terminée, puis la fait lire à haute voix.
+    ///
+    /// Deux temps, parce que le bouton se cache parfois derrière un menu — la
+    /// calibration a retenu le chemin complet, on le refait. Un module de
+    /// traduction peut ainsi parler : on dicte en français, l'interlocuteur
+    /// entend la réponse.
+    ///
+    /// Un échec n'interrompt rien : la réponse est à l'écran, seul le son
+    /// manque. Faire échouer la dictée entière pour un haut-parleur muet serait
+    /// disproportionné.
+    func faireLireLaReponse(patienceSecondes: Double) async {
+        guard selecteurs.saitLire else { return }
+        // La barre d'actions n'apparaît qu'une fois la génération finie.
+        var prete = false
+        for _ in 0..<Int(patienceSecondes * 4) {
+            if Task.isCancelled { return }
+            try? await Task.sleep(for: .milliseconds(250))
+            let r = try? await appeler("return window.__relais.reponsePrete(sel);",
+                                       ["sel": selecteurs.copierParent])
+            if r?["ok"] as? Bool == true { prete = true; break }
+        }
+        guard prete else {
+            Log.error("relais : réponse jamais prête, lecture à haute voix abandonnée")
+            return
+        }
+
+        if !selecteurs.lectureMenu.isEmpty {
+            _ = try? await appeler("return window.__relais.cliquerBouton(parent, bouton);",
+                                   ["parent": selecteurs.lectureMenuParent,
+                                    "bouton": selecteurs.lectureMenu])
+            try? await Task.sleep(for: .milliseconds(600))
+        }
+        let r = try? await appeler("return window.__relais.cliquerBouton(parent, bouton);",
+                                   // Sans cadrage quand un menu l'a ouvert : la
+                                   // page pose ses éléments de menu ailleurs
+                                   // dans le document, hors du bloc de la
+                                   // réponse.
+                                   ["parent": selecteurs.lectureMenu.isEmpty
+                                              ? selecteurs.lectureParent : "",
+                                    "bouton": selecteurs.lecture])
+        Log.info("relais : lecture à haute voix \(r?["ok"] as? Bool == true ? "lancée" : "refusée")")
+    }
+
     /// Vide la zone de saisie, et s'assure qu'elle l'est restée.
     ///
     /// ChatGPT réinstalle le brouillon non envoyé après un rechargement, et
@@ -813,7 +888,8 @@ final class RelaisPage: NSObject {
     }
 
     /// Attend que la zone de saisie soit là et lisible.
-    private func attendreComposeur(secondes: Double) async -> Bool {
+    private func attendreComposeur(secondes: Double,
+                                   selecteur: String? = nil) async -> Bool {
         for _ in 0..<Int(secondes * 4) {
             if Task.isCancelled { return false }
             try? await Task.sleep(for: .milliseconds(250))
@@ -821,7 +897,7 @@ final class RelaisPage: NSObject {
             // chargement est celle de la page qu'on est en train de quitter.
             guard !chargementEnCours else { continue }
             let lu = try? await appeler("return window.__relais.lire(sel);",
-                                        ["sel": selecteurs.composeur])
+                                        ["sel": selecteur ?? selecteurs.composeur])
             if lu?["ok"] as? Bool == true { return true }
         }
         return false
@@ -970,7 +1046,8 @@ final class RelaisPage: NSObject {
     /// l'enregistrement, donc il faut que le clic sur le micro ait réellement
     /// démarré l'écoute pour pouvoir désigner l'arrêt juste après.
     func calibrer(_ cible: RelaisCible) async throws -> String {
-        let r = try await appeler("return await window.__relais.calibrer();")
+        let r = try await appeler("return await window.__relais.calibrer(genre);",
+                                  ["genre": cible.genre])
         guard r["ok"] as? Bool == true else { throw CancellationError() }
         guard let sel = r["selecteur"] as? String, !sel.isEmpty else {
             throw Erreur.introuvable(cible)

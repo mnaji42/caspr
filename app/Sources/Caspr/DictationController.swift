@@ -160,7 +160,6 @@ final class DictationController {
         overlay.onSelectModeIndex = { [weak self] index in
             guard let self else { return }
             let modes = RelaisCatalogue.proposes
-            let modeCourant = RelaisCatalogue.courant
             guard modes.indices.contains(index) else { return }
             RelaisCatalogue.courant = modes[index]
             // L'affichage appartient au module : changer de module en pleine
@@ -506,7 +505,25 @@ final class DictationController {
         // chemins : réussite, texte vide, échec, annulation. La rendre à
         // chaque endroit serait la promesse d'en oublier un, et un oubli
         // condamne la page jusqu'au redémarrage.
-        defer { relaisEnCours = false; Relais.partage.rendreLaMain() }
+        defer {
+            relaisEnCours = false
+            Relais.partage.rendreLaMain()
+            // RELAIS — délivrer ailleurs, c'est quitter la discussion.
+            //
+            // Basculer de « Discuter » vers un module qui écrit au curseur
+            // referme la fenêtre : l'état devait suivre. Il ne suivait pas, et
+            // Caspr poursuivait alors un fil que plus personne ne voyait — la
+            // dictée suivante arrivait dans la conversation d'avant.
+            //
+            // Ici plutôt qu'au fil des chemins de sortie : réussite, texte
+            // vide, échec et annulation passent tous par là.
+            if parRelais, Relais.partage.sortieCourante != .aucune {
+                quitterLaDiscussion()
+            }
+            // RELAIS — et la page est rendue prête pour la prochaine, pendant
+            // qu'on ne s'en sert pas.
+            if parRelais { Relais.partage.preparerLaProchaine() }
+        }
         let moteur: any SpeechEngine = parRelais ? RelaisEngine() : writer
         do {
             let result = try await moteur.transcribe(

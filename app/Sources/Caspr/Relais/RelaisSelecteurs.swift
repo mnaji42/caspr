@@ -4,6 +4,21 @@ import Foundation
 enum RelaisCible: String, CaseIterable, Codable {
     case micro, stop, composeur, envoi, reponse, copier, lecture
 
+    /// Ce que le repère doit être pour vouloir dire quelque chose.
+    ///
+    /// Le pont s'en sert trois fois — pour retrouver l'élément, pour juger un
+    /// repère au moment où on l'apprend, et pour écarter les clics hors sujet
+    /// pendant la calibration. Un bouton d'envoi qui désignerait la zone de
+    /// texte n'est pas un repère imparfait : c'est un repère faux, et il vaut
+    /// mieux ne rien apprendre que d'apprendre cela.
+    var genre: String {
+        switch self {
+        case .composeur: "saisie"
+        case .reponse:   "texte"
+        default:         "bouton"
+        }
+    }
+
     var libelle: String {
         switch self {
         case .micro:     "le bouton micro"

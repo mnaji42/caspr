@@ -174,28 +174,63 @@ final class Relais: ObservableObject {
     private var debut = Date()
     var secondesEcoulees: Double { Date().timeIntervalSince(debut) }
 
+    /// La préparation de la page pour la dictée suivante, s'il y en a une en
+    /// cours.
+    ///
+    /// Retenue pour pouvoir l'attendre : elle tourne au repos, donc elle est
+    /// finie depuis longtemps quand on rappuie — mais « longtemps » n'est pas
+    /// « toujours », et rappuyer dans la seconde ne doit pas recharger la page
+    /// sous une dictée qui commence.
+    private var preparation: Task<Void, Never>?
+
+    /// Laisse la page prête pour la prochaine dictée, maintenant qu'on ne s'en
+    /// sert plus.
+    ///
+    /// C'est **la fin d'une dictée qui prépare la suivante**, et non l'appui qui
+    /// découvre l'état où la précédente a laissé la page. Deux raisons, et la
+    /// seconde vaut la première.
+    ///
+    /// La latence : recharger prend une seconde ou deux, pendant lesquelles on
+    /// parle déjà et le micro n'est pas ouvert. Au repos, cette seconde ne coûte
+    /// rien à personne.
+    ///
+    /// Et surtout, il n'y a plus rien à décider à l'appui. « Est-ce que je
+    /// recharge ? » ne se pose plus : la page est prête, quel que soit le module
+    /// qu'on choisira en parlant. C'est ce qui rend le changement d'avis en
+    /// pleine phrase sans conséquence — il n'y a pas d'état à rattraper.
+    ///
+    /// Trois cas, une seule question posée à la page :
+    ///
+    /// - **en discussion** : le fil ouvert *est* la page prête, on n'y touche
+    ///   pas ;
+    /// - **la page porte une conversation** — un message est parti, que la suite
+    ///   ait abouti ou non : on en ouvre une neuve ;
+    /// - **sinon** — le cas de « Brut », qui n'envoie rien : il suffit de vider
+    ///   la zone de saisie du texte qu'on vient de dicter.
+    func preparerLaProchaine() {
+        // Remplacer la précédente : deux chemins peuvent demander la
+        // préparation à quelques millisecondes d'écart — la fin d'une dictée et
+        // la sortie d'une discussion — et la seconde doit simplement prendre la
+        // place de la première.
+        preparation?.cancel()
+        preparation = Task { [weak self] in
+            guard let self, !enDiscussion else { return }
+            let page = pageActive()
+            if await page.tientUneConversation() {
+                page.charger()
+                _ = await page.attendreComposeurPret(secondes: 30)
+            } else {
+                await page.viderComposeur()
+            }
+        }
+    }
+
     func demarrer() async throws {
         debut = Date()
-        // Un fil neuf **avant** de parler, et seulement au premier appui.
-        //
-        // Il était ouvert après la transcription, et c'était l'ordre inverse
-        // du bon : on rechargeait la page où le texte venait d'être transcrit,
-        // donc on le perdait, et l'on envoyait une conversation vide. Le
-        // deuxième appui semblait marcher — il partait du fil que le premier
-        // avait créé pour rien.
-        //
-        // Ici, la conversation naît avant l'écoute. Les appuis suivants la
-        // poursuivent : c'est ce que la touche veut dire quand une discussion
-        // est déjà ouverte.
-        if RelaisCatalogue.courant.sortieParDefaut == .aucune, !enDiscussion {
-            let page = pageActive()
-            page.charger()
-            guard await page.attendreComposeurPret(secondes: 30) else {
-                throw RelaisPage.Erreur.zoneJamaisRevenue
-            }
-            enDiscussion = true
-            page.montrer()
-        }
+        // La page a été préparée quand la dictée précédente s'est achevée : il
+        // n'y a rien à décider ici, seulement à s'assurer que ce travail est
+        // fini. Il l'est, sauf si l'on rappuie dans la seconde.
+        await preparation?.value
         try await pageActive().demarrer()
     }
 
@@ -267,11 +302,21 @@ final class Relais: ObservableObject {
 
     /// La conversation reste sous les yeux, et prend le clavier.
     ///
-    /// `enDiscussion` est déjà vrai — il l'est depuis l'ouverture du fil, avant
-    /// même qu'on parle. C'est ce qui distingue le premier appui des suivants,
-    /// et cette distinction se prend au début, pas à la fin.
+    /// C'est **ici seulement** que l'état s'ouvre, à la fin d'une dictée que
+    /// personne n'est venu chercher. Il était aussi levé à l'appui, dès que le
+    /// module du moment ne délivrait nulle part — et il y restait quand on
+    /// basculait vers un module qui délivre : la fenêtre disparaissait, mais
+    /// Caspr se croyait encore en discussion et poursuivait un fil qu'on ne
+    /// voyait plus.
+    ///
+    /// « Une discussion est ouverte » veut dire une chose et une seule : une
+    /// fenêtre attend qu'on en sorte, et la touche de dictée y poursuit le fil.
     func entrerEnDiscussion() {
         enDiscussion = true
+        // La fenêtre ne s'ouvre que si le module l'a demandée. « Rien » veut
+        // dire rien, ici comme pendant la dictée : on discute à la voix, la
+        // réponse est lue à haute voix, et Échap met fin au fil.
+        guard RelaisCatalogue.courant.affichageEffectif == .page else { return }
         pageActive().montrer()
     }
 
@@ -280,6 +325,10 @@ final class Relais: ObservableObject {
         enDiscussion = false
         page?.cacher()
         NSApp.hide(nil)
+        // Le fil qu'on vient de quitter n'est plus la page prête : il faut en
+        // ouvrir une neuve, sans quoi la dictée suivante reprendrait la
+        // conversation qu'on vient de fermer.
+        preparerLaProchaine()
         Log.info("relais : discussion terminée")
     }
 
@@ -317,6 +366,9 @@ final class Relais: ObservableObject {
                 try await pageActive()
                     .envoyerSansAttendre((avant: module.avant, apres: module.apres))
                 Log.info("relais : \(module.identifiant) — envoyé, réponse à l'écran")
+                if module.ditLaReponse {
+                    await pageActive().faireLireLaReponse(patienceSecondes: 180)
+                }
             } catch is CancellationError { throw CancellationError() }
             catch {
                 Log.error("relais : \(module.identifiant) n'a pas pu envoyer "
@@ -333,6 +385,9 @@ final class Relais: ObservableObject {
             guard !texte.isEmpty else {
                 Log.error("relais : réponse vide, transcription brute conservée")
                 return brut
+            }
+            if module.ditLaReponse {
+                await pageActive().faireLireLaReponse(patienceSecondes: 30)
             }
             Log.info("relais : \(module.identifiant) — \(brut.count) → \(texte.count) caractères")
             return texte

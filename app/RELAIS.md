@@ -120,7 +120,34 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
   `RelaisEngine` plutôt que le moteur configuré, et trois exclusions (collecte,
   gestionnaire de repli, réglages de barre sans objet).
 
-## Une règle à ne jamais oublier
+## Quatre règles à ne jamais oublier
+
+Un repère appris **doit** dire de quel genre il est — zone de saisie, bouton —
+et ce genre sert trois fois : pour retrouver l'élément, pour juger le repère au
+moment où on l'apprend, et pour écarter les clics hors sujet pendant la
+calibration.
+
+Un sélecteur n'est pas une adresse : c'est une question posée à la page, et
+plusieurs éléments peuvent y répondre. ChatGPT pose le même libellé
+d'accessibilité sur la zone de saisie et sur le bloc qui l'entoure ;
+`querySelector` rendait le bloc, dont on ne peut rien lire. Toutes les dictées
+partaient bien dans ChatGPT et revenaient vides — « rien n'a été entendu » — et
+la calibration annonçait « le message d'essai n'a pas pu être écrit » devant une
+zone où il était pourtant écrit.
+
+Un repère appris qui ne trouve rien veut dire **absent**, et non « cherchons
+quelque chose qui lui ressemble ». Les heuristiques du pont sont le filet de qui
+n'a pas encore calibré, et rien d'autre. Pendant l'enregistrement, ChatGPT retire
+la zone de saisie de la page : se rabattre sur « une zone éditable » trouvait
+alors le document que ChatGPT avait produit à la réorganisation précédente, et
+chaque dictée rendait ce document au lieu de ce qu'on venait de dire — en une
+seconde et demie, au caractère près, sans que rien ne le signale.
+
+C'est **la fin d'une dictée qui prépare la suivante**. Au repos, la page est
+toujours prête : le fil ouvert quand on discute, une conversation neuve quand un
+message est parti, une zone de saisie vidée sinon. Rien ne se décide à l'appui —
+ni fil neuf, ni nettoyage — donc changer de module en pleine phrase n'a aucun
+état à rattraper, et l'on ne paie jamais un rechargement pendant qu'on parle.
 
 Tout champ ajouté à `RelaisSelecteurs` **doit** être décodé avec
 `decodeIfPresent`. Le décodage synthétisé par Swift échoue sur une clé absente

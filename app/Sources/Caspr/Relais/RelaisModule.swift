@@ -1,5 +1,15 @@
 import Foundation
 
+/// La place que la consigne tient dans un module.
+enum RelaisPlaceDeLaConsigne: String, Codable {
+    /// Le module envoie ce qui est dicté, tel quel. Rien à régler.
+    case aucune
+    /// Le module en propose une, qu'on peut retirer.
+    case facultative
+    /// Le module n'existe que par elle. La retirer en ferait un autre.
+    case essentielle
+}
+
 /// Où atterrit ce qui a été dicté.
 ///
 /// Une seule décision, et non trois. Elle emporte la fenêtre et le clavier
@@ -65,16 +75,36 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     var avant: String
     var apres: String
 
-    /// La consigne fait-elle l'identité du module ?
+    /// Quelle place la consigne tient dans ce module.
     ///
-    /// « Réorganiser » sans consigne ne réorganise plus rien : ce serait un
-    /// autre module, portant un nom devenu faux. Proposer de la décocher
-    /// laisserait fabriquer cette contradiction, alors qu'un module écrit par
-    /// l'utilisateur peut très bien vouloir envoyer la dictée telle quelle.
+    /// Trois états, parce qu'il y en a trois, et deux booléens se seraient
+    /// contredits à mi-chemin. « Discuter » envoie ce qu'on dit, tel quel :
+    /// une consigne n'y a pas sa place, et lui en proposer une reviendrait à
+    /// proposer d'en faire un autre module. « Réorganiser » sans consigne ne
+    /// réorganise plus rien : elle y est l'identité même. Et un module écrit
+    /// par l'utilisateur choisit.
+    var consigne: RelaisPlaceDeLaConsigne
+
+    /// Ce module propose-t-il de faire lire la réponse ?
     ///
-    /// On ne cache donc pas la case par prudence : on la cache là où elle n'a
-    /// pas de sens.
-    var consigneEssentielle: Bool
+    /// Pas une règle déduite de la sortie : la lecture à haute voix est
+    /// utilisable partout, y compris avec un texte qui part au curseur — rien
+    /// n'interdit d'écrire *et* d'entendre. C'est un choix de conception, module
+    /// par module.
+    ///
+    /// Les trois modules livrés restent simples : seul « Discuter » l'offre,
+    /// parce que sa réponse ne vit qu'à l'écran. Les modules écrits par
+    /// l'utilisateur l'offrent tous — ce qu'il en fait le regarde.
+    var lectureProposee: Bool
+
+    /// Faire lire la réponse à haute voix — un réglage, pas une nature.
+    ///
+    /// Il vit à part des `actions` parce qu'il appartient à l'utilisateur,
+    /// tandis que les actions décrivent ce que le module *est* et suivent les
+    /// versions de l'application. Rangé parmi les actions, il était réenregistré
+    /// puis aussitôt écrasé par la définition d'usine à la lecture suivante : la
+    /// case se décochait toute seule sans que rien ne le dise.
+    var ditLaReponse: Bool
 
     /// Les étapes que ce module demande, entre l'écoute et la sortie.
     ///
@@ -104,6 +134,11 @@ struct RelaisModule: Codable, Equatable, Identifiable {
 
     var id: String { identifiant }
 
+    /// Les noms qu'un enregistrement plus ancien pouvait porter.
+    private enum AnciennesCles: String, CodingKey {
+        case consigneEssentielle
+    }
+
     // MARK: - Décodage tolérant
     //
     // Même règle que pour les sélecteurs, et pour la même raison : un champ
@@ -117,7 +152,18 @@ struct RelaisModule: Codable, Equatable, Identifiable {
         integre = try c.decodeIfPresent(Bool.self, forKey: .integre) ?? false
         avant = try c.decodeIfPresent(String.self, forKey: .avant) ?? ""
         apres = try c.decodeIfPresent(String.self, forKey: .apres) ?? ""
-        consigneEssentielle = try c.decodeIfPresent(Bool.self, forKey: .consigneEssentielle) ?? false
+        // L'ancien booléen est traduit plutôt qu'ignoré : un champ qui change
+        // de forme ne doit pas effacer ce qui était enregistré.
+        if let place = try c.decodeIfPresent(RelaisPlaceDeLaConsigne.self, forKey: .consigne) {
+            consigne = place
+        } else if let vieux = try? decoder.container(keyedBy: AnciennesCles.self),
+                  try vieux.decodeIfPresent(Bool.self, forKey: .consigneEssentielle) == true {
+            consigne = .essentielle
+        } else {
+            consigne = .facultative
+        }
+        lectureProposee = try c.decodeIfPresent(Bool.self, forKey: .lectureProposee) ?? true
+        ditLaReponse = try c.decodeIfPresent(Bool.self, forKey: .ditLaReponse) ?? false
         actions = try c.decodeIfPresent([RelaisAction].self, forKey: .actions) ?? []
         sorties = try c.decodeIfPresent([RelaisSortie].self, forKey: .sorties) ?? [.curseur, .note]
         sortieParDefaut = try c.decodeIfPresent(RelaisSortie.self, forKey: .sortieParDefaut) ?? .curseur
@@ -126,7 +172,9 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     }
 
     init(identifiant: String, nom: String, integre: Bool = false,
-         avant: String = "", apres: String = "", consigneEssentielle: Bool = false,
+         avant: String = "", apres: String = "",
+         consigne: RelaisPlaceDeLaConsigne = .facultative,
+         lectureProposee: Bool = true, ditLaReponse: Bool = false,
          actions: [RelaisAction] = [],
          sorties: [RelaisSortie] = [.curseur, .note],
          sortieParDefaut: RelaisSortie = .curseur,
@@ -137,7 +185,9 @@ struct RelaisModule: Codable, Equatable, Identifiable {
         self.integre = integre
         self.avant = avant
         self.apres = apres
-        self.consigneEssentielle = consigneEssentielle
+        self.consigne = consigne
+        self.lectureProposee = lectureProposee
+        self.ditLaReponse = ditLaReponse
         self.actions = actions
         self.sorties = sorties
         self.sortieParDefaut = sortieParDefaut
@@ -165,6 +215,7 @@ struct RelaisModule: Codable, Equatable, Identifiable {
         fusion.affichage = enregistre.affichage
         fusion.ecranParDefaut = enregistre.ecranParDefaut
         fusion.sortieParDefaut = enregistre.sortieParDefaut
+        fusion.ditLaReponse = enregistre.ditLaReponse
         return fusion
     }
 
@@ -191,11 +242,14 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     ///
     /// L'ordre vient de `RelaisAction.allCases` et non de la liste
     /// enregistrée : un module ne choisit pas quand, seulement quoi.
-    var etapes: [RelaisAction] { RelaisAction.allCases.filter { actions.contains($0) } }
+    var etapes: [RelaisAction] {
+        var demandees = Set(actions)
+        if ditLaReponse { demandees.insert(.direLaReponse) }
+        return RelaisAction.allCases.filter { demandees.contains($0) }
+    }
 
     var demandeUnAllerRetour: Bool { actions.contains(.demanderUneReponse) }
     var ecranPossible: Bool { actions.contains(.joindreEcran) }
-    var ditLaReponse: Bool { actions.contains(.direLaReponse) }
 
     /// Tout ce qu'il faut avoir appris pour que ce module tourne.
     ///

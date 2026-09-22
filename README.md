@@ -286,38 +286,7 @@ DMG and drag it over the old app.
 
 ## Build from source
 
-### 1. Install the engine service
-
-Only needed for CrisperWhisper. With the built-in macOS engine, skip to step 2.
-
-If you installed Caspr from the DMG and only want to add CrisperWhisper, this
-is the one command — and the only time the Terminal is involved:
-
-```bash
-git clone --depth 1 https://github.com/mnaji42/caspr.git ~/.caspr && ~/.caspr/scripts/setup-engine.sh
-```
-
-It checks for Apple Silicon and `uv`, installs the Python dependencies, shows
-the model licence before downloading anything, and writes a descriptor at
-`~/Library/Application Support/Caspr/engine.json`. **That descriptor is what
-frees you from the Terminal afterwards**: the app reads it and can then write
-the launch agent, start and stop the service, and switch models on its own.
-Pass `--model small|medium|turbo|large` to pick different weights.
-
-Working from a clone of the repository instead:
-
-```bash
-cd engine && uv venv --python 3.12 && uv pip install -e . && cd ..
-./scripts/install-service.sh
-```
-
-This registers the engine as a launch agent, so it starts with your session
-and restarts if it dies. The model loads once (~8 s) and stays warm; each
-dictation pays inference only. Logs land in `~/Library/Logs/Caspr/engine.log`.
-
-To remove it: `./scripts/install-service.sh --uninstall`
-
-### 2. Build and install the app
+### 1. Build and install the app
 
 ```bash
 ./scripts/install.sh
@@ -327,7 +296,7 @@ This builds, signs, installs to `/Applications/Caspr.app`, and launches it.
 Caspr appears in the menu bar — no Dock icon, no window. Build artifacts stay
 in `app/build/`, never in the repo.
 
-### 3. Grant two permissions
+### 2. Grant two permissions
 
 | Permission | Why | When |
 |---|---|---|
@@ -361,7 +330,7 @@ workflow imports a certificate rather than signing ad hoc: with an ad-hoc
 signature, every new version would be a new identity, and macOS would revoke
 everyone's Accessibility grant on every update.
 
-### 4. Dictate
+### 3. Dictate
 
 | Shortcut | Action |
 |---|---|

@@ -41,9 +41,9 @@ enum Migration {
     /// celle-ci ait remplacé l'ancien moteur, et retomberait sur un défaut
     /// plutôt que sur la version mesurée ici.
     static func run() {
-        // Même verrou que `Rebranding` : un binaire lancé hors de son bundle —
-        // `swift run`, un test — lit un autre domaine de réglages, et n'a
-        // aucune raison de vider les dossiers de l'application installée.
+        // Un binaire lancé hors de son bundle — `swift run`, un test — lit un
+        // autre domaine de réglages, et n'a aucune raison de vider les
+        // dossiers de l'application installée.
         guard Bundle.main.bundleIdentifier == bundleIdentifier else { return }
         let home = FileManager.default.homeDirectoryForCurrentUser
 

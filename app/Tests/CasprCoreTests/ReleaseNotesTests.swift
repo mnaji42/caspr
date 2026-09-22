@@ -67,11 +67,11 @@ struct ReleaseNotesTests {
     @Test("Un paragraphe justifié reste une seule entrée")
     func joinsWrappedParagraphs() {
         let body = """
-            Sofler devient Caspr. Vos réglages et votre corpus sont repris
+            La dictée passe par macOS ou par ChatGPT. Vos réglages sont repris
             automatiquement au premier lancement — il n'y a rien à refaire.
             """
         #expect(ReleaseNotes.lines(from: body) == [
-            "Sofler devient Caspr. Vos réglages et votre corpus sont repris "
+            "La dictée passe par macOS ou par ChatGPT. Vos réglages sont repris "
                 + "automatiquement au premier lancement — il n'y a rien à refaire.",
         ])
     }

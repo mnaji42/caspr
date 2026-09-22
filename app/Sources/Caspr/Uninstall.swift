@@ -293,7 +293,7 @@ enum Uninstall {
     }
 
     /// L'agent launchd de l'ancien moteur local — le premier des deux labels,
-    /// l'autre étant celui de Sofler, que `Rebranding` retire déjà.
+    /// l'autre étant celui de l'ancien nom, que `Migration` retire déjà.
     private static var serviceLabel: String { LegacyCleanup.agentLabels[0] }
 
     private static var launchAgent: URL {

@@ -21,12 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let uninstaller = UninstallWindowController.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Tout premier geste, avant la moindre lecture de réglage ou de
-        // fichier : ce qui suit suppose que les données sont à leur place.
-        Rebranding.migrateIfNeeded()
-        // Après le renommage, qui peut apporter des réglages de Sofler encore
-        // réglés sur l'ancien moteur local ; avant tout ce qui lit
-        // `Preferences`.
+        // Tout premier geste, avant tout ce qui lit `Preferences` : les
+        // réglages de l'ancien moteur local doivent être traduits avant
+        // d'être lus (cf. `Migration.run`).
         Migration.run()
         SpeechAssets.shared.probe(Preferences.shared.selectedLanguages)
         controller = DictationController()

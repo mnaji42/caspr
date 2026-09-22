@@ -1,4 +1,4 @@
-// Rend l'icône de Caspr depuis `docs/images/svg-assets/caspr-app-icon.svg`.
+// Rend l'icône de Caspr depuis `app/Sources/Caspr/Resources/icons/caspr-app-icon.svg`.
 //
 // L'icône était dessinée en code — un choix qui se défendait tant qu'elle était
 // géométrique. Elle est maintenant un dessin, et un dessin se maintient là où

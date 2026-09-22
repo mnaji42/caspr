@@ -4,7 +4,7 @@ import Testing
 @Suite("Notes de version")
 struct ReleaseNotesTests {
 
-    /// La forme voulue : `docs/releases/vX.Y.Z.md`, des puces en français.
+    /// La forme voulue : `release-notes/vX.Y.Z.md`, des puces en français.
     @Test("Les puces rédigées à la main sont rendues telles quelles")
     func keepsHandWrittenBullets() {
         let body = """

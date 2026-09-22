@@ -13,7 +13,7 @@ import Foundation
 /// Mais on ne peut pas le poser tel quel dans une fenêtre. Deux formes
 /// coexistent, et une seule est rédigée pour être lue :
 ///
-/// - **Les notes écrites à la main** (`docs/releases/vX.Y.Z.md`, cf.
+/// - **Les notes écrites à la main** (`release-notes/vX.Y.Z.md`, cf.
 ///   `.github/workflows/release.yml`) : des puces en français, une par
 ///   changement. C'est la forme voulue.
 /// - **Les notes engendrées par GitHub** (`--generate-notes`, ce que faisaient

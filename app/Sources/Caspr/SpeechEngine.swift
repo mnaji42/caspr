@@ -23,9 +23,6 @@ struct TranscriptionRequest: Sendable {
     var samples: [Float]
     var mode: TranscriptionMode = .intended
     var language: String = "fr"
-    /// Termes à privilégier au décodage. `nil` laisse le moteur appliquer son
-    /// lexique par défaut ; un tableau vide le désactive.
-    var lexicon: [String]?
 }
 
 struct TranscriptionResult: Sendable {

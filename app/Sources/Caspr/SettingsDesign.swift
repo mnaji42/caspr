@@ -710,10 +710,10 @@ struct OptionCheck: View {
 
 /// Dispose des éléments de largeurs inégales sur plusieurs lignes.
 ///
-/// Un lexique tient en une trentaine de mots courts ; les empiler en colonne
-/// donnerait une page entière pour ce qui tient en quatre lignes, et une
-/// grille à colonnes fixes gâcherait la place sur « hook » pour l'économiser
-/// sur « pull request ».
+/// Des pastilles de langues ou de capacités tiennent en quelques lignes ; les
+/// empiler en colonne donnerait une page entière, et une grille à colonnes
+/// fixes gâcherait la place sur « FR » pour l'économiser sur « Récupérer la
+/// réponse ».
 struct FlowLayout: Layout {
     var spacing: CGFloat = 6
 

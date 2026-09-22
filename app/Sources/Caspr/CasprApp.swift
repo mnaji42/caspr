@@ -461,8 +461,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         keyEquivalent: "")
                 insert.target = self
                 insert.toolTip = "Écrit ce que macOS avait transcrit pendant que "
-                    + "vous parliez. Sans votre lexique, donc moins précis sur "
-                    + "le vocabulaire.\n\n\(preview)"
+                    + "vous parliez, moins soigné que la transcription "
+                    + "finale.\n\n\(preview)"
                 menu.addItem(insert)
             }
 
@@ -649,7 +649,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyPreferences() {
         let prefs = Preferences.shared
 
-        // Mode, langue et lexique ne sont plus recopiés : le contrôleur les lit
+        // Mode et langue ne sont plus recopiés : le contrôleur les lit
         // dans les préférences au moment de s'en servir. Reste le déclencheur,
         // dont le côté est fixé à la création du tap : il faut le reconstruire.
         modifierKey.stop()
@@ -744,7 +744,7 @@ struct CasprApp {
     /// J'en avais conclu qu'elle n'avait pas besoin de `mainMenu`. C'est faux, et
     /// ça se voyait : **⌘A, ⌘C, ⌘V et ⌘Z ne faisaient rien** dans le moindre
     /// champ de texte de l'application — la zone d'essai de l'accueil, la
-    /// recherche de langues, la saisie du lexique.
+    /// recherche de langues, la consigne d'un module du relais.
     ///
     /// macOS ne câble pas ces raccourcis dans les vues : il les route par le
     /// menu principal, en envoyant le sélecteur au premier répondant. Sans

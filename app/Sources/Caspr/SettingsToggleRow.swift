@@ -88,8 +88,7 @@ struct SettingsToggleRow: View {
         SettingsToggleRow(
             title: "Afficher l'aperçu du texte en direct",
             description: "Montre sous la barre ce que macOS entend pendant que vous parlez.",
-            note: "Indicatif : le moteur d'aperçu n'a pas votre vocabulaire "
-                + "technique, donc le texte inséré peut différer.",
+            note: "Indicatif : le texte inséré peut différer de l'aperçu.",
             isOn: $live)
 
         SettingsToggleRow(title: "Sons de début et de fin",

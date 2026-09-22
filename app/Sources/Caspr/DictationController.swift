@@ -37,8 +37,7 @@ final class DictationController {
 
     var onStateChange: ((State) -> Void)?
 
-    /// Mode, langue et lexique sont **lus** dans les préférences, jamais
-    /// recopiés.
+    /// Mode et langue sont **lus** dans les préférences, jamais recopiés.
     ///
     /// Ils l'ont été, et c'était un bug : le contrôleur gardait des copies
     /// rafraîchies à la fermeture de la fenêtre de réglages. Choisir l'anglais
@@ -51,9 +50,6 @@ final class DictationController {
         set { Preferences.shared.defaultMode = newValue }
     }
 
-    /// `nil` laisse le moteur appliquer son lexique développeur par défaut.
-    var lexicon: [String]? { Preferences.shared.effectiveLexicon }
-
     var language: String { Preferences.shared.language }
 
     /// Destination du texte : curseur actif, ou fichier de notes.
@@ -64,7 +60,7 @@ final class DictationController {
     /// que ça ne doit pas aller là.
     ///
     /// **Lue** dans les préférences, jamais recopiée — la même règle que le
-    /// mode, la langue et le lexique juste au-dessus, et pour la même raison.
+    /// mode et la langue juste au-dessus, et pour la même raison.
     /// Elle était un état local remis au curseur à chaque lancement, ce qui
     /// obligeait qui travaille au fichier de notes à y revenir tous les matins.
     var target: DictationTarget { Preferences.shared.effectiveTarget }
@@ -101,11 +97,11 @@ final class DictationController {
     /// échoué.
     ///
     /// Le moteur de macOS a transcrit pendant qu'on parlait. Si la passe finale
-    /// échoue, ce texte existe, il est bon — moins précis sur le vocabulaire,
-    /// puisqu'il n'a pas le lexique — et il était jeté. On proposait donc de
-    /// « réessayer » comme seule issue, y compris quand la cause de l'échec ne
-    /// s'arrangera pas d'un second essai : un service qui refuse de démarrer
-    /// refusera encore.
+    /// échoue, ce texte existe, il est bon — moins soigné que la passe finale,
+    /// qui a toute la phrase sous les yeux — et il était jeté. On proposait
+    /// donc de « réessayer » comme seule issue, y compris quand la cause de
+    /// l'échec ne s'arrangera pas d'un second essai : un modèle absent
+    /// manquera encore.
     ///
     /// Figé ici plutôt que lu dans `previewText` au moment de l'insertion : ce
     /// dernier est remis à zéro au début de la dictée suivante, et l'on peut
@@ -682,7 +678,7 @@ final class DictationController {
         do {
             let result = try await moteur.transcribe(
                 TranscriptionRequest(samples: samples, mode: used,
-                                     language: language, lexicon: lexicon))
+                                     language: language))
             guard numero == cycle else { return }
 
             // RELAIS — une sortie qui n'écrit nulle part s'arrête ici.
@@ -1022,11 +1018,11 @@ final class DictationController {
 
     /// Insère ce que l'aperçu en direct avait écrit, faute de mieux.
     ///
-    /// La seconde issue d'un échec, et souvent la bonne : quand le service
-    /// local refuse de démarrer, réessayer échouera pareil, alors que le texte
-    /// de macOS est là et se suffit à lui-même. Moins précis sur le vocabulaire
-    /// — l'aperçu n'a pas le lexique — mais un texte imparfait vaut mieux que
-    /// dix minutes de parole à redire.
+    /// La seconde issue d'un échec, et souvent la bonne : quand la version de
+    /// macOS choisie ne sait pas écrire ici, réessayer échouera pareil, alors
+    /// que le texte de l'aperçu est là et se suffit à lui-même. Moins soigné
+    /// que la passe finale, mais un texte imparfait vaut mieux que dix minutes
+    /// de parole à redire.
     ///
     /// L'audio est libéré comme après une insertion réussie : on a choisi cette
     /// issue-là, et garder l'autre en réserve laisserait « Réessayer » dans le

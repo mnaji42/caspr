@@ -240,12 +240,6 @@ final class LegacySpeechEngine: SpeechEngine, @unchecked Sendable {
         // Apple — ce que Caspr garantit ne jamais faire.
         audio.requiresOnDeviceRecognition = true
         audio.shouldReportPartialResults = false
-        // Le lexique, quand il y en a un. Contrairement au moteur de macOS 26,
-        // celui-ci accepte `contextualStrings` — reste à mesurer si ça change
-        // quelque chose sur de vraies dictées, ce que le corpus dira.
-        if let lexicon = request.lexicon, !lexicon.isEmpty {
-            audio.contextualStrings = lexicon
-        }
 
         for buffer in Self.buffers(from: request.samples) {
             audio.append(buffer)

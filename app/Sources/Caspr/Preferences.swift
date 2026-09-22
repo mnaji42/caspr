@@ -15,8 +15,8 @@ extension Notification.Name {
 
 /// Réglages persistants.
 ///
-/// Tout passe par `UserDefaults` : ce sont quelques scalaires et une liste de
-/// mots, une base de données serait disproportionnée. Aucun réglage ne quitte
+/// Tout passe par `UserDefaults` : ce sont quelques scalaires et quelques
+/// listes courtes, une base de données serait disproportionnée. Aucun réglage ne quitte
 /// la machine.
 @MainActor
 @Observable
@@ -24,8 +24,6 @@ final class Preferences {
     static let shared = Preferences()
 
     private enum Key {
-        static let lexicon = "caspr.lexicon"
-        static let useDefaultLexicon = "caspr.lexicon.useDefault"
         static let triggerSide = "caspr.trigger.side"
         static let triggerEnabled = "caspr.trigger.enabled"   // hérité, migré vers triggerKind
         static let triggerKind = "caspr.trigger.kind"
@@ -47,8 +45,7 @@ final class Preferences {
         static let ignoredUpdate = "caspr.update.ignored"
         static let lastValidEngine = "caspr.engine.lastValid"
         /// Marque qu'une installation antérieure au multi-langues a été
-        /// reprise. Sert à ne pas changer sous les pieds de quelqu'un des
-        /// défauts qui n'ont bougé que pour les installations neuves.
+        /// reprise — cf. `init`.
         static let migratedSchema = "caspr.schema.migrated"
     }
 
@@ -101,35 +98,6 @@ final class Preferences {
     var checksForUpdates: Bool {
         didSet { defaults.set(checksForUpdates, forKey: Key.updateCheck) }
     }
-
-    // MARK: - Lexique
-
-    /// Termes privilégiés au décodage, un par ligne dans l'interface.
-    ///
-    /// C'est le principal levier de qualité de l'application : c'est lui qui
-    /// fait sortir `useEffect` plutôt que « use effect ».
-    ///
-    /// Mais allonger la liste dégrade, et c'est mesuré : à 36 termes le modèle
-    /// perd des virgules — « Dans Next.js j'ai envie » au lieu de « Dans
-    /// Next.js, j'ai envie ». Un prompt plus long dilue le contexte. Il faut
-    /// donc retirer un terme pour en ajouter un, pas empiler.
-    var lexicon: [String] {
-        didSet { defaults.set(lexicon, forKey: Key.lexicon) }
-    }
-
-    /// Liste envoyée au moteur.
-    ///
-    /// Toujours explicite désormais. Il existait une bascule « utiliser la liste
-    /// intégrée » qui envoyait `nil`, laissant le service appliquer sa propre
-    /// `DEFAULT_LEXICON` — dix-neuf termes de développement web que
-    /// l'utilisateur ne voyait nulle part et ne pouvait pas modifier.
-    ///
-    /// Le prototype n'a pas cette bascule, et il a raison : un réglage qui
-    /// change ce que le moteur écrit sans montrer quoi n'est pas un réglage,
-    /// c'est une surprise. La migration a recopié la liste du service dans
-    /// `lexicon` — les deux étaient **rigoureusement identiques**, donc rien
-    /// n'a changé pour personne, sinon que la liste est enfin visible.
-    var effectiveLexicon: [String]? { lexicon }
 
     // MARK: - Déclencheur
 
@@ -458,40 +426,12 @@ final class Preferences {
     }
 
     private init() {
-        // Reprend-on une installation antérieure au multi-langues ?
-        //
-        // La question n'est pas rhétorique : des défauts ont changé pour les
-        // installations neuves, et les changer sous les pieds de quelqu'un qui
-        // utilise déjà Caspr modifierait ses transcriptions sans qu'il ait rien
-        // touché. On ne peut pas se contenter de l'absence des nouvelles clés : une
-        // installation neuve ne les a pas non plus. C'est la présence des
-        // **anciennes** qui tranche.
-        let isExistingInstall = defaults.object(forKey: Key.migratedSchema) == nil
-            && (defaults.object(forKey: Key.onboarded) != nil
-                || defaults.object(forKey: Key.language) != nil
-                || defaults.object(forKey: Key.engine) != nil)
+        // La marque que cette installation a été lue par la version courante.
+        // Plus rien ici ne la relit, mais `LegacyCleanup` l'attend avant
+        // d'effacer l'ancien réglage unique `caspr.engine` : sans elle, il
+        // le garderait indéfiniment, faute de savoir qu'il a été repris.
         defaults.set(true, forKey: Key.migratedSchema)
 
-        // Liste vide pour qui découvre Caspr : la liste intégrée est du
-        // vocabulaire de développement web, et un médecin ou un juriste n'a
-        // rien à faire de `useEffect`. Mais elle reste en place pour qui
-        // l'utilisait déjà — cf. `isExistingInstall`.
-        // Migration de la bascule « liste intégrée » : ceux qui l'avaient
-        // active recevaient la liste du service. On la leur écrit noir sur
-        // blanc plutôt que de la leur retirer — c'est le même contenu, mot
-        // pour mot, et il devient modifiable.
-        let storedLexicon = defaults.stringArray(forKey: Key.lexicon)
-        let usedBuiltIn = defaults.object(forKey: Key.useDefaultLexicon) as? Bool
-            ?? isExistingInstall
-        if let storedLexicon, !usedBuiltIn {
-            lexicon = storedLexicon
-        } else if usedBuiltIn {
-            lexicon = storedLexicon.map { $0.isEmpty ? Self.starterLexicon : $0 }
-                ?? Self.starterLexicon
-        } else {
-            lexicon = []
-        }
-        defaults.removeObject(forKey: Key.useDefaultLexicon)
         // Migration : l'ancien réglage était un simple interrupteur sur la
         // touche Option, le raccourci restant actif en parallèle. Le couper
         // voulait donc dire « je préfère le raccourci ».
@@ -579,15 +519,4 @@ final class Preferences {
 
         ignoredUpdateVersion = defaults.string(forKey: Key.ignoredUpdate)
     }
-
-    /// Point de départ quand l'utilisateur passe à sa propre liste : le même
-    /// contenu que la liste intégrée, pour qu'il parte de quelque chose qui
-    /// marche plutôt que d'une page blanche.
-    static let starterLexicon = [
-        "useEffect", "useState", "component", "React", "Next.js", "TypeScript",
-        "hook", "props", "state",
-        "refactor", "merge", "commit", "branch", "pull request",
-        "endpoint", "dependencies", "async", "await",
-        "chunk",
-    ]
 }

@@ -11,10 +11,7 @@ import CasprCore
 ///
 /// Il vient avec le système : rien à télécharger, aucune licence à accepter,
 /// et il fonctionne sur toute machine en macOS 26. C'est ce qui en fait le
-/// moteur par défaut. Sa limite est connue et mesurée : il n'a **pas** de
-/// conditionnement par vocabulaire exploitable — `contextualStrings` existe
-/// mais reste sans effet sur nos enregistrements — donc il n'écrira jamais
-/// `useEffect`. Et il n'a qu'un rendu, sans distinction nettoyé/mot-à-mot.
+/// moteur par défaut.
 @available(macOS 26.0, *)
 final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
     enum EngineError: LocalizedError {

@@ -18,13 +18,12 @@ struct EngineChoiceTests {
         #expect(EngineChoice.systemEngines.first == .apple)
     }
 
-    /// Le lexique et les modes passent par le prompt d'un décodeur. Aucune
-    /// version de macOS n'en a : leur prêter ces capacités ferait afficher un
-    /// sélecteur de mode sans effet, et un lexique qui ne change rien.
-    @Test("Aucune version n'a ni lexique ni modes")
+    /// Les modes passent par le prompt d'un décodeur. Aucune version de macOS
+    /// n'en a : leur prêter cette capacité ferait afficher un sélecteur de
+    /// mode sans effet.
+    @Test("Aucune version n'a de modes")
     func noPromptCapability() {
         for engine in EngineChoice.allCases {
-            #expect(!engine.honoursLexicon)
             #expect(!engine.hasModes)
         }
     }

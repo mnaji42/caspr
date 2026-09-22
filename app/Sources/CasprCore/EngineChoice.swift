@@ -52,21 +52,11 @@ public enum EngineChoice: String, CaseIterable, Sendable, Codable {
 
     /// Cette version distingue-t-elle texte nettoyé et mot à mot ?
     ///
-    /// Non, ni l'une ni l'autre : elles n'ont pas de prompt. Le mode et le
-    /// lexique survivent encore dans les réglages et le corpus, et s'en vont
-    /// avec eux ; d'ici là, la question garde sa réponse écrite ici plutôt
-    /// qu'un `false` recopié chez chaque appelant.
+    /// Non, ni l'une ni l'autre : elles n'ont pas de prompt. Le mode survit
+    /// encore dans les réglages, et s'en va avec eux ; d'ici là, la question
+    /// garde sa réponse écrite ici plutôt qu'un `false` recopié chez chaque
+    /// appelant.
     public var hasModes: Bool {
-        switch self {
-        case .apple, .appleLegacy: false
-        }
-    }
-
-    /// Cette version accepte-t-elle un lexique qui change quelque chose ?
-    ///
-    /// Faux, et c'est mesuré : `contextualStrings` existe dans l'API mais ne
-    /// modifie pas la sortie sur nos enregistrements.
-    public var honoursLexicon: Bool {
         switch self {
         case .apple, .appleLegacy: false
         }

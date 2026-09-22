@@ -662,7 +662,7 @@ final class RecordingOverlay {
 
     private static let previewExplanation =
         "Aperçu indicatif, par le moteur de macOS\n"
-        + "Sans le lexique : le texte inséré différera\n"
+        + "Le texte inséré peut différer\n"
         + "Cliquer pour l'activer ou le couper"
 
     /// Nom court : la largeur de la barre suit celle des contrôles, donc un

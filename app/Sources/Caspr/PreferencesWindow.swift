@@ -552,7 +552,7 @@ private struct HistoryTab: View {
 }
 
 /// Une carte bordée d'accent, pour la section qui porte le contenu vivant d'un
-/// onglet — la liste des dictées, le lexique. Le prototype la distingue ainsi
+/// onglet — la liste des dictées. Le prototype la distingue ainsi
 /// de la carte de réglage qui la précède.
 struct AccentCard<Content: View>: View {
     @ViewBuilder var content: Content

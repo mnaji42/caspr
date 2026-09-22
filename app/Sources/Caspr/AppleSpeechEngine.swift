@@ -128,9 +128,6 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
 
         return TranscriptionResult(
             text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-            // Le moteur système ne distingue pas les modes : on rend celui qui
-            // a été demandé plutôt que d'inventer une valeur.
-            mode: request.mode,
             windowSeconds: Double(request.samples.count) / AudioRecorder.targetSampleRate,
             truncated: false,
             // Pas de découpage mel/encodeur/décodeur observable ici : seul le

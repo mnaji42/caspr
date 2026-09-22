@@ -266,9 +266,6 @@ final class LegacySpeechEngine: SpeechEngine, @unchecked Sendable {
         let elapsed = Date().timeIntervalSince(started) * 1000
         return TranscriptionResult(
             text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-            // Comme le moteur de macOS 26 : un seul rendu, on renvoie le mode
-            // demandé plutôt que d'inventer une distinction qui n'existe pas.
-            mode: request.mode,
             windowSeconds: Double(request.samples.count) / AudioRecorder.targetSampleRate,
             truncated: false,
             latency: TranscriptionResult.Latency(melMs: 0, encoderMs: 0,

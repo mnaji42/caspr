@@ -1025,13 +1025,12 @@ struct RelaisEngine: SpeechEngine {
         // personne ne le lui dispute, et le raccourci redevient instantané.
         // L'échéance de toute la suite est fixée ici, sur la durée parlée.
         texte = try await Relais.partage.arreterEtLire(secondesDictees: secondes)
-        // La seconde passe, quand le mode la demande. Elle rend le brut si
+        // La seconde passe, quand le module la demande. Elle rend le brut si
         // elle échoue : rien de ce qui a été dit ne se perd.
         let rendu = try await Relais.partage.transformer(texte, module: RelaisCatalogue.courant)
         let ms = Date().timeIntervalSince(debut) * 1000
         return TranscriptionResult(
             text: rendu,
-            mode: request.mode,
             windowSeconds: secondes,
             truncated: false,
             // Le relais ne distingue ni mel, ni encodeur, ni décodeur : le

@@ -37,19 +37,14 @@ final class DictationController {
 
     var onStateChange: ((State) -> Void)?
 
-    /// Mode et langue sont **lus** dans les préférences, jamais recopiés.
+    /// La langue est **lue** dans les préférences, jamais recopiée.
     ///
-    /// Ils l'ont été, et c'était un bug : le contrôleur gardait des copies
+    /// Elle l'a été, et c'était un bug : le contrôleur gardait des copies
     /// rafraîchies à la fermeture de la fenêtre de réglages. Choisir l'anglais
     /// puis dicter sans fermer la fenêtre transcrivait de l'anglais avec le
     /// modèle français — panne parfaitement muette, puisque le moteur rend
     /// simplement un texte vide ou absurde. Toute copie d'un réglage est une
     /// occasion de divergence ; il n'y en a plus.
-    var mode: TranscriptionMode {
-        get { Preferences.shared.defaultMode }
-        set { Preferences.shared.defaultMode = newValue }
-    }
-
     var language: String { Preferences.shared.language }
 
     /// Destination du texte : curseur actif, ou fichier de notes.
@@ -60,7 +55,7 @@ final class DictationController {
     /// que ça ne doit pas aller là.
     ///
     /// **Lue** dans les préférences, jamais recopiée — la même règle que le
-    /// mode et la langue juste au-dessus, et pour la même raison.
+    /// langue juste au-dessus, et pour la même raison.
     /// Elle était un état local remis au curseur à chaque lancement, ce qui
     /// obligeait qui travaille au fichier de notes à y revenir tous les matins.
     var target: DictationTarget { Preferences.shared.effectiveTarget }
@@ -148,23 +143,17 @@ final class DictationController {
         // RELAIS — Échap suit ce que le relais montre (cf. `ajusterEchap`).
         Relais.partage.surAffichageChange = { [weak self] in self?.ajusterEchap() }
         // RELAIS — le choix se fait sur la barre, au moment de parler.
-        overlay.onSelectModeIndex = { [weak self] index in
+        overlay.onSelectModule = { [weak self] index in
             guard let self else { return }
-            let modes = RelaisCatalogue.proposes
-            guard modes.indices.contains(index) else { return }
-            RelaisCatalogue.courant = modes[index]
+            let modules = RelaisCatalogue.proposes
+            guard modules.indices.contains(index) else { return }
+            RelaisCatalogue.courant = modules[index]
             // L'affichage appartient au module : changer de module en pleine
             // dictée doit le faire suivre. C'était le seul réglage figé à
             // l'appui de la touche, et c'est le cas courant — on change d'avis
             // parce qu'on a déjà commencé à parler.
             if state == .recording { Relais.partage.afficherBarre() }
             refreshOverlay()
-        }
-        overlay.onSelectMode = { [weak self] mode in
-            guard let self else { return }
-            self.mode = mode
-            refreshOverlay()
-            onStateChange?(state)
         }
         overlay.onSelectTarget = { [weak self] wantsNotes in
             guard let self else { return }
@@ -192,43 +181,38 @@ final class DictationController {
 
     /// État courant de la barre.
     ///
-    /// RELAIS — deux réglages n'ont aucun sens quand la dictée passe par
-    /// ChatGPT, et les afficher quand même laisse croire qu'ils agissent : les
-    /// modes « Texte nettoyé / Mot à mot » ne s'appliquent pas à ChatGPT, et la
-    /// langue est détectée par le service lui-même. Le badge de langue sert alors
-    /// à nommer le moteur réellement à l'œuvre — sans quoi la barre est
-    /// indiscernable d'une dictée ordinaire.
+    /// RELAIS — la langue n'a aucun sens quand la dictée passe par ChatGPT, qui
+    /// la détecte lui-même, et l'afficher quand même laisserait croire qu'elle
+    /// agit. Le badge de langue sert alors à nommer le moteur réellement à
+    /// l'œuvre — sans quoi la barre est indiscernable d'une dictée ordinaire.
     private var overlayStatus: RecordingOverlay.Status {
         if relaisEnCours {
-            // La pastille porte les modes du relais dès que l'aller-retour
-            // est calibré. Sans lui, un seul mode est possible : proposer un
-            // choix qui échouerait vaut moins que ne rien proposer.
-            let modes = RelaisCatalogue.proposes
+            // La pastille porte les modules du relais dès que l'aller-retour
+            // est calibré. Sans lui, un seul module est possible, et la barre
+            // n'en montre pas : proposer un choix qui échouerait vaut moins
+            // que ne rien proposer.
+            let modules = RelaisCatalogue.proposes
             let courant = RelaisCatalogue.courant
             return RecordingOverlay.Status(
-                mode: mode,
                 target: target,
                 noteName: noteFile?.lastPathComponent,
                 canPickNote: state != .recording,
                 previewEnabled: Preferences.shared.livePreviewEnabled,
-                modesAvailable: modes.count > 1,
+                moduleLabels: modules.map(\.nom),
+                moduleIndex: modules.firstIndex(of: courant) ?? 0,
                 destinationImposee: courant.sorties == [.aucune]
                     ? "Réponse à l'écran" : nil,
-                modeLabels: modes.count > 1 ? modes.map(\.nom) : nil,
-                modeIndex: modes.firstIndex(of: courant) ?? 0,
                 languageBadge: "ChatGPT",
                 switchableLanguages: [],
                 languageCode: Preferences.shared.primaryLanguage)
         }
         return RecordingOverlay.Status(
-            mode: mode,
             target: target,
             noteName: noteFile?.lastPathComponent,
             // Sans fichier mémorisé, basculer sur les notes suppose un
             // sélecteur — impossible pendant qu'on parle.
             canPickNote: state != .recording,
             previewEnabled: Preferences.shared.livePreviewEnabled,
-            modesAvailable: Preferences.shared.engine.hasModes,
             // La langue **effectivement** écoutée. Elle n'était nulle part sur
             // la barre : depuis le multi-langues, dicter en français avec
             // l'anglais actif produit un texte incompréhensible qu'on met
@@ -310,7 +294,7 @@ final class DictationController {
     /// Ouvre un cycle, depuis le repos.
     private func commencer() {
         cycle &+= 1
-        // RELAIS — c'est le mode qui décide, pas la touche : les deux
+        // RELAIS — c'est la voie choisie qui décide, pas la touche : les deux
         // s'excluent, et il n'y a qu'un seul déclencheur.
         let parRelais = Relais.partage.actif
         if parRelais {
@@ -620,7 +604,6 @@ final class DictationController {
         // tout défait, et un autre cycle a peut-être commencé.
         let numero = cycle
         state = .processing
-        let used = mode
         // RELAIS — le relais se conforme au protocole des moteurs, donc tout ce
         // qui suit (insertion, historique, échecs, barre) marche sans le savoir.
         let parRelais = relaisEnCours
@@ -677,8 +660,7 @@ final class DictationController {
         let moteur: any SpeechEngine = parRelais ? RelaisEngine() : writer
         do {
             let result = try await moteur.transcribe(
-                TranscriptionRequest(samples: samples, mode: used,
-                                     language: language))
+                TranscriptionRequest(samples: samples, language: language))
             guard numero == cycle else { return }
 
             // RELAIS — une sortie qui n'écrit nulle part s'arrête ici.
@@ -768,7 +750,7 @@ final class DictationController {
             let devant = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
             Log.info("insertion vers \(devant)")
             try await deliver(text)
-            history.add(text, mode: used)
+            history.add(text)
             // Abandonné pendant l'insertion : le texte est écrit, et c'est
             // tout ce qui reste de ce cycle. L'état appartient au suivant.
             guard numero == cycle else { return }
@@ -1039,7 +1021,7 @@ final class DictationController {
                 if isAtRest { state = .failed(error.localizedDescription) }
                 return
             }
-            history.add(text, mode: mode)
+            history.add(text)
             pendingAudio = nil
             pendingPreview = nil
             // Une dictée a pu commencer pendant l'insertion : son état n'est

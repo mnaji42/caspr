@@ -109,9 +109,9 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
   `~/Library/WebKit/<bundle>`, et **dit** dans la liste qu'une session ChatGPT
   est connectée. Sans cette mention, une case nommée « Réglages et historique »
   décidait en silence d'une session ouverte sur un service tiers.
-- **`RecordingOverlay.swift`** — la pastille des modes accepte des libellés de
-  rechange. Le relais n'a ni « Texte nettoyé » ni « Mot à mot », et le choix se
-  fait au moment de parler, pas dans un écran de réglages. L'attente, elle,
+- **`RecordingOverlay.swift`** — la pastille des modules (`moduleLabels`,
+  `onSelectModule`) : le choix se fait au moment de parler, pas dans un écran
+  de réglages. L'attente, elle,
   s'affiche avec sa phase et son chrono dès dix secondes, et la sortie par la
   touche de dictée (`showProcessing(_:progress:)`).
 - **`DictationController.swift`** — l'essentiel : un drapeau posé au début du

@@ -27,7 +27,6 @@ final class Preferences {
         static let triggerSide = "caspr.trigger.side"
         static let triggerEnabled = "caspr.trigger.enabled"   // hérité, migré vers triggerKind
         static let triggerKind = "caspr.trigger.kind"
-        static let defaultMode = "caspr.mode"
         static let language = "caspr.language"          // hérité, migré vers languages
         static let languages = "caspr.languages.selected"
         static let primaryLanguage = "caspr.languages.primary"
@@ -157,10 +156,6 @@ final class Preferences {
     let triggerSide: ModifierKeyMonitor.Side = .right
 
     // MARK: - Transcription
-
-    var defaultMode: TranscriptionMode {
-        didSet { defaults.set(defaultMode.rawValue, forKey: Key.defaultMode) }
-    }
 
     /// Les langues de travail, en locales complètes — `["fr-FR", "en-US"]`.
     ///
@@ -442,8 +437,6 @@ final class Preferences {
         } else {
             triggerKind = .option
         }
-        defaultMode = TranscriptionMode(
-            rawValue: defaults.string(forKey: Key.defaultMode) ?? "intended") ?? .intended
 
         // Migration des langues : le réglage était un code court unique
         // (« fr »), il devient une liste de locales complètes (« fr-FR »).

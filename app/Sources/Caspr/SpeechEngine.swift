@@ -1,33 +1,13 @@
 import Foundation
 
-/// Style de transcription.
-///
-/// Aucune version de macOS ne le distingue (`EngineChoice.hasModes`) : le
-/// réglage survit à l'ancien moteur local qui le portait, et s'en va avec le
-/// reste des modes.
-enum TranscriptionMode: String, Sendable, CaseIterable {
-    /// Ce qui était voulu — texte nettoyé, nombres en chiffres. Défaut.
-    case intended
-    /// Ce qui a été dit — hésitations, répétitions, faux départs conservés.
-    case verbatim
-    var label: String {
-        switch self {
-        case .intended: "Texte nettoyé"
-        case .verbatim: "Mot à mot"
-        }
-    }
-}
-
 struct TranscriptionRequest: Sendable {
     /// PCM mono 16 kHz, normalisé dans [-1, 1].
     var samples: [Float]
-    var mode: TranscriptionMode = .intended
     var language: String = "fr"
 }
 
 struct TranscriptionResult: Sendable {
     var text: String
-    var mode: TranscriptionMode
     /// Fenêtre d'encodage retenue, en secondes — utile au diagnostic.
     var windowSeconds: Double
     /// Vrai si l'audio dépassait la limite de 30 s du modèle et a été coupé.

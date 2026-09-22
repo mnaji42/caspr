@@ -50,18 +50,6 @@ public enum EngineChoice: String, CaseIterable, Sendable, Codable {
     /// lequel on les préfère quand les deux marchent.
     public static var systemEngines: [EngineChoice] { [.apple, .appleLegacy] }
 
-    /// Cette version distingue-t-elle texte nettoyé et mot à mot ?
-    ///
-    /// Non, ni l'une ni l'autre : elles n'ont pas de prompt. Le mode survit
-    /// encore dans les réglages, et s'en va avec eux ; d'ici là, la question
-    /// garde sa réponse écrite ici plutôt qu'un `false` recopié chez chaque
-    /// appelant.
-    public var hasModes: Bool {
-        switch self {
-        case .apple, .appleLegacy: false
-        }
-    }
-
     /// Ce que change le choix de version, sous le sélecteur.
     ///
     /// Court exprès : il n'apparaît que sous la carte de macOS, qui dit déjà

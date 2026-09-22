@@ -14,12 +14,13 @@ final class TranscriptionHistory {
         let id: UUID
         let text: String
         let date: Date
-        let mode: String
-        init(text: String, mode: TranscriptionMode) {
+        // Les entrées écrites avant la refonte portent aussi un champ `mode`,
+        // du temps où la dictée en avait deux. Le décodeur ignore les clés
+        // qu'il ne connaît pas : elles se relisent telles quelles.
+        init(text: String) {
             self.id = UUID()
             self.text = text
             self.date = Date()
-            self.mode = mode.rawValue
         }
 
         /// « à l'instant », « il y a 3 min » — repère plus utile qu'une heure
@@ -102,12 +103,12 @@ final class TranscriptionHistory {
         }
     }
 
-    func add(_ text: String, mode: TranscriptionMode) {
+    func add(_ text: String) {
         guard isEnabled else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        entries.insert(Entry(text: trimmed, mode: mode), at: 0)
+        entries.insert(Entry(text: trimmed), at: 0)
         if entries.count > limit {
             entries.removeLast(entries.count - limit)
         }

@@ -18,16 +18,6 @@ struct EngineChoiceTests {
         #expect(EngineChoice.systemEngines.first == .apple)
     }
 
-    /// Les modes passent par le prompt d'un décodeur. Aucune version de macOS
-    /// n'en a : leur prêter cette capacité ferait afficher un sélecteur de
-    /// mode sans effet.
-    @Test("Aucune version n'a de modes")
-    func noPromptCapability() {
-        for engine in EngineChoice.allCases {
-            #expect(!engine.hasModes)
-        }
-    }
-
     /// Les `rawValue` sont écrits dans les préférences. En renommer un ne
     /// casse aucune compilation : ça relit simplement `nil` au prochain
     /// lancement, et l'utilisateur retrouve la version par défaut sans que

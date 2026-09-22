@@ -6,9 +6,8 @@ import QuartzCore
 ///
 /// Il ne se contente pas d'indiquer que l'enregistrement tourne : il permet de
 /// corriger le tir **en parlant**. On se rend compte au milieu d'une phrase
-/// qu'on est en mot-à-mot au lieu de texte nettoyé, ou que la destination
-/// n'est pas la bonne — il faut pouvoir changer sans arrêter, sinon la dictée
-/// est à refaire.
+/// que la langue, la destination ou le module de ChatGPT ne sont pas les bons
+/// — il faut pouvoir changer sans arrêter, sinon la dictée est à refaire.
 ///
 /// Quatre contraintes non négociables :
 ///
@@ -24,16 +23,16 @@ import QuartzCore
 /// * **rester étroite.** Elle vit en bas de l'écran pendant qu'on travaille
 ///   ailleurs. D'où deux lignes courtes plutôt qu'une longue : ce qui
 ///   concerne la *captation* en haut — chrono, niveau, micro, aperçu — et ce
-///   qui concerne le *texte* en dessous — mode et destination.
+///   qui concerne le *texte* en dessous — langue et destination. Les modules
+///   de ChatGPT, quand il y en a, passent au-dessus.
 @MainActor
 final class RecordingOverlay {
     /// Tout ce que la barre affiche, en un seul objet.
     ///
-    /// Regroupé parce que ces valeurs bougent ensemble : changer de mode
+    /// Regroupé parce que ces valeurs bougent ensemble : changer de module
     /// pendant une dictée doit repeindre la barre entière, et une signature à
     /// six paramètres se serait désynchronisée au premier oubli.
     struct Status {
-        var mode: TranscriptionMode
         var target: DictationTarget
         /// Nom du fichier de notes mémorisé, `nil` si aucun.
         var noteName: String?
@@ -41,24 +40,24 @@ final class RecordingOverlay {
         /// peut pas ouvrir maintenant.
         var canPickNote: Bool = true
         var previewEnabled: Bool
-        /// Faux quand le moteur **retenu** n'a qu'un rendu : la pastille de
-        /// mode **disparaît** plutôt que d'être grisée. Un contrôle inerte
-        /// occupe la place et l'attention sans rien offrir.
-        var modesAvailable: Bool = true
-        // RELAIS — libellés de rechange pour la pastille des modes.
-        //
-        // Le relais n'a ni « Texte nettoyé » ni « Mot à mot » : il a ses
-        // propres modes, et la
-        // pastille est l'endroit où on les choisit — au moment de parler, pas
-        // dans un écran de réglages qu'on n'ouvrira pas pour une phrase.
+        /// Les modules de ChatGPT entre lesquels choisir, au-dessus de la
+        /// carte.
+        ///
+        /// La pastille est l'endroit où on les choisit — au moment de parler,
+        /// pas dans un écran de réglages qu'on n'ouvrira pas pour une phrase.
+        /// Vide, elle **disparaît** plutôt que d'être grisée : un contrôle
+        /// inerte occupe la place et l'attention sans rien offrir. C'est le
+        /// cas sous macOS, et sous ChatGPT tant qu'un seul module est
+        /// possible.
+        var moduleLabels: [String] = []
+        /// Le module en cours, parmi `moduleLabels`.
+        var moduleIndex: Int = 0
         // RELAIS — la destination qu'un module impose, quand il en impose une.
         //
         // « Discuter » n'écrit ni au curseur ni dans les notes : proposer les
         // deux laisserait choisir entre deux options sans effet. Une seule
         // pastille inerte dit ce qui va se passer.
         var destinationImposee: String? = nil
-        var modeLabels: [String]? = nil
-        var modeIndex: Int = 0
         /// La langue en cours, « 🇫🇷 FR ».
         var languageBadge: String = ""
 
@@ -112,8 +111,7 @@ final class RecordingOverlay {
     private let statusLabel = NSTextField(labelWithString: "")
     private let previewLabel = NSTextField(labelWithString: "")
     private let meter = LevelMeter()
-    private let modeControl = PillSelector(
-        labels: TranscriptionMode.allCases.map(\.label), accent: accent)
+    private let moduleControl = PillSelector(labels: [], accent: accent)
     private let targetControl = PillSelector(
         labels: ["Curseur", "Notes…"], accent: accent)
     private let micButton = FirstMouseButton()
@@ -138,19 +136,17 @@ final class RecordingOverlay {
     private var processingGlow: CALayer?
     private var tabsBelowCard: NSLayoutConstraint?
     private var cardAlone: NSLayoutConstraint?
-    /// La carte sous la rangée du mode, ou collée en haut quand elle n'y est pas.
-    private var cardBelowMode: NSLayoutConstraint?
+    /// La carte sous la rangée des modules, ou collée en haut quand elle n'y
+    /// est pas.
+    private var cardBelowModules: NSLayoutConstraint?
     private var cardAtTop: NSLayoutConstraint?
     private var previewLineCount = 1
     /// Composition courante de la rangée d'onglets.
     private var tabsLayout: Layout?
 
     var levelProvider: (() -> Float)?
-    var onSelectMode: ((TranscriptionMode) -> Void)?
-    /// RELAIS — appelé à la place du précédent quand `modeLabels` est posé.
-    var onSelectModeIndex: ((Int) -> Void)?
-    /// RELAIS — vrai quand la pastille porte les modes du relais.
-    private var modeLabelsActifs: Bool { status.modeLabels != nil }
+    /// Le module choisi sur la pastille, par son rang dans `moduleLabels`.
+    var onSelectModule: ((Int) -> Void)?
     var onSelectTarget: ((Bool) -> Void)?
     var onSelectLanguage: ((String) -> Void)?
 
@@ -158,8 +154,7 @@ final class RecordingOverlay {
 
     private var startedAt: Date?
     private var pulsePhase: CGFloat = 0
-    private var status = Status(mode: .intended, target: .caret, noteName: nil,
-                                previewEnabled: false)
+    private var status = Status(target: .caret, noteName: nil, previewEnabled: false)
 
     // MARK: - Mesures et couleurs
 
@@ -249,9 +244,9 @@ final class RecordingOverlay {
         textRow?.isHidden = false
         cardAlone?.isActive = false
         tabsBelowCard?.isActive = true
-        // `layoutTabs` remettra la rangée du mode si le moteur la demande ;
+        // `layoutModules` remettra la rangée des modules s'il y en a ;
         // d'ici là, la carte reprend le haut.
-        cardBelowMode?.isActive = false
+        cardBelowModules?.isActive = false
         cardAtTop?.isActive = true
         // Une ligne vide laisserait croire que l'aperçu est en panne le temps
         // que les premiers mots arrivent.
@@ -292,13 +287,13 @@ final class RecordingOverlay {
         textRow?.isHidden = true
         tabsBelowCard?.isActive = false
         cardAlone?.isActive = true
-        // La rangée du mode disparaît avec le reste. Laissée en place, elle
-        // gardait « Texte nettoyé | Mot à mot » flottant au-dessus d'un message
-        // qui ne les concerne pas — et surtout elle continuait de pousser la
-        // carte vers le bas pendant que `cardAlone` la retenait par le bas :
-        // coincée entre les deux, elle se réduisait à un liseré.
-        modeControl.isHidden = true
-        cardBelowMode?.isActive = false
+        // La rangée des modules disparaît avec le reste. Laissée en place, elle
+        // flottait au-dessus d'un message qui ne la concerne pas — et surtout
+        // elle continuait de pousser la carte vers le bas pendant que
+        // `cardAlone` la retenait par le bas : coincée entre les deux, elle se
+        // réduisait à un liseré.
+        moduleControl.isHidden = true
+        cardBelowModules?.isActive = false
         cardAtTop?.isActive = true
         statusLabel.isHidden = false
         // Une ligne, et remise à une ligne : un échec précédent a pu en laisser
@@ -397,13 +392,13 @@ final class RecordingOverlay {
         textRow?.isHidden = true
         tabsBelowCard?.isActive = false
         cardAlone?.isActive = true
-        // La rangée du mode disparaît avec le reste. Laissée en place, elle
-        // gardait « Texte nettoyé | Mot à mot » flottant au-dessus d'un message
-        // qui ne les concerne pas — et surtout elle continuait de pousser la
-        // carte vers le bas pendant que `cardAlone` la retenait par le bas :
-        // coincée entre les deux, elle se réduisait à un liseré.
-        modeControl.isHidden = true
-        cardBelowMode?.isActive = false
+        // La rangée des modules disparaît avec le reste. Laissée en place, elle
+        // flottait au-dessus d'un message qui ne la concerne pas — et surtout
+        // elle continuait de pousser la carte vers le bas pendant que
+        // `cardAlone` la retenait par le bas : coincée entre les deux, elle se
+        // réduisait à un liseré.
+        moduleControl.isHidden = true
+        cardBelowModules?.isActive = false
         cardAtTop?.isActive = true
         statusLabel.isHidden = false
         statusLabel.maximumNumberOfLines = hint == nil ? 1 : 2
@@ -499,14 +494,9 @@ final class RecordingOverlay {
     func update(_ status: Status) {
         self.status = status
 
-        // RELAIS — les libellés de rechange l'emportent sur les modes de
-        // transcription, et pilotent aussi l'index sélectionné.
-        if let libelles = status.modeLabels {
-            modeControl.setLabels(libelles)
-            modeControl.select(min(status.modeIndex, max(libelles.count - 1, 0)))
-        } else {
-            modeControl.setLabels(TranscriptionMode.allCases.map(\.label))
-            modeControl.select(TranscriptionMode.allCases.firstIndex(of: status.mode) ?? 0)
+        if !status.moduleLabels.isEmpty {
+            moduleControl.setLabels(status.moduleLabels)
+            moduleControl.select(min(status.moduleIndex, status.moduleLabels.count - 1))
         }
         languageBadge.stringValue = status.languageBadge
 
@@ -547,9 +537,8 @@ final class RecordingOverlay {
         // Masquer ne suffit pas à recentrer : les entretoises restent en
         // place et le contrôle survivant se retrouve décalé d'une demi-
         // entretoise. On refait la rangée avec les seuls contrôles visibles.
-        layoutTabs(showMode: status.modesAvailable, switchable: canSwitch,
-                   usesMenu: usesMenu)
-        layoutMode(showMode: status.modesAvailable)
+        layoutTabs(switchable: canSwitch, usesMenu: usesMenu)
+        layoutModules(show: showsModules)
 
         if let imposee = status.destinationImposee {          // RELAIS —
             targetControl.setLabels([imposee])
@@ -727,7 +716,7 @@ final class RecordingOverlay {
         guard let panel else { return }
         var height = Self.controlRowHeight + Self.tabGap
             + Self.padding + Self.rowHeight + Self.padding
-        if status.modesAvailable {
+        if showsModules {
             height += Self.controlRowHeight + Self.tabGap
         }
         if status.previewEnabled {
@@ -807,7 +796,7 @@ final class RecordingOverlay {
         buildControls()
 
         let recording = makeRow([dot, timeLabel, meter, NSView(), micButton])
-        let tabs = makeSpacedRow([modeControl, targetControl])
+        let tabs = makeSpacedRow([moduleControl, targetControl])
         recordingRow = recording
         textRow = tabs
 
@@ -838,18 +827,18 @@ final class RecordingOverlay {
         // onglets ce qu'on en fait. Posés au-dessus, ils s'interposaient entre
         // le regard et le texte reconnu, qui est la seule chose qu'on lit
         // vraiment pendant qu'on parle.
-        // Le mode de rendu passe **au-dessus**, à droite. Il n'apparaît que
+        // Les modules passent **au-dessus**, à droite. Ils n'apparaissent que
         // sous le relais : le laisser en bas obligeait la rangée du bas à se
         // réorganiser selon le moteur, et la destination changeait de place
         // d'une dictée à l'autre. En haut, il apparaît et disparaît sans rien
         // déplacer de ce qui reste.
-        root.addSubview(modeControl)
+        root.addSubview(moduleControl)
         NSLayoutConstraint.activate([
-            modeControl.topAnchor.constraint(equalTo: root.topAnchor),
-            modeControl.trailingAnchor.constraint(equalTo: root.trailingAnchor,
+            moduleControl.topAnchor.constraint(equalTo: root.topAnchor),
+            moduleControl.trailingAnchor.constraint(equalTo: root.trailingAnchor,
                                                   constant: -6),
         ])
-        cardBelowMode = card.topAnchor.constraint(equalTo: modeControl.bottomAnchor,
+        cardBelowModules = card.topAnchor.constraint(equalTo: moduleControl.bottomAnchor,
                                                   constant: Self.tabGap)
         cardAtTop = card.topAnchor.constraint(equalTo: root.topAnchor)
 
@@ -902,17 +891,17 @@ final class RecordingOverlay {
     /// - **Une seule** : un simple indicateur, qui dit dans quelle langue on
     ///   parle.
     ///
-    /// Le mode de rendu n'est pas ici : il est passé **au-dessus de la carte, à
-    /// droite** (cf. `makePanel`). Il n'apparaît que sous le relais, et le
-    /// laisser en bas obligeait cette rangée à se réorganiser selon le moteur —
-    /// la destination changeait alors de place d'une dictée à l'autre.
+    /// Les modules ne sont pas ici : ils sont passés **au-dessus de la carte, à
+    /// droite** (cf. `makePanel`). Ils n'apparaissent que sous le relais, et
+    /// les laisser en bas obligeait cette rangée à se réorganiser selon le
+    /// moteur — la destination changeait alors de place d'une dictée à
+    /// l'autre.
     ///
     /// Appelée à chaque mise à jour, mais ne fait rien tant que la composition
     /// ne change pas : reconstruire des contraintes vingt fois par seconde
     /// pendant une dictée serait absurde.
-    private func layoutTabs(showMode: Bool, switchable: Bool, usesMenu: Bool) {
-        let wanted = Layout(showMode: showMode, switchable: switchable,
-                            usesMenu: usesMenu)
+    private func layoutTabs(switchable: Bool, usesMenu: Bool) {
+        let wanted = Layout(switchable: switchable, usesMenu: usesMenu)
         guard wanted != tabsLayout || textRow == nil else { return }
         tabsLayout = wanted
         guard let row = textRow else { return }
@@ -927,19 +916,21 @@ final class RecordingOverlay {
 
     }
 
-    /// La rangée du mode, montrée ou cachée à **chaque** mise à jour.
+    /// La rangée des modules, montrée ou cachée à **chaque** mise à jour.
     ///
     /// Hors de `layoutTabs`, qui sort tôt quand la composition de la rangée du
     /// bas n'a pas bougé : la rangée du haut ne serait alors jamais rétablie
     /// après une transcription ou un échec, qui la cachent tous deux.
-    private func layoutMode(showMode: Bool) {
-        modeControl.isHidden = !showMode
-        cardBelowMode?.isActive = showMode
-        cardAtTop?.isActive = !showMode
+    private func layoutModules(show: Bool) {
+        moduleControl.isHidden = !show
+        cardBelowModules?.isActive = show
+        cardAtTop?.isActive = !show
     }
 
+    /// Un seul module n'est pas un choix : la pastille n'apparaît qu'à deux.
+    private var showsModules: Bool { status.moduleLabels.count > 1 }
+
     private struct Layout: Equatable {
-        var showMode: Bool
         var switchable: Bool
         var usesMenu: Bool
     }
@@ -1052,18 +1043,8 @@ final class RecordingOverlay {
             button.setButtonType(.momentaryChange)
         }
 
-        modeControl.onSelect = { [weak self] index in
-            guard let self else { return }
-            // RELAIS — des libellés de rechange veulent dire d'autres modes :
-            // traduire l'index en `TranscriptionMode` désignerait alors un
-            // réglage qui n'a rien à voir avec ce qui est écrit sur la pastille.
-            if modeLabelsActifs {
-                onSelectModeIndex?(index)
-                return
-            }
-            let modes = TranscriptionMode.allCases
-            guard modes.indices.contains(index) else { return }
-            onSelectMode?(modes[index])
+        moduleControl.onSelect = { [weak self] index in
+            self?.onSelectModule?(index)
         }
         targetControl.onSelect = { [weak self] index in
             self?.onSelectTarget?(index == 1)
@@ -1096,7 +1077,7 @@ final class RecordingOverlay {
         panel = nil
         tabsBelowCard = nil
         cardAlone = nil
-        cardBelowMode = nil
+        cardBelowModules = nil
         cardAtTop = nil
         container = nil
         recordingRow = nil

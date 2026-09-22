@@ -48,9 +48,12 @@ final class Relais: ObservableObject {
                 // Allumé, on charge tout de suite : la première dictée ne doit
                 // pas payer le chargement de chatgpt.com. C'est possible parce
                 // que Caspr n'ouvrira plus le micro tant que ce mode dure.
-                _ = pageActive()
+                _ = try? pageActive()
                 return
             }
+            // Tout de suite, sans attendre la libération : une dictée en vol
+            // doit trouver le relais éteint dès maintenant (cf. `pageActive`).
+            oublierCeQuiVitSurLaPage()
             // Rendre le micro avant de lâcher la page : décocher la case doit
             // rendre Caspr exactement à l'état d'avant, y compris pour la
             // dictée sur la touche principale. C'est la porte de sortie, elle
@@ -134,11 +137,21 @@ final class Relais: ObservableObject {
     /// Construite à la première utilisation, jamais avant.
     private var page: RelaisPage?
 
-    private func pageActive() -> RelaisPage {
+    /// La page, construite au besoin — **jamais quand le relais est éteint.**
+    ///
+    /// Elle se reconstruisait sans rien demander. Éteindre le relais en pleine
+    /// dictée détruisait la page, puis l'étape suivante du cycle en faisait
+    /// une neuve : chatgpt.com rouvert derrière une case décochée, et le micro
+    /// repris par une page que plus personne n'attendait — la dictée macOS
+    /// suivante n'enregistrait que du silence. Le cycle en cours apprend
+    /// désormais que le relais a disparu, et s'arrête là.
+    private func pageActive() throws -> RelaisPage {
         if let page { return page }
+        guard actif else { throw RelaisPage.Erreur.relaisEteint }
         let neuve = RelaisPage()
         neuve.surFermeture = { [weak self] in self?.fenetreFermee() }
         neuve.surMort = { [weak self] in self?.surPageInterrompue?() }
+        neuve.surAffichage = { [weak self] in self?.surAffichageChange?() }
         page = neuve
         return neuve
     }
@@ -167,7 +180,7 @@ final class Relais: ObservableObject {
     /// Caspr n'ouvre plus le micro du tout dans ce mode : la raison a disparu.
     func prechauffer() {
         guard actif, estCalibre else { return }
-        _ = pageActive()
+        _ = try? pageActive()
     }
 
     // MARK: - Cycle de dictée
@@ -220,7 +233,11 @@ final class Relais: ObservableObject {
     /// l'inverse de ce que le message d'échec promettait. La préparation
     /// attend donc que l'utilisateur en ait fini : qu'il ferme la fenêtre, ou
     /// qu'il rappuie sur la touche.
-    private var preparationDifferee = false
+    private var preparationDifferee = false {
+        // La fenêtre de récupération tient le clavier : Échap y revient au
+        // système tant qu'elle attend (cf. `discussionAffichee`).
+        didSet { if preparationDifferee != oldValue { surAffichageChange?() } }
+    }
 
     /// L'appui devra-t-il attendre la page ? La barre de Caspr le dit alors,
     /// plutôt que de laisser l'écran muet pendant qu'elle se prépare.
@@ -272,26 +289,32 @@ final class Relais: ObservableObject {
             return
         }
         lancerPreparation { [weak self] page in
-            guard let self, !enDiscussion else { return }
-            switch await page.tientUneConversation() {
-            case true?:
-                page.charger()
-                let prete = await page.attendreComposeurPret(secondes: 30)
-                guard !prete, !Task.isCancelled else { return }
-                // La page vient d'être rechargée : il n'y a rien à y perdre, et
-                // un second essai rattrape un chargement resté en route.
-                Log.error("relais : la page rechargée est restée sans zone de saisie — "
-                          + "nouveau rechargement")
-                page.charger()
-                _ = await page.attendreComposeurPret(secondes: 30)
-            case false?:
-                await page.viderComposeur()
-            case nil:
-                guard !Task.isCancelled else { return }
-                Log.error("relais : la page ne répond plus — rechargement au repos")
-                page.charger()
-                _ = await page.attendreComposeurPret(secondes: 30)
-            }
+            await self?.preparer(page)
+        }
+    }
+
+    /// Le travail de `preparerLaProchaine`, à part pour que l'arrêt d'une
+    /// dictée abandonnée le fasse aussi (cf. `interrompre`).
+    private func preparer(_ page: RelaisPage) async {
+        guard !enDiscussion, !Task.isCancelled else { return }
+        switch await page.tientUneConversation() {
+        case true?:
+            page.charger()
+            let prete = await page.attendreComposeurPret(secondes: 30)
+            guard !prete, !Task.isCancelled else { return }
+            // La page vient d'être rechargée : il n'y a rien à y perdre, et
+            // un second essai rattrape un chargement resté en route.
+            Log.error("relais : la page rechargée est restée sans zone de saisie — "
+                      + "nouveau rechargement")
+            page.charger()
+            _ = await page.attendreComposeurPret(secondes: 30)
+        case false?:
+            await page.viderComposeur()
+        case nil:
+            guard !Task.isCancelled else { return }
+            Log.error("relais : la page ne répond plus — rechargement au repos")
+            page.charger()
+            _ = await page.attendreComposeurPret(secondes: 30)
         }
     }
 
@@ -319,7 +342,12 @@ final class Relais: ObservableObject {
         preparationDifferee = false
         numeroPreparation &+= 1
         let numero = numeroPreparation
-        let page = pageActive()
+        // Relais éteint : il n'y a plus de page à préparer, et surtout pas une
+        // neuve à construire (cf. `pageActive`).
+        guard let page = try? pageActive() else {
+            preparation = nil
+            return
+        }
         preparation = Task { [weak self] in
             await travail(page)
             guard let self, numeroPreparation == numero else { return }
@@ -354,14 +382,37 @@ final class Relais: ObservableObject {
         abandonnerCalibration()
         guard preparationDifferee, occupation == .libre else { return }
         preparerLaProchaine()
-        // Une discussion a survécu à l'échec : Échap, laissé à la fenêtre le
-        // temps de la récupération, redevient la sortie du fil.
-        if enDiscussion { surRecuperationFinie?() }
     }
 
-    /// Appelé quand la fenêtre ouverte pour récupérer un texte est fermée,
-    /// une discussion toujours ouverte.
-    var surRecuperationFinie: (() -> Void)?
+    /// Appelé chaque fois que ce qui est à l'écran du relais change : une
+    /// fenêtre montrée ou rangée, une discussion ouverte ou close, une
+    /// récupération commencée ou finie.
+    ///
+    /// Échap se règle là-dessus (cf. `discussionAffichee`). Il était pris et
+    /// rendu au fil des chemins du cycle, et l'un d'eux l'oubliait toujours :
+    /// armé après une discussion, il survivait à la fenêtre refermée et
+    /// avalait la frappe suivante dans n'importe quelle application — en
+    /// fermant le fil au passage.
+    var surAffichageChange: (() -> Void)?
+
+    /// Une discussion est-elle ouverte **sous les yeux** ?
+    ///
+    /// La seule situation, hors enregistrement, où Échap appartient à Caspr :
+    /// une fenêtre est là, et c'est elle qu'il ferme. Sans fenêtre — module
+    /// qui ne fait que parler, fenêtre fermée à la main — Échap est un
+    /// raccourci global qui fermerait un fil qu'on ne voit pas ; la sortie est
+    /// alors dans le menu de Caspr. Pendant une récupération non plus : la
+    /// fenêtre a le clavier, et Échap y appartient au système.
+    ///
+    /// La barre compte comme une fenêtre. Une discussion réglée sur
+    /// « Barre » la garde à l'écran après la dictée ; ne regarder que la
+    /// grande fenêtre rendait Échap au système devant une barre qui flottait
+    /// au-dessus du travail, sans autre sortie qu'une entrée du menu. Pas la
+    /// barre transparente de « Rien » : il n'y a rien sous les yeux.
+    var discussionAffichee: Bool {
+        guard enDiscussion, !preparationDifferee, let page else { return false }
+        return page.estVisible || page.barreEnVue
+    }
 
     /// Appelé quand la page meurt pendant que la dictée écoute.
     var surPageInterrompue: (() -> Void)?
@@ -396,11 +447,6 @@ final class Relais: ObservableObject {
         return try await pageActive().arreterEtLire(attente)
     }
 
-    func annuler() async {
-        await page?.annuler()
-        await page?.rendreLeMicro()
-    }
-
     /// Détruit la page, à l'extinction du mode.
     ///
     /// Le processus de contenu de WebKit part avec elle, et c'est lui qui tient
@@ -414,9 +460,25 @@ final class Relais: ObservableObject {
     func libererPage() async {
         guard let ancienne = page else { return }
         page = nil
+        // « Se déconnecter » passe aussi par ici, relais allumé : sans cela,
+        // une discussion affichée gardait Échap pris après la destruction de
+        // sa fenêtre, et avalait la frappe dans n'importe quelle application.
+        oublierCeQuiVitSurLaPage()
+        surAffichageChange?()
         await ancienne.rendreLeMicro()
         ancienne.detruire()
         Log.info("relais : page libérée")
+    }
+
+    /// Ni discussion ni préparation ne survivent à la page : une discussion
+    /// restée « ouverte » sur une page détruite gardait sa sortie dans le menu,
+    /// et une préparation en vol aurait continué de piloter la page qu'on
+    /// libère.
+    private func oublierCeQuiVitSurLaPage() {
+        preparation?.cancel()
+        preparation = nil
+        preparationDifferee = false
+        enDiscussion = false
     }
 
     /// Efface la session ChatGPT — cookies, stockage local, caches.
@@ -456,7 +518,9 @@ final class Relais: ObservableObject {
     /// Publiée : la barre des menus et les réglages doivent pouvoir le dire, et
     /// c'est un état qui se termine par un geste de l'utilisateur, pas par la
     /// fin d'un cycle.
-    @Published private(set) var enDiscussion = false
+    @Published private(set) var enDiscussion = false {
+        didSet { if enDiscussion != oldValue { surAffichageChange?() } }
+    }
 
     /// La conversation reste sous les yeux, et prend le clavier.
     ///
@@ -470,12 +534,14 @@ final class Relais: ObservableObject {
     /// « Une discussion est ouverte » veut dire une chose et une seule : une
     /// fenêtre attend qu'on en sorte, et la touche de dictée y poursuit le fil.
     func entrerEnDiscussion() {
+        guard actif else { return }
         enDiscussion = true
         // La fenêtre ne s'ouvre que si le module l'a demandée. « Rien » veut
         // dire rien, ici comme pendant la dictée : on discute à la voix, la
-        // réponse est lue à haute voix, et Échap met fin au fil.
+        // réponse est lue à haute voix, et c'est le menu de Caspr qui met fin
+        // au fil — Échap n'est pris que devant une fenêtre.
         guard RelaisCatalogue.courant.affichageEffectif == .page else { return }
-        pageActive().montrer()
+        try? pageActive().montrer()
     }
 
     func terminerDiscussion() {
@@ -549,8 +615,8 @@ final class Relais: ObservableObject {
             // Un refus — un quota — ou l'échéance passée se dit dans la
             // barre : sans quoi on attend une voix qui ne viendra pas, et
             // l'on redemande.
-            if module.ditLaReponse,
-               let echec = await pageActive().faireLireLaReponse(attente: attente) {
+            if module.ditLaReponse, let page = try? pageActive(),
+               let echec = await page.faireLireLaReponse(attente: attente) {
                 avertissement = echec.raisonCourte
             }
             // Interrompue, la lecture se tait sans lever, et c'est voulu :
@@ -578,7 +644,7 @@ final class Relais: ObservableObject {
                 // son seul, et le texte remanié s'insère quand même. Trente
                 // secondes au plus, et non l'échéance : le texte attend ce
                 // clic pour s'insérer.
-                await pageActive().faireLireLaReponse(attente: attente, auPlus: 30)
+                await (try? pageActive())?.faireLireLaReponse(attente: attente, auPlus: 30)
                 // Interrompue, elle rend la main sans rien dire : sans cette
                 // vérification, le texte s'insérait au curseur un instant
                 // après l'abandon, et entrait dans l'historique.
@@ -657,20 +723,64 @@ final class Relais: ObservableObject {
 
     // MARK: - Réglages
 
-    func ouvrirFenetre() { pageActive().montrer() }
+    func ouvrirFenetre() { try? pageActive().montrer() }
 
     /// La petite fenêtre pendant la dictée, et son retrait après.
-    func afficherBarre() { pageActive().afficherBarre() }
+    func afficherBarre() { try? pageActive().afficherBarre() }
     func masquerBarre() { page?.cacher() }
 
-    /// Tout arrêter proprement, dans l'ordre.
+    /// Range la barre d'une dictée qui s'achève, sauf si la grande fenêtre est
+    /// ouverte.
+    ///
+    /// La grande fenêtre ne s'ouvre à la fin d'une dictée que pour qu'on y
+    /// fasse quelque chose : se connecter, récupérer un texte, poursuivre une
+    /// discussion. La ranger avec la barre défaisait ce qu'on venait de
+    /// montrer.
+    func rangerLaBarre() {
+        guard let page, !page.estVisible else { return }
+        page.cacher()
+    }
+
+    /// Tout arrêter proprement, dans l'ordre — puis préparer la suivante.
     ///
     /// La barre se referme **après** l'arrêt et non avant : rangée hors champ,
     /// la page est suspendue par le système, et le clic sur le bouton d'arrêt
     /// n'aboutirait pas. ChatGPT continuerait d'écouter, invisible.
-    func interrompre() async {
-        await annuler()
-        masquerBarre()
+    ///
+    /// L'arrêt passe par la préparation, et c'est ce qui le rend sûr contre un
+    /// appui immédiat. Détaché, il courait en même temps que la dictée
+    /// suivante : le clic sur l'arrêt pouvait couper l'écoute qui venait de
+    /// s'ouvrir, et la barre se rangeait sous elle. Devenu une préparation,
+    /// l'appui suivant l'attend (cf. `attendreLaPreparation`), comme il attend
+    /// n'importe quelle page qu'on remet d'aplomb. Et la page abandonnée est
+    /// remise prête — une réorganisation interrompue après l'envoi laisse une
+    /// conversation, que la suivante ne doit pas reprendre.
+    ///
+    /// `quitterLaDiscussion` : la dictée abandonnée devait écrire ailleurs, ce
+    /// qui fermait la discussion à la fin de son cycle — l'abandon la ferme à
+    /// sa place. Sans quoi la préparation, qui ne touche pas au fil d'une
+    /// discussion, laissait la page telle quelle, et la dictée suivante
+    /// partait dans l'ancienne conversation, message abandonné compris. Pas
+    /// par `terminerDiscussion` : il range la page tout de suite, avant que
+    /// l'arrêt n'ait cliqué — ChatGPT aurait continué d'écouter hors champ —
+    /// puis lance une préparation que celle-ci remplacerait, arrêt compris.
+    func interrompre(quitterLaDiscussion: Bool = false) {
+        let rendreLePremierPlan = quitterLaDiscussion && enDiscussion
+        if quitterLaDiscussion { enDiscussion = false }
+        lancerPreparation { [weak self] page in
+            await page.annuler()
+            await page.rendreLeMicro()
+            // Une dictée a pu commencer entre-temps et afficher sa barre : ce
+            // n'est plus à nous de la ranger.
+            guard let self else { return }
+            if occupation == .libre {
+                page.cacher()
+                // Comme à la sortie d'une discussion : sa grande fenêtre a pu
+                // activer Caspr, et la dictée suivante écrirait chez lui.
+                if rendreLePremierPlan { NSApp.hide(nil) }
+            }
+            await preparer(page)
+        }
     }
 
     /// Apprendre à Caspr tout ce que la page sait faire, d'un seul parcours.
@@ -693,8 +803,11 @@ final class Relais: ObservableObject {
             termine?()
             return
         }
+        guard let page = try? pageActive() else {
+            termine?()
+            return
+        }
         occupation = .calibration
-        let page = pageActive()
         page.montrer()
         calibration = Task {
             defer { calibration = nil; occupation = .libre; termine?() }
@@ -851,7 +964,7 @@ final class Relais: ObservableObject {
     /// sélecteur devenu caduc d'un bouton qui refuse de répondre, et le seul
     /// recours est de tout recalibrer en espérant.
     func diagnostic() {
-        let page = pageActive()
+        guard let page = try? pageActive() else { return }
         let sel = RelaisSelecteurs.charger()
         Task {
             let connexion = await page.etatConnexion(patience: 2)

@@ -125,6 +125,12 @@ final class AudioRecorder: @unchecked Sendable {
     }
 
     func start() throws {
+        // Avant la garde, et non après : un démarrage sur un magnétophone
+        // resté en marche sortait ici en silence, en gardant l'audio de la
+        // dictée précédente — la suivante rendait alors deux phrases collées.
+        lock.lock()
+        samples.removeAll(keepingCapacity: true)
+        lock.unlock()
         guard !isRunning else { return }
 
         let input = engine.inputNode
@@ -146,10 +152,6 @@ final class AudioRecorder: @unchecked Sendable {
             throw RecorderError.converterUnavailable
         }
         self.converter = converter
-
-        lock.lock()
-        samples.removeAll(keepingCapacity: true)
-        lock.unlock()
         level = 0
 
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in

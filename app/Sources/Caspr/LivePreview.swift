@@ -44,6 +44,13 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     /// Raison d'un aperçu indisponible, à afficher telle quelle.
     private let onFailure: @MainActor @Sendable (String) -> Void
 
+    /// Tout ce qui suit est partagé entre trois fils : le démarrage, qui
+    /// tourne hors du main actor, le fil audio qui appelle `append`, et le
+    /// main actor qui appelle `stop`. Rien ne le protégeait — `converter`
+    /// était écrit par deux d'entre eux à la fois —, là où `LegacyLivePreview`
+    /// avait déjà son verrou. Jamais tenu à travers une suspension : un verrou
+    /// bloquant immobiliserait un fil du pool coopératif.
+    private let lock = NSLock()
     private var analyzer: SpeechAnalyzer?
     private var continuation: AsyncStream<AnalyzerInput>.Continuation?
     private var results: Task<Void, Never>?
@@ -52,6 +59,18 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     /// moment-là, et il change si l'utilisateur change de micro.
     private var converter: AVAudioConverter?
     private var analyzerFormat: AVAudioFormat?
+
+    /// Vrai dès `stop()`, et pour toujours : un aperçu arrêté ne repart pas.
+    ///
+    /// `stop()` ne l'empêchait pas. Appelé pendant que `start` attendait
+    /// encore — la réservation de la locale, le téléchargement du modèle —, il
+    /// n'avait rien à arrêter ; `start` reprenait ensuite, branchait
+    /// l'analyseur, et l'aperçu ressuscité écrivait sur une barre et dans un
+    /// contrôleur passés à la dictée suivante. C'est le jeton que chaque
+    /// étape vérifie avant d'agir, rappels compris.
+    private var stopped = false
+
+    private var isStopped: Bool { lock.withLock { stopped } }
 
     init(onText: @escaping @MainActor @Sendable (String) -> Void,
          onFailure: @escaping @MainActor @Sendable (String) -> Void) {
@@ -86,7 +105,23 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
         NSLog("caspr: locale %@ réservée : %@", locale.identifier, granted ? "oui" : "non")
     }
 
+    /// Branche l'analyseur, sauf si l'aperçu a été arrêté entre-temps.
+    private func adopt(format: AVAudioFormat,
+                       continuation: AsyncStream<AnalyzerInput>.Continuation,
+                       analyzer: SpeechAnalyzer,
+                       results: Task<Void, Never>) -> Bool {
+        lock.withLock {
+            guard !stopped else { return false }
+            analyzerFormat = format
+            self.continuation = continuation
+            self.analyzer = analyzer
+            self.results = results
+            return true
+        }
+    }
+
     func start(language: String) async {
+        guard !isStopped else { return }
         guard let locale = await SpeechTranscriber.supportedLocale(
             equivalentTo: Locale(identifier: language)) else {
             await report("aperçu indisponible en \(language)")
@@ -133,15 +168,19 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
                 await report("aperçu : format audio incompatible")
                 return
             }
-            analyzerFormat = format
 
             let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
-            self.continuation = continuation
-
             let analyzer = SpeechAnalyzer(modules: [transcriber])
-            self.analyzer = analyzer
-            results = Task { [weak self] in
-                await self?.consume(transcriber.results)
+            let results = Task { [weak self] in
+                guard let self else { return }
+                await consume(transcriber.results)
+            }
+            // Arrêté pendant qu'on préparait : on ne branche rien.
+            guard adopt(format: format, continuation: continuation,
+                        analyzer: analyzer, results: results) else {
+                continuation.finish()
+                results.cancel()
+                return
             }
             try await analyzer.start(inputSequence: stream)
         } catch {
@@ -177,21 +216,30 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
 
     @MainActor
     private func publish(_ text: String) {
+        guard !isStopped else { return }
         onText(text.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     @MainActor
     private func report(_ message: String) {
+        guard !isStopped else { return }
         onFailure(message)
     }
 
+    /// Appelé depuis le fil audio.
     func append(_ buffer: AVAudioPCMBuffer) {
-        guard let continuation, let analyzerFormat else { return }
-
-        if converter == nil || converter?.inputFormat != buffer.format {
-            converter = AVAudioConverter(from: buffer.format, to: analyzerFormat)
+        let prepared: (AsyncStream<AnalyzerInput>.Continuation, AVAudioFormat,
+                       AVAudioConverter)? = lock.withLock {
+            guard let continuation = self.continuation,
+                  let analyzerFormat = self.analyzerFormat else { return nil }
+            if self.converter?.inputFormat != buffer.format {
+                self.converter = AVAudioConverter(from: buffer.format, to: analyzerFormat)
+            }
+            guard let converter = self.converter else { return nil }
+            return (continuation, analyzerFormat, converter)
         }
-        guard let converter else { return }
+        guard let prepared else { return }
+        let (continuation, analyzerFormat, converter) = prepared
 
         // Le ré-échantillonnage change le nombre de trames : on dimensionne la
         // sortie au ratio des fréquences, avec une trame de marge.
@@ -216,15 +264,17 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     }
 
     func stop() {
+        let (continuation, analyzer, results) = lock.withLock {
+            stopped = true
+            let taken = (self.continuation, self.analyzer, self.results)
+            self.continuation = nil
+            self.converter = nil
+            self.analyzerFormat = nil
+            self.analyzer = nil
+            self.results = nil
+            return taken
+        }
         continuation?.finish()
-        continuation = nil
-        converter = nil
-        analyzerFormat = nil
-
-        let analyzer = self.analyzer
-        let results = self.results
-        self.analyzer = nil
-        self.results = nil
         // Laisser l'analyseur se terminer proprement avant d'abandonner la
         // boucle : la tuer net laisse le moteur système en cours d'analyse.
         Task {

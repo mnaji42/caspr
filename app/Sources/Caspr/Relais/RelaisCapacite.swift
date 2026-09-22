@@ -62,7 +62,10 @@ enum RelaisCapacite: String, CaseIterable, Codable {
         switch self {
         case .dicter: s.estCalibre
         case .envoyer: !s.envoi.isEmpty
-        case .recuperer: s.saitCopier
+        // Le repère de la réponse compte aussi, comme dans `saitDialoguer` :
+        // la page sait encore lire par lui (cf. `attendreReponse`), et exiger
+        // le bouton copier retirait ses modules à qui avait calibré avant lui.
+        case .recuperer: s.saitCopier || !s.reponse.isEmpty
         // Les deux dernières ne sont pas encore construites. Rendre `false`
         // n'est pas un oubli : c'est ce qui empêche un module qui les
         // réclamerait d'apparaître sur la barre avant qu'elles existent.

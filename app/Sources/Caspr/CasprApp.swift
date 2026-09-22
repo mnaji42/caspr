@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 /// Caspr vit dans la barre de menus, sans fenêtre ni icône au Dock.
 @MainActor
@@ -9,6 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var modifierKey: ModifierKeyMonitor!
     private var reArmTimer: Timer?
     private var controller: DictationController!
+    /// RELAIS — la discussion s'ouvre et se ferme sans que l'état de la
+    /// dictée change : le menu, qui en porte la sortie, doit suivre quand même.
+    private var discussionWatch: AnyCancellable?
 
     private let preferences = PreferencesWindowController()
     private let onboarding = OnboardingWindowController()
@@ -27,6 +31,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.onStateChange = { [weak self] state in
             self?.render(state)
         }
+        discussionWatch = Relais.partage.$enDiscussion                 // RELAIS —
+            .removeDuplicates()
+            .dropFirst()
+            // L'icône aussi, et pas seulement le menu : c'est elle qui dit
+            // qu'un fil attend quand rien d'autre n'est à l'écran. `render`
+            // rafraîchit le menu au passage. Dans une tâche : `@Published`
+            // prévient avant d'écrire, l'état se relit un tour plus tard.
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.render(self.controller.state)
+                }
+            }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         render(.idle)
@@ -318,7 +335,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .idle:
             // Une mise à jour en attente se voit depuis la barre, sans ouvrir
             // quoi que ce soit — c'est l'endroit où le regard passe déjà.
-            if UpdateChecker.shared.newer != nil {
+            // RELAIS — une discussion ouverte passe avant la mise à jour :
+            // elle change ce que fera le prochain appui — il poursuivra le
+            // fil. Réglée sur « Rien », ou fenêtre fermée, elle n'a pas d'autre
+            // témoin à l'écran, et Échap ne la ferme pas (cf.
+            // `Relais.discussionAffichee`) : sans ce signe, on ne savait
+            // qu'en ouvrant le menu que la dictée suivante partirait dans
+            // l'ancienne conversation.
+            if Relais.partage.enDiscussion {
+                (MenuBarIcon.image(.discussion),
+                 "Caspr — discussion ChatGPT ouverte, la prochaine dictée y répond")
+            } else if UpdateChecker.shared.newer != nil {
                 (MenuBarIcon.image(.update), "Caspr — mise à jour disponible")
             } else if controller.target.isLocked {
                 (MenuBarIcon.image(.idle),
@@ -326,6 +353,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 (MenuBarIcon.image(.idle), "Caspr — prêt")
             }
+        case .starting:
+            (MenuBarIcon.image(.processing), "Caspr — démarrage")
         case .recording:
             (MenuBarIcon.image(.listening), "Caspr — enregistrement")
         case .processing:
@@ -382,6 +411,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let status: String = switch controller.state {
         case .idle: "Prêt"
+        case .starting: "Démarrage…"
         case .recording: "Enregistrement…"
         case .processing: "Transcription…"
         case .failed(let message): message
@@ -414,9 +444,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictate.target = self
         menu.addItem(dictate)
 
+        // RELAIS — la sortie de la discussion, quand Échap n'est pas pris.
+        //
+        // Échap ne ferme la discussion que devant sa fenêtre. Une discussion
+        // qui ne fait que parler, ou dont on a fermé la fenêtre, reste ouverte
+        // — la dictée suivante y répond — et c'est ici qu'on la voit, et
+        // qu'on en sort.
+        if Relais.partage.enDiscussion, controller.isAtRest {
+            let end = NSMenuItem(title: "Terminer la discussion ChatGPT",
+                                 action: #selector(endDiscussion), keyEquivalent: "")
+            end.target = self
+            end.toolTip = "La prochaine dictée repartira d'une conversation neuve."
+            menu.addItem(end)
+        }
+
         // Une dictée ratée après plusieurs minutes de parole doit pouvoir être
         // relancée sans tout redire : l'audio est encore là.
-        if controller.hasPendingAudio {
+        //
+        // Au repos seulement : pendant une dictée, ces trois entrées agissaient
+        // sur l'audio de la précédente et remettaient l'état au repos
+        // par-dessus un enregistrement en cours.
+        if controller.hasPendingAudio, controller.isAtRest {
             // L'aperçu d'abord, et c'est délibéré : quand le service local
             // refuse de démarrer, réessayer échouera de la même façon, alors
             // que le texte de macOS est déjà écrit. C'est l'issue qui aboutit
@@ -647,6 +695,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func retry() {
         controller.retryLast()
+    }
+
+    @objc private func endDiscussion() {                             // RELAIS —
+        controller.endDiscussion()
     }
 
     /// Écrit ce que l'aperçu avait transcrit, plutôt que de le jeter.

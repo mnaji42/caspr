@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" fill="none">
+  <!-- Variante barre de menus : un seul tracé, yeux, bouche et intérieur de
+       bulle en **trous** (fill-rule evenodd) plutôt qu'en formes sombres.
+       macOS pose ces icônes en gabarit et ne regarde que l'alpha : une forme
+       opaque sombre y devient de la même couleur que le reste, et tout
+       s'aplatissait en une silhouette muette. -->
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M128 20 C80 20 48 55 48 104 V158 C48 176 40 187 34 199 C27 212 31 225 43 232 C55 239 68 234 77 220 C85 232 96 238 108 238 C117 238 123 232 128 222 C133 232 139 238 148 238 C160 238 171 232 179 220 C188 234 201 239 213 232 C225 225 229 212 222 199 C216 187 208 176 208 158 V104 C208 55 176 20 128 20 Z M90 107.5 A9.5 9.5 0 0 1 109 107.5 V120.5 A9.5 9.5 0 0 1 90 120.5 Z M147 107.5 A9.5 9.5 0 0 1 166 107.5 V120.5 A9.5 9.5 0 0 1 147 120.5 Z M110 150 C110 166 146 166 146 150 Z M94 163 H162 C174 163 184 173 184 185 V207 C184 219 174 229 162 229 H138 L128 244 L118 229 H94 C82 229 72 219 72 207 V185 C72 173 82 163 94 163 Z M96 167 H160 C170 167 180 176 180 186 V206 C180 216 170 225 160 225 H136 L128 237 L120 225 H96 C86 225 76 216 76 206 V186 C76 176 86 167 96 167 Z M98 182 H158 A5 5 0 0 1 158 192 H98 A5 5 0 0 1 98 182 Z M98 200 H138 A5 5 0 0 1 138 210 H98 A5 5 0 0 1 98 200 Z"/>
+</svg>

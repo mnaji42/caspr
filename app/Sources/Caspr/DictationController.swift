@@ -12,13 +12,27 @@ import CasprCore
 final class DictationController {
     enum State: Equatable {
         case idle
+        /// L'appui est reçu, l'écoute n'est pas encore ouverte.
+        ///
+        /// Posé **avant** le premier `await`, et c'est toute sa raison d'être.
+        /// Sous le relais, ouvrir l'écoute attend la page — de une à plusieurs
+        /// dizaines de secondes quand elle se prépare —, et l'état restait
+        /// jusque-là au repos : un second appui s'y croyait le premier, se
+        /// faisait refuser la page, et remettait à faux le drapeau du relais
+        /// d'un cycle qui n'était pas le sien. Ce cycle-là finissait sans
+        /// jamais rendre la page, et toute dictée ChatGPT échouait ensuite sur
+        /// « Une dictée est en cours » jusqu'au redémarrage.
+        case starting
         case recording
         case processing
         case failed(String)
     }
 
     private(set) var state: State = .idle {
-        didSet { if state != oldValue { onStateChange?(state) } }
+        didSet {
+            if state != oldValue { onStateChange?(state) }
+            ajusterEchap()
+        }
     }
 
     var onStateChange: ((State) -> Void)?
@@ -158,14 +172,8 @@ final class DictationController {
         overlay.onCancel = { [weak self] in self?.cancel() }
         // RELAIS — la page peut mourir pendant qu'on parle.
         Relais.partage.surPageInterrompue = { [weak self] in self?.pageRelaisInterrompue() }
-        // RELAIS — Échap revient à la discussion une fois le texte récupéré.
-        Relais.partage.surRecuperationFinie = { [weak self] in
-            guard let self, escapeMonitor == nil else { return }
-            switch state {
-            case .idle, .failed: captureEscape()
-            case .recording, .processing: break
-            }
-        }
+        // RELAIS — Échap suit ce que le relais montre (cf. `ajusterEchap`).
+        Relais.partage.surAffichageChange = { [weak self] in self?.ajusterEchap() }
         // RELAIS — le choix se fait sur la barre, au moment de parler.
         overlay.onSelectModeIndex = { [weak self] index in
             guard let self else { return }
@@ -291,49 +299,35 @@ final class DictationController {
     // RELAIS — le démarrage en cours, retenu pour que la touche l'interrompe.
     //
     // Avant l'écoute, l'appui attend que la page soit prête — jusqu'à
-    // quelques dizaines de secondes quand elle a dû être rechargée. L'état
-    // est encore au repos pendant ce temps : sans prise sur cette tâche,
-    // rappuyer ne l'interrompait pas, et se faisait même refuser pour
-    // « dictée en cours ».
+    // quelques dizaines de secondes quand elle a dû être rechargée. C'est
+    // l'état `.starting` qui dit qu'on y est, et cette tâche qui permet d'en
+    // sortir.
     private var relaisDemarrage: Task<Void, Never>?
+    /// Le numéro du cycle en cours.
+    ///
+    /// Un cycle abandonné finit de se dérouler après coup : ses `defer` et
+    /// ses branches d'échec s'exécutent quand sa tâche se rend compte de
+    /// l'annulation. Rappuyer aussitôt, c'était donc laisser le cycle mort
+    /// rendre la page que le nouveau venait de prendre, recharger la page sous
+    /// la dictée qui commençait, poser son état par-dessus le sien. Chaque
+    /// effet différé vérifie désormais que le cycle est encore le sien ;
+    /// abandonner un cycle, c'est changer ce numéro, et reprendre à son compte
+    /// tout ce qu'il aurait dû défaire (cf. `abandonnerLeCycleRelais`).
+    private var cycle = 0
 
     func toggle() {
         switch state {
         case .idle, .failed:
+            commencer()
+        case .starting:
             // RELAIS — la touche interrompt l'attente du démarrage, comme
-            // celle de la transcription.
-            if let demarrage = relaisDemarrage {
-                demarrage.cancel()
-                return
-            }
-            // RELAIS — c'est le mode qui décide, pas la touche : les deux
-            // s'excluent, et il n'y a qu'un seul déclencheur.
-            relaisEnCours = Relais.partage.actif
-            // RELAIS — une seule chose à la fois sur la page.
+            // celle de la transcription. Le démarrage se défait lui-même (cf.
+            // `startRecording`) : c'est lui qui sait où il en était.
             //
-            // La dictée et la calibration pilotent le même document. Les
-            // laisser tourner ensemble faisait intercepter par la calibration
-            // les clics que la dictée envoyait par programme : Caspr prenait
-            // ses propres commandes pour des gestes de l'utilisateur.
-            if relaisEnCours, !Relais.partage.prendreLaMainPourDictee() {
-                state = .failed(Relais.partage.occupation.raison ?? "Relais occupé.")
-                relaisEnCours = false
-                return
-            }
-            guard !relaisEnCours || Relais.partage.estCalibre else {
-                Relais.partage.rendreLaMain()
-                state = .failed("ChatGPT Web Preview est actif mais pas configuré — "
-                                + "voir Réglages › Moteur IA.")
-                return
-            }
-            if relaisEnCours {
-                relaisDemarrage = Task {
-                    await startRecording()
-                    relaisDemarrage = nil
-                }
-            } else {
-                Task { await startRecording() }
-            }
+            // Sur le chemin ordinaire, rien à interrompre : seul le dialogue
+            // d'autorisation du micro peut retenir le démarrage, et il se
+            // ferme par ses propres boutons.
+            relaisDemarrage?.cancel()
         case .recording:
             relaisTache = Task { await finishRecording() }        // RELAIS —
         case .processing:
@@ -353,22 +347,55 @@ final class DictationController {
         }
     }
 
-    func cancel() {
-        // RELAIS — hors dictée, Échap met fin à la discussion ouverte.
-        //
-        // Après un échec aussi : une dictée ratée en pleine discussion laisse
-        // l'état sur `.failed`, et Échap, seule sortie d'une discussion sans
-        // fenêtre, devenait inerte.
-        let auRepos: Bool
-        switch state {
-        case .idle, .failed: auRepos = true
-        case .recording, .processing: auRepos = false
+    /// Ouvre un cycle, depuis le repos.
+    private func commencer() {
+        cycle &+= 1
+        // RELAIS — c'est le mode qui décide, pas la touche : les deux
+        // s'excluent, et il n'y a qu'un seul déclencheur.
+        let parRelais = Relais.partage.actif
+        if parRelais {
+            // RELAIS — une seule chose à la fois sur la page.
+            //
+            // La dictée et la calibration pilotent le même document. Les
+            // laisser tourner ensemble faisait intercepter par la calibration
+            // les clics que la dictée envoyait par programme : Caspr prenait
+            // ses propres commandes pour des gestes de l'utilisateur.
+            guard Relais.partage.prendreLaMainPourDictee() else {
+                state = .failed(Relais.partage.occupation.raison ?? "Relais occupé.")
+                return
+            }
+            guard Relais.partage.estCalibre else {
+                Relais.partage.rendreLaMain()
+                state = .failed("ChatGPT Web Preview est actif mais pas configuré — "
+                                + "voir Réglages › Moteur IA.")
+                return
+            }
         }
-        if auRepos, Relais.partage.enDiscussion {
+        relaisEnCours = parRelais
+        state = .starting
+        let demarrage = Task { await startRecording() }
+        if parRelais { relaisDemarrage = demarrage }
+    }
+
+    func cancel() {
+        switch state {
+        case .starting:
+            // RELAIS — la croix de la barre, pendant que la page se prépare.
             relaisDemarrage?.cancel()
-            quitterLaDiscussion()
-            Feedback.cancelled()
             return
+        case .idle, .failed:
+            // RELAIS — hors dictée, Échap met fin à la discussion ouverte.
+            //
+            // Après un échec aussi : une dictée ratée en pleine discussion
+            // laisse l'état sur `.failed`, et la discussion doit pouvoir se
+            // fermer quand même.
+            if Relais.partage.enDiscussion {
+                quitterLaDiscussion()
+                Feedback.cancelled()
+            }
+            return
+        case .recording, .processing:
+            break
         }
         // RELAIS — deux différences avec le chemin ordinaire, et la seconde
         // avait été manquée.
@@ -385,30 +412,41 @@ final class DictationController {
         // à abandonner, ChatGPT répond dans le fil. Ni arrêter la page, ni
         // cacher la barre — seulement cesser d'attendre la lecture à haute
         // voix. Le cycle s'achève alors de lui-même, sur la discussion
-        // ouverte (cf. `Relais.messageParti`).
+        // ouverte (cf. `Relais.messageParti`) : il reste le sien.
         if relaisEnCours, state == .processing, Relais.partage.messageParti {
             relaisTache?.cancel()
             relaisTache = nil
             return
         }
-        if relaisEnCours, state == .recording || state == .processing {
-            relaisTache?.cancel()
-            relaisTache = nil
-            relaisEnCours = false
-            Relais.partage.rendreLaMain()          // RELAIS —
-            releaseEscape()
-            Task { await Relais.partage.interrompre() }
-            overlay.hide()
-            Feedback.cancelled()
-            state = .idle
+        if relaisEnCours {
+            abandonnerLeCycleRelais()
             return
         }
         guard state == .recording else { return }
-        if relaisEnCours { Task { await Relais.partage.annuler() } }   // RELAIS —
-        relaisEnCours = false                                          // RELAIS —
         recorder.cancel()
         stopPreview()
-        releaseEscape()
+        overlay.hide()
+        Feedback.cancelled()
+        state = .idle
+    }
+
+    /// RELAIS — abandonne le cycle en cours, et fait à sa place ce qu'il ne
+    /// fera plus.
+    ///
+    /// Le cycle cesse d'être le cycle en cours avant tout le reste : ce qui
+    /// s'en déroulera encore — l'annulation se constate à la tâche suivante —
+    /// ne touchera plus à rien. Rendre la page, l'arrêter, la préparer pour la
+    /// suivante, tout se fait donc ici, une fois — jusqu'à quitter la
+    /// discussion quand le module du moment écrit ailleurs, comme
+    /// `acheverLeCycle` l'aurait fait.
+    private func abandonnerLeCycleRelais() {
+        cycle &+= 1
+        relaisTache?.cancel()
+        relaisTache = nil
+        relaisEnCours = false
+        Relais.partage.rendreLaMain()
+        Relais.partage.interrompre(
+            quitterLaDiscussion: Relais.partage.sortieCourante != .aucune)
         overlay.hide()
         Feedback.cancelled()
         state = .idle
@@ -417,6 +455,22 @@ final class DictationController {
     // MARK: - Étapes
 
     private func startRecording() async {
+        let parRelais = relaisEnCours
+        // Toute sortie qui n'aboutit pas à l'écoute rend la page, et quitte
+        // `.starting`. Une ligne par chemin de sortie, c'était la promesse d'en
+        // oublier un — et il y en avait deux : un micro ou une accessibilité
+        // refusés gardaient la page jusqu'au redémarrage.
+        //
+        // Aucun autre cycle ne peut s'ouvrir d'ici là : l'état reste
+        // `.starting` jusqu'à cette sortie, et un appui n'y fait qu'annuler.
+        defer {
+            relaisDemarrage = nil
+            if state == .starting { state = .idle }
+            if parRelais, state != .recording {
+                relaisEnCours = false
+                Relais.partage.rendreLaMain()
+            }
+        }
         switch AudioRecorder.microphoneAccess {
         case .granted:
             break
@@ -452,7 +506,7 @@ final class DictationController {
             //
             // L'aperçu en direct est donc impossible ici, et c'est définitif :
             // il faudrait un second flux micro, celui-là même qui casse tout.
-            if relaisEnCours {
+            if parRelais {
                 relaisDebut = Date()
                 // La barre s'ouvre avant l'écoute : on voit ChatGPT démarrer,
                 // et la page, enfin à l'écran, cesse d'être différée par le
@@ -471,7 +525,6 @@ final class DictationController {
                 try recorder.start()
             }
             Log.info("enregistrement démarré")
-            captureEscape()
             // Une collecte encore en cours cède la place : le moteur ne traite
             // qu'une requête à la fois, et la dictée qui commence est
             // prioritaire sur l'archivage de la précédente.
@@ -480,9 +533,10 @@ final class DictationController {
             previewEngine = nil
             // Avant d'afficher la barre : elle grise le bouton Notes tant
             // qu'un sélecteur serait impossible, et lit l'état pour le savoir.
+            // Échap est pris au passage (cf. `ajusterEchap`).
             state = .recording
             overlay.showRecording(overlayStatus)
-            if relaisEnCours {                                     // RELAIS —
+            if parRelais {                                         // RELAIS —
                 overlay.setPreviewNotice("ChatGPT transcrit à la fin de la dictée")
             } else {
                 startPreview()
@@ -491,10 +545,10 @@ final class DictationController {
         } catch is CancellationError {
             // RELAIS — la touche a interrompu l'attente du démarrage. La page
             // a pu se mettre à écouter entre-temps : on l'arrête, comme Échap
-            // le fait pendant l'enregistrement.
-            Relais.partage.rendreLaMain()
-            relaisEnCours = false
-            Task { await Relais.partage.interrompre() }
+            // le fait pendant l'enregistrement. La page est rendue par le
+            // `defer`, avant que l'arrêt ne s'exécute : c'est l'arrêt qui
+            // range la barre, et il ne le fait qu'une page libre.
+            Relais.partage.interrompre()
             overlay.hide()
             Feedback.cancelled()
             state = .idle
@@ -502,15 +556,19 @@ final class DictationController {
             // RELAIS — la barre dit pourquoi, quand la raison tient en une
             // ligne ; elle s'efface sinon, au lieu de rester sur « ChatGPT se
             // prépare… » devant une dictée qui n'aura pas lieu.
-            if relaisEnCours {
+            //
+            // Et la barre de ChatGPT se range avec elle. Ouverte avant
+            // l'écoute, elle restait à flotter au-dessus du travail, sans
+            // rapport visible avec le message d'échec. Pas la grande fenêtre,
+            // si elle vient de s'ouvrir : c'est là qu'on se connecte.
+            if parRelais {
                 if let courte = (error as? RelaisPage.Erreur)?.raisonCourte {
                     overlay.showFailure(courte)
                 } else {
                     overlay.hide()
                 }
+                Relais.partage.rangerLaBarre()
             }
-            Relais.partage.rendreLaMain()          // RELAIS —
-            relaisEnCours = false
             state = .failed(error.localizedDescription)
         }
     }
@@ -529,14 +587,16 @@ final class DictationController {
         Log.error("relais : la page est morte pendant l'écoute")
         relaisEnCours = false
         Relais.partage.rendreLaMain()
-        // Échap reste pris en discussion : c'est par lui qu'on en sort.
-        if !Relais.partage.enDiscussion { releaseEscape() }
         Relais.partage.masquerBarre()
         overlay.showFailure(erreur.raisonCourte ?? "La page ChatGPT s'est fermée")
         state = .failed(erreur.localizedDescription)
     }
 
     private func finishRecording() async {
+        // Abandonnée entre l'appui et l'exécution de cette tâche : il n'y a
+        // plus d'écoute à arrêter, et la poursuivre prendrait le chemin
+        // ordinaire — le drapeau du relais vient d'être remis à faux.
+        guard state == .recording else { return }
         // RELAIS — rien n'a été enregistré de notre côté : ni durée minimale à
         // vérifier, ni audio à conserver pour un « Réessayer » qui n'aurait
         // rien à rejouer. La page a le son, elle seule.
@@ -553,8 +613,8 @@ final class DictationController {
             // coup, sans que personne n'ait voulu annuler quoi que ce soit.
             //
             // La sortie de secours reste la croix de la barre, qui demande un
-            // clic délibéré au bon endroit.
-            releaseEscape()
+            // clic délibéré au bon endroit. Il est rendu au passage à
+            // `.processing` (cf. `ajusterEchap`).
             Feedback.recordingStopped()
             // La phase et le chrono, relus sur l'attente du relais : elle
             // peut durer des minutes, et la touche de dictée en est la
@@ -568,7 +628,6 @@ final class DictationController {
         }
         let samples = recorder.stop()
         stopPreview()
-        releaseEscape()
         Feedback.recordingStopped()
         overlay.showProcessing()
 
@@ -601,6 +660,10 @@ final class DictationController {
     /// possible pour cette application. L'audio n'est donc libéré qu'après une
     /// insertion réussie, et `retryLast()` permet de relancer sans reparler.
     private func transcribeAndInject(_ samples: [Float]) async {
+        // Le cycle que cette transcription sert. S'il a été abandonné quand
+        // elle reprend la main, elle n'a plus rien à faire : l'abandon a déjà
+        // tout défait, et un autre cycle a peut-être commencé.
+        let numero = cycle
         state = .processing
         let used = mode
         // RELAIS — le relais se conforme au protocole des moteurs, donc tout ce
@@ -613,7 +676,7 @@ final class DictationController {
         // chemins : réussite, texte vide, échec, annulation. La rendre à
         // chaque endroit serait la promesse d'en oublier un, et un oubli
         // condamne la page jusqu'au redémarrage.
-        defer {
+        func acheverLeCycle() {
             relaisEnCours = false
             Relais.partage.rendreLaMain()
             // RELAIS — et la page est rendue prête pour la prochaine, pendant
@@ -639,25 +702,29 @@ final class DictationController {
             if parRelais, Relais.partage.sortieCourante != .aucune {
                 quitterLaDiscussion()
             }
-            // RELAIS — une discussion qui survit à la dictée garde Échap pour
-            // en sortir. L'arrêt de l'écoute l'a rendu, et seule la réussite
-            // le reprenait : après un échec, plus rien ne fermait le fil.
+            // RELAIS — la barre de ChatGPT se range à la fin de la dictée,
+            // quelle qu'en soit l'issue.
             //
-            // Sauf quand l'échec a laissé son texte dans la fenêtre : elle a
-            // le clavier, et Échap y appartient au système. Repris par Caspr,
-            // il fermait la discussion et rechargeait la page avant que le
-            // texte n'ait été copié. Il revient quand on ferme la fenêtre
-            // (cf. `surRecuperationFinie`).
-            if parRelais, !texteLaisseDansLaPage, Relais.partage.enDiscussion,
-               escapeMonitor == nil {
-                captureEscape()
+            // Seules la réussite et un échec sur deux la rangeaient : un texte
+            // vide la laissait flotter au-dessus du travail, sans rapport avec
+            // le message affiché. Deux exceptions, qui sont ce que la dictée
+            // laisse délibérément à l'écran — la discussion qui continue, et
+            // la fenêtre ouverte pour qu'on y récupère son texte.
+            if parRelais, !texteLaisseDansLaPage, !Relais.partage.enDiscussion {
+                Relais.partage.masquerBarre()
             }
+        }
+        // Seulement pour le cycle en cours : un cycle abandonné rendrait la
+        // page que le suivant vient de prendre, et la rechargerait sous lui.
+        defer {
+            if numero == cycle { acheverLeCycle() }
         }
         let moteur: any SpeechEngine = parRelais ? RelaisEngine() : writer
         do {
             let result = try await moteur.transcribe(
                 TranscriptionRequest(samples: samples, mode: used,
                                      language: language, lexicon: lexicon))
+            guard numero == cycle else { return }
 
             // RELAIS — une sortie qui n'écrit nulle part s'arrête ici.
             //
@@ -736,10 +803,7 @@ final class DictationController {
                 }
                 return
             }
-            if parRelais {                                     // RELAIS —
-                releaseEscape()
-                Relais.partage.masquerBarre()
-            }
+            if parRelais { Relais.partage.masquerBarre() }         // RELAIS —
             overlay.hide()
             // L'application au premier plan au moment d'insérer. L'insertion
             // par accessibilité vise l'élément focalisé de cette
@@ -758,6 +822,9 @@ final class DictationController {
             Log.info("insertion vers \(devant)")
             try await deliver(text)
             history.add(text, mode: used)
+            // Abandonné pendant l'insertion : le texte est écrit, et c'est
+            // tout ce qui reste de ce cycle. L'état appartient au suivant.
+            guard numero == cycle else { return }
             pendingAudio = nil
             pendingAudioFile = nil
             pendingPreview = nil
@@ -788,9 +855,10 @@ final class DictationController {
                         outcome: .inserted)
             }
         } catch is CancellationError {                             // RELAIS —
-            releaseEscape()
+            // L'abandon a tout défait (cf. `abandonnerLeCycleRelais`).
             return
         } catch {
+            guard numero == cycle else { return }
             // RELAIS — pas d'audio conservé : il n'y en a pas. « Réessayer »
             // rejouerait un enregistrement vide sur une page qui est passée à
             // autre chose, donc échouerait à coup sûr. Proposer un recours qui
@@ -830,12 +898,9 @@ final class DictationController {
             // collera à la dictée suivante — celle-ci vide la zone avant
             // d'écouter.
             if parRelais {
-                releaseEscape()
                 if texteRecuperable {
                     texteLaisseDansLaPage = true
                     Relais.partage.ouvrirFenetre()
-                } else {
-                    Relais.partage.masquerBarre()
                 }
             } else {
                 collect(samples: samples, primary: nil, mode: used,
@@ -1185,9 +1250,26 @@ final class DictationController {
             : "Rien n'est perdu : insérer l'aperçu ou réessayer, dans le menu de Caspr."
     }
 
+    /// Au repos : ni démarrage, ni écoute, ni transcription en cours.
+    ///
+    /// Les trois recours du menu sur l'audio conservé n'ont de sens qu'ici.
+    /// Ils posaient `.idle` quel que soit l'état : par-dessus un magnétophone
+    /// qui tournait, la touche suivante croyait démarrer, le magnétophone
+    /// refusait en silence de repartir, et la dictée d'après rendait deux
+    /// phrases collées.
+    var isAtRest: Bool {
+        switch state {
+        case .idle, .failed: true
+        case .starting, .recording, .processing: false
+        }
+    }
+
     /// Relance la transcription de l'audio conservé après un échec.
     func retryLast() {
-        guard let pendingAudio, state != .processing else { return }
+        guard let pendingAudio, isAtRest else { return }
+        // Posé tout de suite, et non par la tâche : entre les deux, un appui
+        // aurait trouvé l'état au repos et ouvert un cycle par-dessus.
+        state = .processing
         Task { await transcribeAndInject(pendingAudio) }
     }
 
@@ -1203,7 +1285,7 @@ final class DictationController {
     /// issue-là, et garder l'autre en réserve laisserait « Réessayer » dans le
     /// menu au-dessus d'un texte déjà écrit.
     func insertPendingPreview() {
-        guard let text = pendingPreviewText else { return }
+        guard let text = pendingPreviewText, isAtRest else { return }
         Task {
             do {
                 try await deliver(text)
@@ -1211,19 +1293,22 @@ final class DictationController {
                 // L'insertion elle-même a échoué — plus de curseur, fichier
                 // devenu illisible. On garde tout : c'est un autre problème
                 // que celui qu'on essayait de contourner, et il se répare.
-                state = .failed(error.localizedDescription)
+                if isAtRest { state = .failed(error.localizedDescription) }
                 return
             }
             history.add(text, mode: mode)
             pendingAudio = nil
             pendingAudioFile = nil
             pendingPreview = nil
-            state = .idle
+            // Une dictée a pu commencer pendant l'insertion : son état n'est
+            // pas le nôtre.
+            if isAtRest { state = .idle }
         }
     }
 
     /// Libère l'audio conservé. Appelé quand l'utilisateur renonce.
     func discardPending() {
+        guard isAtRest else { return }
         pendingAudio = nil
         pendingAudioFile = nil
         pendingPreview = nil
@@ -1254,17 +1339,54 @@ final class DictationController {
     // touche de dictée relance une dictée dans le même fil — mais une fenêtre
     // attend qu'on en sorte. Sans cet état, rien n'écoutait Échap une fois le
     // cycle terminé.
+    //
+    // Échap n'est pas pris ici : il suit la fenêtre (cf. `ajusterEchap`).
     private func entrerEnDiscussion() {
         Relais.partage.entrerEnDiscussion()
-        captureEscape()
     }
 
     private func quitterLaDiscussion() {
-        releaseEscape()
         Relais.partage.terminerDiscussion()
     }
 
+    /// RELAIS — met fin à la discussion depuis le menu.
+    ///
+    /// La sortie qui reste quand Échap n'est pas pris : une discussion qui ne
+    /// fait que parler, ou dont on a fermé la fenêtre, n'a rien sous les yeux
+    /// pour Échap — et le prendre quand même avalait la frappe dans
+    /// l'application où l'on travaillait, en fermant le fil au passage.
+    func endDiscussion() {
+        guard isAtRest, Relais.partage.enDiscussion else { return }
+        quitterLaDiscussion()
+    }
+
+    /// Prend ou rend Échap selon ce qui est en cours — la seule décision, prise
+    /// à chaque changement d'état ou d'affichage du relais.
+    ///
+    /// Il était pris et rendu au fil des chemins du cycle, une ligne par
+    /// chemin, et l'un d'eux l'oubliait toujours. Pris pendant l'écoute ; rendu
+    /// pendant la transcription, qui peut durer des minutes pendant qu'on
+    /// travaille ailleurs ; au repos, pris seulement devant une discussion
+    /// affichée (cf. `Relais.discussionAffichee`).
+    private func ajusterEchap() {
+        let voulu = switch state {
+        case .recording: true
+        case .starting, .processing: false
+        case .idle, .failed: Relais.partage.discussionAffichee   // RELAIS —
+        }
+        if !voulu {
+            releaseEscape()
+        } else if escapeMonitor == nil {
+            captureEscape()
+        }
+    }
+
     private func captureEscape() {
+        // Rendu d'abord. Un second moniteur enregistré par-dessus le premier
+        // se faisait refuser par Carbon, puis la libération de l'ancien
+        // désenregistrait la touche : relancer une dictée depuis une
+        // discussion laissait Échap sans aucun effet.
+        releaseEscape()
         let monitor = HotkeyMonitor { [weak self] in self?.cancel() }
         // Le résultat était jeté : un échec d'enregistrement laissait Échap
         // sans effet, sans que rien ne le signale nulle part.

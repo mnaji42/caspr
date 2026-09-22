@@ -256,10 +256,20 @@ struct RelaisModule: Codable, Equatable, Identifiable {
     /// Le socle, plus ce que réclament ses étapes, plus ce que réclament les
     /// sorties qu'il autorise. Rien n'est écrit à la main : une action nouvelle
     /// déclare ses exigences et cette liste s'allonge d'elle-même.
+    ///
+    /// Les sorties ne comptent que pour un module qui envoie quelque chose.
+    /// Ce qu'elles exigent — rapatrier la réponse — n'a de sens que s'il y a
+    /// une réponse : « Brut » n'envoie rien, et écrit au curseur la
+    /// transcription elle-même. Il exigeait pourtant « Récupérer la réponse »,
+    /// si bien qu'une installation qui n'avait jamais montré le bouton copier
+    /// voyait ses trois modules passer « indisponibles », et leur pastille
+    /// disparaître de la barre — la seule qui permette d'en changer.
     var capacitesRequises: [RelaisCapacite] {
         var requises: Set<RelaisCapacite> = [.dicter]
         for etape in etapes { requises.formUnion(etape.capacitesRequises) }
-        for sortie in sorties { requises.formUnion(sortie.capacitesRequises) }
+        if demandeUnAllerRetour {
+            for sortie in sorties { requises.formUnion(sortie.capacitesRequises) }
+        }
         return RelaisCapacite.allCases.filter { requises.contains($0) }
     }
 

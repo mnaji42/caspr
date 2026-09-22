@@ -24,12 +24,13 @@ enum MenuBarIcon {
     ///
     /// La grammaire vient des dessins : **le fantôme ne change jamais**, une
     /// bulle apparaît en bas à droite, et c'est son contenu qui porte l'état —
-    /// cinq barres pour l'écoute, trois points pour le traitement. L'œil
+    /// cinq barres pour l'écoute, trois points pour le traitement, deux lignes
+    /// de texte pour une discussion ChatGPT qui attend la suite. L'œil
     /// reconnaît l'application d'abord, son état ensuite.
     /// La forme dit *quoi*, la couleur dit *si c'est grave* — cyan pour ce qui
     /// est normal ou souhaitable, rouge pour ce qui demande une intervention.
     enum State {
-        case idle, listening, processing, error, update
+        case idle, listening, processing, error, update, discussion
 
         var fileName: String {
             switch self {
@@ -38,6 +39,7 @@ enum MenuBarIcon {
             case .processing: "menu-caspr-ghost-processing"
             case .error: "menu-caspr-ghost-error"
             case .update: "menu-caspr-ghost-update"
+            case .discussion: "menu-caspr-ghost-discussion"
             }
         }
     }

@@ -36,6 +36,9 @@ final class RelaisPage: NSObject {
         case pageInterrompue
         /// Personne n'a cliqué pendant qu'un guetteur de calibration attendait.
         case calibrationSansClic(RelaisCible)
+        /// Le relais a été éteint pendant la dictée : la page n'existe plus,
+        /// et n'est pas reconstruite (cf. `Relais.pageActive`).
+        case relaisEteint
 
         /// Ce que la barre affiche, quand la raison générique mentirait.
         ///
@@ -51,6 +54,7 @@ final class RelaisPage: NSObject {
             case .attenteEpuisee(let abandon): return abandon.raisonCourte
             case .pontMuet: return "ChatGPT ne répond plus — page rechargée, réessayez"
             case .pageInterrompue: return "La page ChatGPT s'est fermée — dictée perdue"
+            case .relaisEteint: return "ChatGPT désactivé pendant la dictée"
             default: return nil
             }
         }
@@ -61,8 +65,10 @@ final class RelaisPage: NSObject {
         /// chercher est une page neuve et vide, et promettre le contraire
         /// envoyait fouiller une fenêtre où rien ne subsistait.
         var laissePeutEtreLeTexte: Bool {
-            if case .pageInterrompue = self { return false }
-            return true
+            switch self {
+            case .pageInterrompue, .relaisEteint: false
+            default: true
+            }
         }
 
         var errorDescription: String? {
@@ -88,6 +94,9 @@ final class RelaisPage: NSObject {
             case .calibrationSansClic(let c):
                 "Aucun clic sur \(c.libelle) en trois minutes : la calibration est "
                 + "abandonnée. Relancez-la quand vous serez prêt."
+            case .relaisEteint:
+                "ChatGPT Web Preview a été désactivé pendant la dictée : elle est "
+                + "abandonnée, et la page ChatGPT fermée."
             }
         }
     }
@@ -211,6 +220,15 @@ final class RelaisPage: NSObject {
     /// l'appui d'arrêt, et tout ce qui avait été dit entre-temps était perdu
     /// sans que rien ne le dise.
     var surMort: (() -> Void)?
+
+    /// Appelé quand une fenêtre du relais apparaît ou se range.
+    ///
+    /// Échap en dépend : il n'est pris, hors enregistrement, que devant une
+    /// fenêtre à fermer (cf. `Relais.discussionAffichee`). La fermeture
+    /// passe par des chemins que le cycle de dictée ne voit pas — le bouton
+    /// rouge, une calibration qui s'achève — et c'est donc la fenêtre qui le
+    /// dit.
+    var surAffichage: (() -> Void)?
 
     /// Position hors champ de la fenêtre quand le relais travaille en silence.
     ///
@@ -365,6 +383,7 @@ final class RelaisPage: NSObject {
         // On voyait donc un champ qui semblait prêt et qui ne l'était pas.
         fenetre.makeFirstResponder(webView)
         Task { await rafraichirEtiquette() }
+        surAffichage?()
     }
 
     /// Ce qu'on montre pendant la dictée, selon le réglage.
@@ -402,6 +421,9 @@ final class RelaisPage: NSObject {
         // rectangle gris là où l'on attendait sa disparition.
         fenetre.orderOut(nil)
         rendreLaVueALaBarre()
+        // À la fin, une fois la barre posée : Échap lit sa place et sa
+        // transparence (cf. `barreEnVue`).
+        defer { surAffichage?() }
         let compact = affichage == .barre
 
         // La page doit être **rendue**, même quand on ne veut rien voir.
@@ -438,6 +460,18 @@ final class RelaisPage: NSObject {
     /// La grande fenêtre est-elle sous les yeux de l'utilisateur ?
     var estVisible: Bool { fenetre.isVisible }
 
+    /// La barre est-elle sous les yeux — posée sur un écran, et opaque ?
+    ///
+    /// Elle ne se retire jamais de l'écran (cf. `horsChamp`) : `isVisible`
+    /// vaut vrai rangée comme affichée, et transparente pour « Rien ». Une
+    /// discussion réglée sur « Barre » la laisse à l'écran après la dictée,
+    /// pendant que la réponse est lue : Échap doit pouvoir la fermer, comme
+    /// la grande fenêtre (cf. `Relais.discussionAffichee`).
+    var barreEnVue: Bool {
+        barre.isVisible && barre.alphaValue > 0
+            && NSScreen.screens.contains { $0.frame.intersects(barre.frame) }
+    }
+
     /// Range tout : la grande fenêtre disparaît, la barre repart hors champ.
     ///
     /// Hors champ, et non retirée de l'écran : le système suspend le JavaScript
@@ -455,6 +489,7 @@ final class RelaisPage: NSObject {
         barre.ignoresMouseEvents = false
         barre.setFrameOrigin(Self.horsChamp)
         barre.orderFrontRegardless()
+        surAffichage?()
     }
 
     private func rendreLaVueALaBarre() {
@@ -1248,18 +1283,28 @@ final class RelaisPage: NSObject {
         // un texte obtenu, et laisserait la copie écraser le presse-papiers
         // sans qu'on le rende.
         //
-        // Sauf l'abandon, qui l'interrompt — mais seulement après avoir rendu
-        // le presse-papiers si la copie y est déjà. Sans ce contrôle, une
-        // tâche annulée tournait ici dix secondes (le sommeil lève aussitôt,
-        // et `try?` l'avalait), puis rendait un texte qui s'insérait.
+        // Sauf l'abandon, relevé en tête de chaque tour : il ne rend jamais de
+        // texte. Sans ce contrôle, une tâche annulée tournait ici dix secondes
+        // (le sommeil lève aussitôt, et `try?` l'avalait), puis rendait un
+        // texte qui s'insérait. Mais il ne sort pas sur-le-champ : le clic est
+        // parti, et la copie qu'il déclenche atterrit quand même, une fraction
+        // de seconde plus tard. Sortir avant, c'était la laisser écraser le
+        // presse-papiers sans plus personne pour le rendre. Il attend donc
+        // cette copie une seconde encore, la défait, et seulement alors lève.
         let finCopie = Date.now.addingTimeInterval(10)
-        while Date.now < finCopie {
-            let annulee = Task.isCancelled
-            if !annulee { try? await Task.sleep(for: .milliseconds(250)) }
-            guard presse.changeCount != avant else {
-                if annulee { throw CancellationError() }
-                continue
+        var finAbandon: Date?
+        while Date.now < (finAbandon ?? finCopie) {
+            if finAbandon == nil, Task.isCancelled {
+                finAbandon = min(finCopie, Date.now.addingTimeInterval(1))
             }
+            if finAbandon == nil {
+                try? await Task.sleep(for: .milliseconds(250))
+            } else {
+                // Le sommeil d'une tâche annulée rend la main aussitôt : on
+                // dort dans une tâche à part, que l'annulation n'atteint pas.
+                await Task { try? await Task.sleep(for: .milliseconds(100)) }.value
+            }
+            guard presse.changeCount != avant else { continue }
             let texte = presse.string(forType: .string) ?? ""
             presse.clearContents()
             if let sauvegarde { presse.setString(sauvegarde, forType: .string) }
@@ -1277,6 +1322,7 @@ final class RelaisPage: NSObject {
             }
             return texte
         }
+        try Task.checkCancellation()
         throw Erreur.pasDeReponse
     }
 

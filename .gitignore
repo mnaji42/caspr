@@ -6,30 +6,18 @@ notes/
 docs/
 
 # Enregistrements de voix — données personnelles, ne jamais publier.
-poc/samples/
-poc/samples_tts/
 *.wav
 *.m4a
 *.aiff
 
-# Sorties des bancs sur le corpus réel. Le dépôt est public et ces fichiers
-# contiennent les dictées mot pour mot, c'est-à-dire de la parole privée. Les
-# scripts qui les produisent sont versionnés ; leur sortie, jamais.
-poc/mesures/
-
-# Python
-.venv/
-__pycache__/
-*.py[cod]
-*.bak
-.python-version
-
-# Modèles (téléchargés à la demande, plusieurs Go)
-models/
-*.safetensors
-*.gguf
-*.mlpackage/
-*.mlmodelc/
+# L'ancien moteur local et ses bancs d'essai ont quitté le dépôt, mais pas les
+# disques de ceux qui les ont fait tourner : `git rm` laisse en place ce qui
+# était ignoré. Il y reste un environnement Python de plusieurs gigaoctets, et
+# surtout des échantillons de voix et des sorties de bancs qui contiennent des
+# dictées mot pour mot — de la parole privée. Le dépôt est public : ces deux
+# lignes empêchent qu'un `git add -A` les y ramène.
+engine/
+poc/
 
 # Swift / Xcode — artefacts de build, jamais versionnés
 .build/

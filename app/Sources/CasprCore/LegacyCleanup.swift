@@ -285,8 +285,9 @@ public enum LegacyCleanup {
             // Le socket du service, et rien d'autre.
             Location(home.appending(path: "Library/Caches/caspr"), "socket du moteur"),
             Location(support.appending(path: "corpus"), "corpus"),
-            // Écrites par `scripts/reset-state.sh`, qui exportait les réglages
-            // avant de les effacer. Plus rien ne les relit.
+            // Écrites par les anciennes versions de `scripts/reset-state.sh`,
+            // qui exportaient les réglages ici avant de les effacer. Plus rien
+            // ne les relit, et le script les range désormais hors d'ici.
             Location(support.appending(path: "backups"), "sauvegardes de réglages"),
             // Ce que le renommage laissait en place quand le nouveau dossier
             // existait déjà — il refusait de fusionner, à juste titre. Plus

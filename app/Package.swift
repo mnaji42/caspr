@@ -15,10 +15,10 @@ let package = Package(
             name: "Caspr",
             dependencies: ["CasprCore"],
             path: "Sources/Caspr",
-            // Le catalogue des langues est copié dans le bundle par
-            // `install.sh`, à côté du moteur Python et de l'icône. Le déclarer
-            // en ressource SwiftPM le rangerait dans un bundle séparé qu'il
-            // faudrait copier en plus, pour le même résultat.
+            // Le catalogue des langues et les icônes sont copiés dans le
+            // bundle par `install.sh`. Les déclarer en ressources SwiftPM les
+            // rangerait dans un bundle séparé qu'il faudrait copier en plus,
+            // pour le même résultat.
             exclude: ["Resources"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

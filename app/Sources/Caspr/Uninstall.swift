@@ -90,20 +90,6 @@ enum Uninstall {
                     + "s'en sert."
             }
         }
-
-        /// Coché d'avance ?
-        ///
-        /// Ce qui ne sert plus à rien, oui : le service et les poids de
-        /// l'ancien moteur local ne servent à aucune version de Caspr.
-        /// L'environnement Python, non : sur une machine de développement, il
-        /// vit dans le dépôt de travail, où l'on s'en sert encore pour
-        /// relancer l'ancien moteur à la main.
-        var checkedByDefault: Bool {
-            switch self {
-            case .settings, .permissions, .service, .logs, .model: true
-            case .engine: false
-            }
-        }
     }
 
     // MARK: - Emplacements

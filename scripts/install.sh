@@ -84,25 +84,6 @@ mkdir -p "$STAGE/Contents/Resources/icons"
 cp "$APP_DIR"/Sources/Caspr/Resources/icons/*.svg \
    "$STAGE/Contents/Resources/icons/"
 
-# Le moteur Python voyage dans le bundle. Son code pèse quelques centaines de
-# kilo-octets — trois dixièmes de pour cent de l'application — et l'embarquer
-# supprime le `git clone` que l'accueil demandait autrefois : plus de dépôt à
-# récupérer pour obtenir le programme, seulement ses dépendances.
-#
-# Uniquement ce que le service exécute. Les bancs d'essai (benchmark.py,
-# model_shootout.py, les sondes) sont des outils de développement : les
-# expédier gonflerait le bundle de code que personne n'appellera, et donnerait
-# à croire qu'ils font partie du produit.
-echo "▸ moteur Python"
-ENGINE_OUT="$STAGE/Contents/Resources/engine"
-mkdir -p "$ENGINE_OUT"
-cp -R "$ROOT/engine/caspr_engine" "$ENGINE_OUT/"
-cp "$ROOT/engine/pyproject.toml" "$ROOT/engine/uv.lock" "$ENGINE_OUT/"
-# Les caches de bytecode suivraient la copie et invalideraient la signature au
-# premier lancement, puisque Python les réécrit là où il les trouve.
-find "$ENGINE_OUT" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-echo "  $(du -sh "$ENGINE_OUT" | cut -f1) embarqués"
-
 cat > "$STAGE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

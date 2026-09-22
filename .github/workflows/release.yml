@@ -134,17 +134,6 @@ jobs:
           codesign -d --entitlements - /tmp/caspr/Caspr.app 2>/dev/null \
               | grep -q "audio-input" \
               || { echo "::error::entitlement micro absent"; exit 1; }
-          # Le moteur Python voyage dans le bundle depuis la 0.2.0. Sans lui,
-          # le bouton « Installer CrisperWhisper » n'a rien à installer — et
-          # comme le reste de l'application fonctionne parfaitement, l'absence
-          # ne se découvrirait que chez quelqu'un qui essaie ce moteur-là.
-          engine="/tmp/caspr/Caspr.app/Contents/Resources/engine"
-          for required in pyproject.toml caspr_engine/server.py \
-                          caspr_engine/protocol.py caspr_engine/crisper.py; do
-              [ -f "$engine/$required" ] \
-                  || { echo "::error::moteur Python incomplet dans le bundle : $required manque"; exit 1; }
-          done
-          echo "moteur Python présent ($(du -sh "$engine" | cut -f1))"
           hdiutil detach /tmp/caspr -quiet
 
       - uses: actions/upload-artifact@v4

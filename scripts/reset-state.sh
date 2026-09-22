@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
 # Remet Caspr dans l'état d'une première installation, pour éprouver l'accueil.
 #
-#   ./scripts/reset-state.sh          réglages, accueil, autorisations
-#   ./scripts/reset-state.sh --all    + corpus, modèle, service, application
+#   ./scripts/reset-state.sh          réglages, autorisations, session ChatGPT
+#   ./scripts/reset-state.sh --all    + l'application elle-même
 #
-# Par défaut, le corpus n'est PAS touché. C'est le seul contenu irremplaçable
-# de la machine : des centaines de dictées réelles, enregistrées pour mesurer
-# la qualité des moteurs, et que rien ne permet de reconstituer. Les réglages
-# se refont en une minute, le corpus non.
-#
-# Ce que fait la réinitialisation par défaut, et qui suffit à revoir l'accueil
-# exactement comme le verrait quelqu'un qui installe Caspr pour la première
-# fois :
-#   - efface les réglages et l'historique (UserDefaults)
-#   - révoque le micro et l'accessibilité (TCC), donc l'accueil les redemande
+# On ne juge pas un premier lancement sur la machine qui l'a développé : les
+# autorisations y sont déjà accordées, les réglages déjà choisis, ChatGPT déjà
+# connecté, et l'accueil ne s'ouvre jamais. Après ce script, il s'ouvre comme
+# chez quelqu'un qui installe Caspr pour la première fois.
 set -euo pipefail
 
 BUNDLE_ID="fr.lyriastudio.caspr"
-SUPPORT="$HOME/Library/Application Support/Caspr"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 ALL=0
@@ -28,8 +21,8 @@ case "${1:-}" in
 esac
 
 # --- Arrêter l'application ------------------------------------------------
-# Caspr réécrit ses réglages en quittant : les effacer pendant qu'il tourne
-# les verrait réapparaître à la seconde suivante.
+# Caspr réécrit ses réglages en quittant, et WebKit sa session : les effacer
+# pendant qu'il tourne les verrait réapparaître à la seconde suivante.
 if pgrep -x Caspr >/dev/null 2>&1; then
     echo "▸ arrêt de Caspr"
     osascript -e 'quit app "Caspr"' 2>/dev/null || pkill -x Caspr || true
@@ -37,79 +30,78 @@ if pgrep -x Caspr >/dev/null 2>&1; then
 fi
 
 # --- Réglages et historique ------------------------------------------------
-# Sauvegarde d'abord. Les réglages ne valent pas le corpus, mais le lexique se
-# construit terme par terme sur des semaines d'usage, et `defaults delete` ne
-# laisse rien derrière lui. La leçon a été apprise en le perdant une fois.
-BACKUP_DIR="$HOME/Library/Application Support/Caspr/backups"
+# Sauvegardés d'abord : le calibrage du relais se refait à la main, repère par
+# repère, et `defaults delete` ne laisse rien derrière lui. La copie va dans
+# `scratch/`, que git ignore — elle contient l'historique des dictées — et non
+# dans le dossier de support de Caspr, que l'application vide à son lancement.
 if defaults read "$BUNDLE_ID" >/dev/null 2>&1; then
+    BACKUP_DIR="$ROOT/scratch/reglages"
     mkdir -p "$BACKUP_DIR"
-    BACKUP="$BACKUP_DIR/prefs-$(date +%Y-%m-%dT%H-%M-%S).plist"
+    BACKUP="$BACKUP_DIR/$(date +%Y-%m-%dT%H-%M-%S).plist"
     defaults export "$BUNDLE_ID" "$BACKUP"
     echo "▸ réglages sauvegardés"
     echo "  $BACKUP"
     echo "  restauration : defaults import $BUNDLE_ID \"\$fichier\""
 fi
 
-echo "▸ effacement des réglages"
+echo "▸ effacement des réglages et de l'historique"
 defaults delete "$BUNDLE_ID" 2>/dev/null || true
 # Le cache de préférences garde une copie en mémoire, qui réécrirait le
 # fichier qu'on vient de supprimer.
 killall cfprefsd 2>/dev/null || true
 
+# --- Session ChatGPT -------------------------------------------------------
+# La page du relais garde ses cookies, donc la connexion au compte, là où
+# WebKit range les données d'une application : sous son identifiant, hors du
+# bundle. Sans ce ménage, l'accueil trouverait ChatGPT déjà connecté.
+# Chemins littéraux, jamais construits d'une variable qui pourrait être vide.
+echo "▸ effacement de la session ChatGPT"
+rm -rf "$HOME/Library/WebKit/fr.lyriastudio.caspr"
+rm -rf "$HOME/Library/Caches/fr.lyriastudio.caspr"
+# Le dossier, et le fichier de cookies `.binarycookies` posé à côté.
+rm -rf "$HOME/Library/HTTPStorages/fr.lyriastudio.caspr"*
+
 # --- Autorisations ---------------------------------------------------------
 # Sans ça, l'accueil s'ouvrirait avec le micro et l'accessibilité déjà
 # accordés — c'est-à-dire sans montrer ce qu'on cherche justement à vérifier.
+# La reconnaissance vocale aussi : la Dictée de macOS la demande.
 echo "▸ révocation des autorisations"
-tccutil reset Microphone "$BUNDLE_ID" >/dev/null 2>&1 \
-    || echo "  (micro : rien à révoquer)"
-tccutil reset Accessibility "$BUNDLE_ID" >/dev/null 2>&1 \
-    || echo "  (accessibilité : rien à révoquer)"
+for service in Microphone Accessibility SpeechRecognition; do
+    tccutil reset "$service" "$BUNDLE_ID" >/dev/null 2>&1 \
+        || echo "  ($service : rien à révoquer)"
+done
 
 if [ "$ALL" -eq 0 ]; then
     cat <<EOF
 
-  Réinitialisé. Le corpus est intact :
-    $SUPPORT/corpus  ($(du -sh "$SUPPORT" 2>/dev/null | cut -f1 || echo "absent"))
+  Réinitialisé : réglages, historique, calibrage du relais, session ChatGPT
+  et autorisations. Relancez Caspr : l'accueil s'ouvrira comme au premier jour.
 
-  Relancez Caspr : l'accueil s'ouvrira comme au premier jour.
-
-  Pour tout supprimer, corpus compris : ./scripts/reset-state.sh --all
+  Pour retirer aussi l'application : ./scripts/reset-state.sh --all
 EOF
     exit 0
 fi
 
-# --- Tout effacer ----------------------------------------------------------
-MODEL="$HOME/.cache/huggingface/hub/models--nyralabs--CrisperWhisper2.0_turbo"
+# --- L'application ---------------------------------------------------------
+if [ -e "/Applications/Caspr.app" ]; then
+    echo
+    printf "  Supprimer définitivement /Applications/Caspr.app ? Taper « supprimer » : "
+    read -r answer
+    [ "$answer" = "supprimer" ] || { echo "  annulé — l'application reste."; exit 1; }
+    rm -rf "/Applications/Caspr.app"
+    echo "▸ application supprimée"
+fi
 
-echo
-echo "  ⚠ --all va supprimer définitivement :"
-for path in "$SUPPORT" "$HOME/Library/Logs/Caspr" "$HOME/Library/Caches/caspr" \
-            "$MODEL" "/Applications/Caspr.app"; do
-    if [ -e "$path" ]; then
-        printf "      %-58s %s\n" "$path" "$(du -sh "$path" 2>/dev/null | cut -f1)"
-    fi
-done
-echo "      le service moteur (launchd)"
-echo
-printf "  Taper « supprimer » pour confirmer : "
-read -r answer
-[ "$answer" = "supprimer" ] || { echo "  annulé."; exit 1; }
+# Ce qui reste est nommé : annoncer « tout est supprimé » serait faux.
+cat <<EOF
 
-echo "▸ retrait du service moteur"
-"$ROOT/scripts/install-service.sh" --uninstall >/dev/null 2>&1 || true
+  Réinitialisé, application comprise. Restent en place :
+    - l'ouverture à la connexion, si elle était activée
+      (Réglages Système › Général › Ouverture) ;
+    - votre fichier de notes, qui est votre document ;
+    - les restes d'une version d'avant septembre 2026 (moteur local, modèle,
+      corpus) : c'est Caspr qui les met à la corbeille à son lancement, ou
+      son désinstalleur.
 
-echo "▸ suppression des données"
-# Chemins littéraux, jamais construits par expansion : une variable vide dans
-# un rm -rf effacerait la racine.
-rm -rf "$SUPPORT"
-rm -rf "$HOME/Library/Logs/Caspr"
-rm -rf "$HOME/Library/Caches/caspr"
-# Seulement le modèle de Caspr. ~/.cache/huggingface est partagé avec tout
-# autre projet qui utilise la bibliothèque : l'effacer en entier ferait
-# retélécharger des gigaoctets qui ne nous appartiennent pas.
-rm -rf "$MODEL"
-rm -rf "/Applications/Caspr.app"
-
-echo
-echo "  Tout est supprimé. Il ne reste de Caspr que le dépôt."
-echo "  Pour repartir de zéro : ./scripts/install.sh"
+  Pour réinstaller : ./scripts/install.sh
+EOF

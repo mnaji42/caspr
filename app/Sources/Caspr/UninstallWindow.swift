@@ -67,12 +67,17 @@ private struct UninstallView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WindowBackground().ignoresSafeArea())
+        // Tout est coché d'avance : rien de ce qui est listé ne sert plus une
+        // fois l'application partie. L'environnement Python de l'ancien moteur
+        // restait décoché tant qu'un dépôt de travail pouvait encore relancer
+        // ce moteur à la main ; le code en a quitté le dépôt, l'environnement
+        // n'est plus qu'un reste.
         // Le drapeau évite de recocher ce que l'utilisateur vient de décocher
         // si la vue réapparaît.
         .onAppear {
             guard !initialised else { return }
             initialised = true
-            selected = Set(Uninstall.Item.allCases.filter(\.checkedByDefault))
+            selected = Set(Uninstall.Item.allCases)
         }
     }
 

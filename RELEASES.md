@@ -99,8 +99,7 @@ Le workflow refuse déjà de publier un paquet qui :
 
 - ne passe pas `codesign --verify --deep --strict` ;
 - n'a pas l'entitlement `audio-input` — sans lui le runtime durci refuse le
-  micro **sans aucun dialogue**, et l'application paraît simplement muette ;
-- n'embarque pas le module Python du moteur.
+  micro **sans aucun dialogue**, et l'application paraît simplement muette.
 
 Reste ce qu'aucune vérification automatique ne couvre : installer le `.dmg`
 publié à la main, vérifier que l'accessibilité n'a pas sauté, puis publier la

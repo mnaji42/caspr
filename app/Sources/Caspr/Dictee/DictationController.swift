@@ -262,14 +262,15 @@ final class DictationController {
             // sa barre : Échap pendant l'écoute rendait la main, mais laissait
             // ChatGPT écouter derrière une barre restée à l'écran.
             //
-            // Sauf une fois le message de « Discuter » parti : il n'y a plus
-            // rien à abandonner, ChatGPT répond dans le fil. Ni arrêter la
-            // page, ni cacher la barre — seulement cesser d'attendre la lecture
-            // à haute voix. Le cycle s'achève alors de lui-même, sur la
-            // discussion ouverte (cf. `Relais.messageParti`) : il reste le sien.
-            if state == .processing, chatgpt.messageParti {
-                fin?.cancel()
-                fin = nil
+            // Sauf une fois le message de « Discuter » parti, ou la réponse
+            // d'un module qui écrit en main : il n'y a plus rien à abandonner.
+            // Ni arrêter la page, ni cacher la barre, ni annuler la tâche —
+            // elle a encore à ouvrir la discussion ou à insérer le texte —,
+            // seulement cesser d'attendre la lecture à haute voix. Le cycle
+            // s'achève alors de lui-même, et il reste le sien (cf.
+            // `Relais.seuleLaLectureEnAttente`).
+            if state == .processing, chatgpt.seuleLaLectureEnAttente {
+                chatgpt.cesserDAttendreLaLecture()
             } else {
                 abandonnerLeCycleRelais()
             }

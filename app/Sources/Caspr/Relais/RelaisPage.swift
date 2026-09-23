@@ -103,6 +103,9 @@ final class RelaisPage: NSObject {
     /// lui dit que la page qu'elle attend n'existe plus.
     var morts = 0
     var mortsAuDepart = 0
+    /// L'appui a demandé de ne plus attendre la lecture à haute voix (cf.
+    /// `Relais.cesserDAttendreLaLecture`). Remis à zéro à chaque dictée.
+    var lectureInterrompue = false
     /// Les alertes que la page affichait avant qu'on lui demande quelque chose.
     ///
     /// Une bannière déjà là n'est pas une réponse à notre demande — celle d'un

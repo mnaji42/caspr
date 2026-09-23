@@ -297,13 +297,34 @@ final class Relais: ObservableObject {
     /// répondait, au moment même où l'on appuyait pour lui répondre.
     private(set) var messageParti = false
 
+    /// La réponse d'un module qui écrit est en main, et n'attend plus pour
+    /// s'insérer que le clic « lire à haute voix ».
+    ///
+    /// Même règle que `messageParti` : traité en abandon, l'appui jetait une
+    /// réponse obtenue — et payée sur le quota —, et la fin du cycle
+    /// rechargeait la page sous elle.
+    private(set) var reponseObtenue = false
+
+    /// Plus rien à abandonner : la touche de dictée ne fait plus que cesser
+    /// d'attendre la lecture à haute voix (cf. `cesserDAttendreLaLecture`).
+    var seuleLaLectureEnAttente: Bool { messageParti || reponseObtenue }
+
+    /// Fait taire l'attente de la lecture, et elle seule.
+    ///
+    /// Pas en annulant la tâche de la dictée : elle a encore à ouvrir la
+    /// discussion ou à insérer le texte, et une tâche annulée n'insère rien.
+    func cesserDAttendreLaLecture() {
+        page?.lectureInterrompue = true
+    }
+
     /// Ce que la barre affiche pendant l'attente, `nil` avant qu'elle ne
     /// commence.
     var avancement: RecordingOverlay.ProcessingProgress? {
         guard let attente else { return nil }
         return .init(label: attente.phase.libelle, elapsed: attente.ecoule,
-                     exitHint: messageParti ? "touche de dictée pour ne plus attendre"
-                                            : "touche de dictée pour abandonner")
+                     exitHint: seuleLaLectureEnAttente
+                        ? "touche de dictée pour ne plus attendre"
+                        : "touche de dictée pour abandonner")
     }
 
     /// La préparation de la page pour la dictée suivante, s'il y en a une en
@@ -511,6 +532,7 @@ final class Relais: ObservableObject {
         debut = Date()
         attente = nil
         messageParti = false
+        reponseObtenue = false
         avertissement = nil
         do {
             try await pageActive().demarrer()
@@ -761,7 +783,7 @@ final class Relais: ObservableObject {
             // le message est parti, l'appui a seulement cessé d'attendre (cf.
             // `messageParti`). Rendre "" ouvre la discussion sur le fil que
             // ChatGPT est en train de remplir.
-            if Task.isCancelled {
+            if (try? pageActive())?.lectureInterrompue == true {
                 Log.info("relais : attente de la lecture interrompue, discussion conservée")
             }
             return ""
@@ -781,12 +803,10 @@ final class Relais: ObservableObject {
                 // La réponse est déjà là, finie et copiée : ce qui fait défaut
                 // ici, c'est le son seul, et le texte remanié s'insère quand
                 // même. Il attend ce clic pour s'insérer : aucune stabilité à
-                // reprouver (cf. `dejaFinie`).
+                // reprouver (cf. `dejaFinie`). L'appui, désormais, ne fait
+                // plus que cesser d'attendre (cf. `reponseObtenue`).
+                reponseObtenue = true
                 await (try? pageActive())?.faireLireLaReponse(attente: attente, dejaFinie: true)
-                // Interrompue, elle rend la main sans rien dire : sans cette
-                // vérification, le texte s'insérait au curseur un instant
-                // après l'abandon, et entrait dans l'historique.
-                try Task.checkCancellation()
             }
             Log.info("relais : \(module.identifiant) — \(brut.count) → \(texte.count) caractères")
             return texte

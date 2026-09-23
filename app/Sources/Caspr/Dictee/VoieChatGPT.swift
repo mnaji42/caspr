@@ -157,9 +157,13 @@ final class VoieChatGPT {
     /// attendre qu'elle soit prête — n'a rien à transcrire.
     var secondesEcoutees: TimeInterval { relais.secondesEcoulees }
 
-    /// Le message de « Discuter » est parti : il n'y a plus rien à abandonner,
-    /// ChatGPT répond dans le fil.
-    var messageParti: Bool { relais.messageParti }
+    /// Plus rien à abandonner — le message de « Discuter » est parti, ou la
+    /// réponse d'un module qui écrit est en main : il ne reste qu'à attendre
+    /// la lecture à haute voix.
+    var seuleLaLectureEnAttente: Bool { relais.seuleLaLectureEnAttente }
+
+    /// L'appui ne fait plus que cesser d'attendre la lecture.
+    func cesserDAttendreLaLecture() { relais.cesserDAttendreLaLecture() }
 
     /// Abandonne la dictée en cours sur la page : la rendre, l'arrêter, la
     /// préparer pour la suivante — jusqu'à quitter la discussion quand la
@@ -242,14 +246,12 @@ final class VoieChatGPT {
             // un filet pour retrouver un texte qu'une insertion aurait perdu,
             // et une conversation n'est pas une dictée qu'on range.
             if dictee.nEcritNullePart {
-                // Abandonnée avant l'envoi, la dictée n'ouvre pas de
-                // discussion : l'annulation a déjà rendu la main. Après
-                // l'envoi, l'appui n'a fait que cesser d'attendre, et le fil
-                // parti doit rester ouvert — sans quoi la fin du cycle
-                // rechargeait la page sous la réponse de ChatGPT.
-                if Task.isCancelled, !relais.messageParti {
-                    throw CancellationError()
-                }
+                // Abandonnée avant l'envoi, la dictée n'arrive pas ici : son
+                // cycle n'est plus le sien. Après l'envoi, l'appui n'a fait que
+                // cesser d'attendre, et le fil parti doit rester ouvert — sans
+                // quoi la fin du cycle rechargeait la page sous la réponse de
+                // ChatGPT.
+                //
                 // Parti, le message n'a plus rien à insérer : le brut gardé
                 // pour le menu promettrait un recours sans objet. Resté dans
                 // la zone — un envoi impossible —, il reste à portée.

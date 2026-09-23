@@ -40,6 +40,7 @@ extension RelaisPage {
     func demarrer() async throws {
         // La page que cette dictée va attendre est celle d'aujourd'hui.
         mortsAuDepart = morts
+        lectureInterrompue = false
         // Vingt secondes, et non huit dixièmes : au tout premier appui d'une
         // session, la page peut encore être en train de se charger. Conclure
         // « pas connecté » à cet instant-là revenait à demander un second appui.
@@ -425,7 +426,7 @@ extension RelaisPage {
         var silences = 0
         while Date.now < limite {
             defer { tour += 1 }
-            if Task.isCancelled { return nil }
+            if Task.isCancelled || lectureInterrompue { return nil }
             if morteDepuisLeDepart { return .pageInterrompue }
             try? await Task.sleep(for: .milliseconds(250))
             if tour % 4 == 3, let message = await refusPendantLAttente(silences: &silences) {
@@ -474,7 +475,7 @@ extension RelaisPage {
         func cliquer(_ parent: String, _ bouton: String) async -> Bool {
             let fin = Date.now.addingTimeInterval(5)
             repeat {
-                if Task.isCancelled { return false }
+                if Task.isCancelled || lectureInterrompue { return false }
                 let r = try? await appeler("return window.__relais.cliquerBouton(parent, bouton);",
                                            ["parent": parent, "bouton": bouton])
                 if r?["ok"] as? Bool == true { return true }

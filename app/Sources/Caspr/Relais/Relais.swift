@@ -481,7 +481,12 @@ final class Relais: ObservableObject {
             Log.error("relais : la page rechargée est restée sans zone de saisie")
             await reconstruireLaPage()
         case false?:
-            await page.viderComposeur()
+            // Un vidage refusé par une page qui répond se retente à l'appui ;
+            // par une page devenue muette entre-temps, il la laissait figée
+            // devant l'appui suivant, sans reconstruction.
+            guard await !page.viderComposeur(), !Task.isCancelled,
+                  await page.tientUneConversation() == nil, !Task.isCancelled else { return }
+            await reconstruireLaPage()
         case nil:
             guard !Task.isCancelled else { return }
             await reconstruireLaPage()
@@ -600,19 +605,20 @@ final class Relais: ObservableObject {
     var surPageInterrompue: (() -> Void)?
 
     /// `patienter` : la page n'est pas prête sur-le-champ — une préparation
-    /// en cours, une session pas encore dite. La barre le dit alors, avec la
-    /// sortie : aucune de ces attentes n'a de fin, et seule la touche de
-    /// dictée les interrompt.
+    /// en cours, une session pas encore dite, une page qui ne se met pas à
+    /// écouter. La barre le dit alors, avec la sortie : aucune de ces attentes
+    /// n'a de fin, et seule la touche de dictée les interrompt.
     ///
     /// Une page figée au démarrage ne lève plus rien : l'appui l'attend
     /// jusqu'à la touche, et l'arrêt qui suit la trouve muette — la
     /// préparation la reconstruit alors pour l'appui suivant (cf.
     /// `interrompre`).
-    func demarrer(patienter: () -> Void) async throws {
+    func demarrer(patienter: @escaping @MainActor () -> Void) async throws {
         // La page a été préparée quand la dictée précédente s'est achevée : il
         // n'y a rien à décider ici, seulement à s'assurer que ce travail est
         // fini. Il l'est, sauf si l'on rappuie dans la seconde.
-        if preparationEnCours { patienter() }
+        let dejaDit = preparationEnCours
+        if dejaDit { patienter() }
         let avant = page
         try await attendreLaPreparation()
         // La préparation a reconstruit une page muette : la barre que l'appui
@@ -624,7 +630,9 @@ final class Relais: ObservableObject {
         messageParti = false
         reponseObtenue = false
         avertissement = nil
-        try await pageActive().demarrer(siLaSessionTarde: patienter)
+        // Déjà affichée, la barre n'est pas redessinée : le chrono part de
+        // l'appui et continue.
+        try await pageActive().demarrer(siElleTarde: dejaDit ? {} : patienter)
     }
 
     /// Arrête l'écoute et rend la transcription, en ouvrant l'attente que

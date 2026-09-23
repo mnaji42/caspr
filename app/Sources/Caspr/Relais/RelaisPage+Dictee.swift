@@ -54,12 +54,27 @@ extension RelaisPage {
 
     /// Clique le micro. La page commence à écouter.
     ///
-    /// `siLaSessionTarde` : la page ne s'est pas dite connectée au premier
-    /// relevé. La barre le dit alors, avec la sortie (cf.
-    /// `VoieChatGPT.demarrer`) : l'attente qui suit n'a pas de fin.
-    func demarrer(siLaSessionTarde: () -> Void = {}) async throws {
+    /// `siElleTarde` : la page ne s'est pas dite connectée au premier relevé,
+    /// ou ne s'est pas mise à écouter peu après. La barre le dit alors, avec
+    /// la sortie (cf. `VoieChatGPT.demarrer`) : l'attente qui suit n'a pas de
+    /// fin.
+    func demarrer(siElleTarde: @escaping @MainActor () -> Void = {}) async throws {
         lectureInterrompue = false
-        try await attendreLaSession(siElleTarde: siLaSessionTarde)
+        // L'annonce ne dépend pas du retour d'un relevé. Sur un fil JavaScript
+        // figé, le premier ne revient jamais : annoncer à son retour, c'était
+        // laisser la barre muette, sans la sortie, aussi longtemps que la page
+        // restait figée. Une fois la session dite, la page peut encore se
+        // figer au vidage ou au clic du micro : l'annonce reste armée, un peu
+        // plus tard, pour ne pas faire clignoter « se prépare » devant un
+        // démarrage ordinaire. Ce délai n'est qu'un affichage : il ne met fin
+        // à rien (cf. la règle en tête de ce fichier).
+        var annonce = annoncer(apres: .milliseconds(400), siElleTarde)
+        defer { annonce.cancel() }
+        try await attendreLaSession()
+        annonce.cancel()
+        if await annonce.value == false {
+            annonce = annoncer(apres: .milliseconds(1500), siElleTarde)
+        }
         // La page que cette dictée va attendre est celle qui vient de se dire
         // connectée. Relevé avant l'attente, une mort survenue pendant celle-ci
         // — déjà réparée par le rechargement — faisait annoncer « dictée
@@ -91,8 +106,7 @@ extension RelaisPage {
     ///
     /// Rien n'est demandé pendant un chargement : une zone vue alors est celle
     /// de la page qu'on quitte.
-    private func attendreLaSession(siElleTarde: () -> Void) async throws {
-        var premier = true
+    private func attendreLaSession() async throws {
         while true {
             try Task.checkCancellation()
             if !chargementEnCours,
@@ -109,11 +123,18 @@ extension RelaisPage {
                     throw Erreur.pasConnecte
                 }
             }
-            if premier {
-                premier = false
-                siElleTarde()
-            }
             try await Task.sleep(for: .milliseconds(400))
+        }
+    }
+
+    /// Fait `annonce` après `delai`, sauf annulation d'ici là ; la tâche rend
+    /// si l'annonce a été faite.
+    private func annoncer(apres delai: Duration,
+                          _ annonce: @escaping @MainActor () -> Void) -> Task<Bool, Never> {
+        Task { @MainActor in
+            guard (try? await Task.sleep(for: delai)) != nil else { return false }
+            annonce()
+            return true
         }
     }
 

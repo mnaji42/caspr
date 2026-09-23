@@ -98,9 +98,9 @@ final class VoieChatGPT {
         // La barre s'ouvre avant l'écoute : on voit ChatGPT démarrer, et la
         // page, enfin à l'écran, cesse d'être différée par le système.
         relais.afficherBarre()
-        // La page n'est pas prête sur-le-champ — elle se prépare encore, ou ne
-        // s'est pas dite connectée au premier relevé : on le dit, plutôt que
-        // de laisser l'écran muet. Avec le chrono et la sortie dès dix
+        // La page n'est pas prête sur-le-champ — elle se prépare encore, ne
+        // s'est pas dite connectée au premier relevé, ou ne s'est pas mise à
+        // écouter : on le dit, plutôt que de laisser l'écran muet. Avec le chrono et la sortie dès dix
         // secondes, comme les attentes d'après l'arrêt : celle-ci n'a pas de
         // fin non plus, et seule la touche de dictée l'interrompt.
         let appui = Date.now

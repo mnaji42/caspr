@@ -906,6 +906,19 @@ final class DictationController {
     /// d'écrire. Passé ce délai, ou si elle a été quittée, le texte part là où
     /// l'on se trouve — c'était le comportement d'avant, et l'historique le
     /// garde de toute façon.
+    ///
+    /// ## Deux façons de demander, parce que la première peut être ignorée
+    ///
+    /// Depuis macOS 14, l'activation est **coopérative** : c'est l'application
+    /// au premier plan qui cède sa place, et une demande venue d'une
+    /// application qui ne l'a pas peut être ignorée. Or c'est le cas visé :
+    /// pendant l'attente de ChatGPT, on est passé dans une autre application,
+    /// et Caspr — que `rendreLeClavier` vient de cacher — n'a rien à céder.
+    /// La demande polie reste la première, et suffit quand Caspr est devant
+    /// (la fenêtre du relais, après une discussion). Sinon, on passe par
+    /// l'accessibilité, que l'insertion exige déjà : `kAXFrontmostAttribute`
+    /// est l'attribut que le système lui-même expose pour mettre une
+    /// application devant, et il ne dépend pas de qui la demande.
     private func ramener(_ application: NSRunningApplication?) async {
         guard let application, !application.isTerminated else { return }
         let workspace = NSWorkspace.shared
@@ -914,16 +927,30 @@ final class DictationController {
         }
         guard !devant() else { return }
         let nom = application.bundleIdentifier ?? application.localizedName ?? "?"
-        // Céder d'abord : depuis macOS 14, l'activation est coopérative, et une
-        // application qui a le premier plan — la fenêtre du relais, parfois —
-        // doit le rendre pour qu'une autre puisse le prendre.
-        NSApp.yieldActivation(to: application)
+        if NSApp.isActive { NSApp.yieldActivation(to: application) }
         application.activate(options: [])
+
         let echeance = ContinuousClock.now + .seconds(1)
+        // Un cinquième de la seconde pour la demande polie : au-delà, elle a
+        // été ignorée, et l'on insiste par l'accessibilité — sur la même
+        // échéance, pas sur une nouvelle.
+        let relance = ContinuousClock.now + .milliseconds(200)
+        var parAccessibilite = false
         while ContinuousClock.now < echeance {
             if devant() {
-                Log.info("insertion : retour à \(nom), où l'on parlait")
+                Log.info("insertion : retour à \(nom), où l'on parlait"
+                         + (parAccessibilite ? " (par l'accessibilité)" : ""))
                 return
+            }
+            if !parAccessibilite, ContinuousClock.now >= relance {
+                parAccessibilite = true
+                let resultat = AXUIElementSetAttributeValue(
+                    AXUIElementCreateApplication(application.processIdentifier),
+                    kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+                if resultat != .success {
+                    Log.error("insertion : \(nom) refuse le premier plan par "
+                              + "l'accessibilité (\(resultat.rawValue))")
+                }
             }
             try? await Task.sleep(for: .milliseconds(20))
         }

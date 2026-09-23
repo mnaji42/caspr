@@ -129,6 +129,12 @@ final class Relais: ObservableObject {
 
     /// Détruit la page que la voie macOS ne veut plus.
     private func quitterLaPage() {
+        // Une calibration non plus : la destruction ne passe pas par la
+        // fermeture de la fenêtre, qui l'aurait arrêtée, et elle continuait
+        // sur une vue morte — chatgpt.com rechargé dans le vide, puis une
+        // alerte « ne répond pas » ou « inachevée » pour un parcours qu'on
+        // venait d'annuler en repassant à macOS.
+        abandonnerCalibration()
         // Tout de suite, sans attendre la libération : ni discussion ni
         // préparation ne doivent survivre à la décision.
         oublierCeQuiVitSurLaPage()

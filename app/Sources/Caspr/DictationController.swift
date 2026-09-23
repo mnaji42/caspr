@@ -536,31 +536,17 @@ final class DictationController {
         Task { await transcrireParMacOS(pendingAudio, figee, apercuConserve: apercu) }
     }
 
-    /// Insère ce que l'aperçu en direct avait écrit, faute de mieux.
-    ///
-    /// La seconde issue d'un échec, et souvent la bonne : quand la version de
-    /// macOS choisie ne sait pas écrire ici, réessayer échouera pareil, alors
-    /// que le texte de l'aperçu est là et se suffit à lui-même. Moins soigné
-    /// que la passe finale, mais un texte imparfait vaut mieux que dix minutes
-    /// de parole à redire.
-    ///
-    /// L'audio est libéré comme après une insertion réussie : on a choisi cette
-    /// issue-là, et garder l'autre en réserve laisserait « Réessayer » dans le
-    /// menu au-dessus d'un texte déjà écrit.
+    /// Insère ce que l'aperçu en direct avait écrit (cf.
+    /// `Livraison.insererLApercu`).
     func insertPendingPreview() {
-        guard let text = pendingPreviewText, isAtRest else { return }
+        guard pendingPreviewText != nil, isAtRest else { return }
         Task {
             do {
-                try await livraison.deliver(text, to: target)
+                try await livraison.insererLApercu()
             } catch {
-                // L'insertion elle-même a échoué — plus de curseur, fichier
-                // devenu illisible. On garde tout : c'est un autre problème
-                // que celui qu'on essayait de contourner, et il se répare.
                 if isAtRest { state = .failed(error.localizedDescription) }
                 return
             }
-            history.add(text)
-            livraison.oublierLeRecours()
             // Une dictée a pu commencer pendant l'insertion : son état n'est
             // pas le nôtre.
             if isAtRest { state = .idle }

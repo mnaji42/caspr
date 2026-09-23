@@ -2,8 +2,9 @@ import AppKit
 import CasprCore
 
 /// Ce qui arrive à un texte une fois dicté, quelle que soit la voie qui l'a
-/// écrit : l'insérer là où il doit aller, le ranger dans l'historique, et,
-/// quand la dictée échoue, garder ce qui permet de la reprendre.
+/// écrit : rendre le clavier, l'insérer là où il doit aller, le ranger dans
+/// l'historique, et, quand la dictée échoue, garder ce qui permet de la
+/// reprendre.
 ///
 /// Les deux voies partagent cette queue, et c'est ici qu'elles la partagent —
 /// pas en amont. Le partage se faisait par un protocole de moteur que la voie
@@ -26,13 +27,30 @@ final class Livraison {
 
     // MARK: - Insérer
 
-    /// Écrit le texte à sa destination, là où l'on parlait, puis l'archive.
-    ///
+    /// Écrit le texte d'une dictée à sa destination, là où l'on parlait, puis
+    /// l'archive.
+    func livrer(_ text: String, _ dictee: DicteeEnCours) async throws {
+        // Rendre le clavier avant d'écrire. Après une discussion, ou si l'on
+        // bascule vers un module qui écrit en pleine dictée, la fenêtre du
+        // relais est au premier plan : le texte y partirait.
+        //
+        // Pour une dictée ChatGPT seulement : c'est elle qui a mis cette
+        // fenêtre devant. Sous une dictée macOS, une fenêtre du relais à
+        // l'écran n'est pas de son fait — la calibration qu'ouvre un passage
+        // à ChatGPT en pleine phrase, par exemple — et la cacher la ferait
+        // disparaître sans explication.
+        switch dictee.voie {
+        case .chatgpt: await Relais.partage.rendreLeClavier()
+        case .apple: break
+        }
+        try await ecrire(text, vers: dictee.destination, depuis: dictee.applicationVisee)
+    }
+
     /// `visee` est l'application capturée à l'appui : l'insertion par
     /// accessibilité vise l'élément focalisé **au moment d'écrire**, et l'on a
     /// pu changer d'application pendant la transcription.
-    func livrer(_ text: String, vers target: DictationTarget,
-                depuis visee: NSRunningApplication?) async throws {
+    private func ecrire(_ text: String, vers target: DictationTarget,
+                        depuis visee: NSRunningApplication?) async throws {
         switch target {
         case .caret: await ramener(visee)
         case .file: break
@@ -220,6 +238,30 @@ final class Livraison {
         pendingAudio = audio
         pendingPreview = apercu
         overlay.showFailure(echec, hint: Self.rescueHint(preview: apercu))
+    }
+
+    /// Insère ce que l'aperçu en direct avait écrit, faute de mieux.
+    ///
+    /// La seconde issue d'un échec, et souvent la bonne : quand la version de
+    /// macOS choisie ne sait pas écrire ici, réessayer échouera pareil, alors
+    /// que le texte de l'aperçu est là et se suffit à lui-même. Moins soigné
+    /// que la passe finale, mais un texte imparfait vaut mieux que dix minutes
+    /// de parole à redire.
+    ///
+    /// Le menu de Caspr ne prend pas le premier plan : l'application devant
+    /// est celle où l'on veut le texte, comme à l'appui. Et la destination du
+    /// moment, comme pour « Réessayer » : c'est une nouvelle livraison.
+    ///
+    /// L'audio est libéré comme après une insertion réussie : on a choisi cette
+    /// issue-là, et garder l'autre en réserve laisserait « Réessayer » dans le
+    /// menu au-dessus d'un texte déjà écrit. Si l'insertion elle-même échoue —
+    /// plus de curseur, fichier devenu illisible —, on garde tout : c'est un
+    /// autre problème que celui qu'on essayait de contourner, et il se répare.
+    func insererLApercu() async throws {
+        guard let text = pendingPreviewText else { return }
+        try await ecrire(text, vers: Preferences.shared.effectiveTarget,
+                         depuis: Self.applicationDevant())
+        oublierLeRecours()
     }
 
     /// Libère l'audio et l'aperçu conservés : une insertion a réussi, ou

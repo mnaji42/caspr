@@ -199,10 +199,13 @@ d'abord conformé au protocole des moteurs de macOS, `SpeechEngine`, pour
 hériter de l'insertion, de l'historique et des échecs. Il ne pouvait le faire
 qu'en mentant : il recevait un enregistrement vide par construction, et
 inventait une latence découpée en mel, encodeur et décodeur. Ce protocole a
-disparu. Chaque voie a son chemin — `VoieApple`, `VoieChatGPT` —, et ils se rejoignent dans `Livraison`, qui
-ne sait rien de l'un ni de l'autre. Les différences sont écrites là où elles
-se produisent, et ce sont des différences réelles : aucun audio de notre
-côté, donc pas de « Réessayer » ; une page à rendre et à préparer à la fin de
+disparu. Chaque voie a son chemin — `VoieApple`, `VoieChatGPT` —, et ils se
+rejoignent dans `Livraison` : rendre le clavier, insérer au curseur ou en
+note, archiver, garder de quoi reprendre un échec. Elle ne distingue les voies
+qu'une fois, pour rendre le clavier, que seule une dictée ChatGPT a pu donner
+à la fenêtre du relais. Les autres différences sont écrites là où elles se
+produisent, et ce sont des différences réelles : aucun audio de notre côté,
+donc pas de « Réessayer » ; une page à rendre et à préparer à la fin de
 chaque dictée.
 
 ## Pourquoi une exclusion, et pas un moteur de plus

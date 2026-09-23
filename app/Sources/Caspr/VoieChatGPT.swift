@@ -251,16 +251,7 @@ final class VoieChatGPT {
             }
             relais.masquerBarre()
             overlay.hide()
-            // Rendre le clavier avant d'écrire. Après une discussion, ou si
-            // l'on bascule vers un module qui écrit en pleine dictée, la
-            // fenêtre du relais est au premier plan : le texte y partirait.
-            //
-            // Ici et non dans `Livraison` : seule cette fenêtre peut tenir le
-            // clavier, et la cacher sous une dictée macOS masquerait la
-            // calibration qu'ouvre un passage à ChatGPT fait en pleine phrase.
-            await relais.rendreLeClavier()
-            try await livraison.livrer(texte, vers: dictee.destination,
-                                       depuis: dictee.applicationVisee)
+            try await livraison.livrer(texte, dictee)
             // Abandonné pendant l'insertion : le texte est écrit, et c'est
             // tout ce qui reste de ce cycle. L'état appartient au suivant.
             guard estEnCours() else { return .sansSuite }

@@ -176,8 +176,7 @@ final class VoieApple {
                     + "audio conservé, « Réessayer » ci-dessous."
             }
             overlay.hide()
-            try await livraison.livrer(text, vers: dictee.destination,
-                                       depuis: dictee.applicationVisee)
+            try await livraison.livrer(text, dictee)
             livraison.oublierLeRecours()
             Log.info("transcrit en \(Log.ms(depuis: debut)) ms, \(text.count) caractères")
             return nil

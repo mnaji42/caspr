@@ -353,6 +353,23 @@ final class Preferences {
         didSet { defaults.set(livePreviewEnabled, forKey: Key.livePreview) }
     }
 
+    // MARK: - Voie
+
+    /// Qui écoute le micro : macOS, ou la page ChatGPT.
+    ///
+    /// La seule décision qui compte, et elle n'est écrite qu'ici. Une dictée
+    /// la lit **une fois**, à l'appui, et la garde jusqu'à la livraison :
+    /// basculer en pleine phrase vaut pour la dictée suivante. Le relais la
+    /// suit aussitôt, parce que c'est elle qui décide si sa page doit exister
+    /// (cf. `Relais.suivreLaVoie`).
+    var voie: VoieDeDictee {
+        didSet {
+            defaults.set(voie.rawValue, forKey: VoieDeDictee.cle)
+            guard voie != oldValue else { return }
+            Relais.partage.suivreLaVoie()
+        }
+    }
+
     // MARK: - Moteur
 
     /// La version de macOS qui écrit le texte définitif — Apple Intelligence
@@ -511,5 +528,9 @@ final class Preferences {
             ?? resolvedApple
 
         ignoredUpdateVersion = defaults.string(forKey: Key.ignoredUpdate)
+        // Posée par `Migration` avant cette lecture. Un binaire lancé hors de
+        // son bundle ne migre rien : il dicte alors par macOS, ce qui n'ouvre
+        // aucune page tierce qu'on n'aurait pas demandée.
+        voie = VoieDeDictee.relue(defaults)
     }
 }

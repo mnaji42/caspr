@@ -101,6 +101,12 @@ enum Migration {
             appleTechnology(defaults)
         }
         for line in done { Log.notice("migration : \(line)") }
+        // La voie est posée ici, une fois, et non déduite par `Preferences` à
+        // chaque lecture : l'interrupteur du relais ne serait jamais devenu
+        // muet, et il écraserait tout choix fait depuis.
+        if let voie = VoieDeDictee.migrer(defaults) {
+            Log.notice("migration : voie de dictée posée — \(voie.rawValue)")
+        }
     }
 
     /// La version de macOS qui remplace CrisperWhisper.

@@ -99,8 +99,8 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
   `RelaisCard { AppleEngineCard(target: .final) }` enveloppe la carte de
   macOS, dont elle décide l'affichage : les deux s'excluent à l'écran comme en
   fonctionnement.
-- **`CasprApp.swift`** — la page est chargée au lancement quand le mode est
-  actif, pour que la première dictée ne paie pas l'ouverture de chatgpt.com.
+- **`CasprApp.swift`** — la page est chargée au lancement quand la voie est
+  ChatGPT, pour que la première dictée ne paie pas l'ouverture de chatgpt.com.
 - **`UninstallWindow.swift`** — la session est effacée par l'API de WebKit
   avant le balayage des fichiers. C'est l'appelant qui attend, parce qu'il est
   dans un contexte qui le peut : le faire depuis le désinstalleur lui-même
@@ -163,12 +163,18 @@ rien n'y entrait — protégeait la possibilité de retirer le relais, abandonn�
 depuis que ChatGPT est l'une des deux voies du produit. Ce qui décide des
 modules proposés, et ce qui relit un calibrage, n'avait aucun test.
 
-**Rien n'entre dans `Preferences`.** Les réglages du relais vivent dans
-`UserDefaults` sous le préfixe `relais.`, lus depuis ce dossier seulement.
+**La voie vit dans `Preferences`, et nulle part ailleurs.** Qui écoute le
+micro est `Preferences.voie` (`caspr.voie`, un `VoieDeDictee`), relu à
+chaque fois et figé au début de chaque dictée : basculer en pleine phrase
+vaut pour la suivante. L'ancien interrupteur `relais.actif` n'est plus lu que
+par la migration, qui en déduit la voie une fois, et il reste sur le disque.
+Les autres réglages du relais vivent sous le préfixe `relais.`, lus depuis ce
+dossier seulement.
 
-**Rien n'existe tant que ce n'est pas activé.** La `WKWebView` et la session
-ChatGPT ne sont construites qu'à l'allumage de l'interrupteur, et détruites à
-son extinction.
+**Rien n'existe tant que la voie n'est pas ChatGPT.** La `WKWebView` et la
+session ChatGPT ne sont construites que sur cette voie, et détruites quand on
+choisit macOS — à la fin de la dictée ChatGPT en cours s'il y en a une, qui va
+au bout sur la page qu'elle a prise.
 
 **Le relais se conforme à `SpeechEngine`.** `transcribeAndInject` ne sait pas
 qu'il existe : l'insertion, l'historique, la barre, les échecs et le bouton
@@ -185,7 +191,7 @@ D'où l'interrupteur plutôt qu'une entrée dans la liste des moteurs : proposer
 les deux côte à côte laisserait croire qu'on passe de l'un à l'autre d'une
 dictée sur l'autre. On ne peut pas.
 
-L'exclusion a une contrepartie heureuse : tant que le relais est allumé, Caspr
+L'exclusion a une contrepartie heureuse : tant que la voie est ChatGPT, Caspr
 ne touche jamais au micro, donc la page peut rester ouverte entre deux dictées
 et le raccourci reste instantané.
 

@@ -186,7 +186,11 @@ final class DictationController {
     /// agit. Le badge de langue sert alors à nommer le moteur réellement à
     /// l'œuvre — sans quoi la barre est indiscernable d'une dictée ordinaire.
     private var overlayStatus: RecordingOverlay.Status {
-        if relaisEnCours {
+        // La voie de la dictée en cours ; au repos, celle de la suivante.
+        switch voieDuCycle ?? Preferences.shared.voie {
+        case .apple:
+            break
+        case .chatgpt:
             // La pastille porte les modules du relais dès que l'aller-retour
             // est calibré. Sans lui, un seul module est possible, et la barre
             // n'en montre pas : proposer un choix qui échouerait vaut moins
@@ -227,11 +231,15 @@ final class DictationController {
         overlay.update(overlayStatus)
     }
 
-    /// Appelé par le raccourci global : démarre ou termine la dictée.
-    // RELAIS — vrai quand le cycle en cours passe par ChatGPT plutôt que par
-    // le moteur choisi. Positionné à l'appui, lu jusqu'à la livraison : le
-    // geste d'arrêt n'a pas à redire par où l'on était parti.
-    private var relaisEnCours = false
+    /// La voie du cycle en cours, **figée à l'appui** ; `nil` hors d'un cycle.
+    ///
+    /// Lue une fois, dans `commencer`, et portée jusqu'à la livraison. La
+    /// relire en chemin, c'était laisser une bascule en pleine phrase
+    /// arrêter par macOS une écoute que ChatGPT avait ouverte — le geste
+    /// d'arrêt n'a pas à redire par où l'on était parti. Basculer vaut donc
+    /// pour la dictée suivante, et le relais garde sa page jusqu'à la fin de
+    /// celle-ci (cf. `Relais.suivreLaVoie`).
+    private var voieDuCycle: VoieDeDictee?
     // RELAIS — début de la dictée, faute d'enregistrement pour en déduire la
     // durée. Elle sert à dimensionner l'attente de la transcription.
     private var relaisDebut = Date()
@@ -259,6 +267,7 @@ final class DictationController {
     /// tout ce qu'il aurait dû défaire (cf. `abandonnerLeCycleRelais`).
     private var cycle = 0
 
+    /// Appelé par le raccourci global : démarre ou termine la dictée.
     func toggle() {
         switch state {
         case .idle, .failed:
@@ -287,17 +296,23 @@ final class DictationController {
             // La touche de dictée, elle, est un geste délibéré et propre à
             // Caspr : personne ne la presse par distraction, et celui qui la
             // presse pendant l'attente veut bien dire qu'il abandonne.
-            if relaisEnCours { cancel() }
+            switch voieDuCycle {
+            case .chatgpt?: cancel()
+            case .apple?, nil: break
+            }
         }
     }
 
     /// Ouvre un cycle, depuis le repos.
     private func commencer() {
         cycle &+= 1
-        // RELAIS — c'est la voie choisie qui décide, pas la touche : les deux
+        // C'est la voie choisie qui décide, pas la touche : les deux
         // s'excluent, et il n'y a qu'un seul déclencheur.
-        let parRelais = Relais.partage.actif
-        if parRelais {
+        let voie = Preferences.shared.voie
+        switch voie {
+        case .apple:
+            break
+        case .chatgpt:
             // RELAIS — une seule chose à la fois sur la page.
             //
             // La dictée et la calibration pilotent le même document. Les
@@ -315,10 +330,13 @@ final class DictationController {
                 return
             }
         }
-        relaisEnCours = parRelais
+        voieDuCycle = voie
         state = .starting
-        let demarrage = Task { await startRecording() }
-        if parRelais { relaisDemarrage = demarrage }
+        let demarrage = Task { await startRecording(voie: voie) }
+        switch voie {
+        case .apple: break
+        case .chatgpt: relaisDemarrage = demarrage
+        }
     }
 
     func cancel() {
@@ -357,20 +375,24 @@ final class DictationController {
         // cacher la barre — seulement cesser d'attendre la lecture à haute
         // voix. Le cycle s'achève alors de lui-même, sur la discussion
         // ouverte (cf. `Relais.messageParti`) : il reste le sien.
-        if relaisEnCours, state == .processing, Relais.partage.messageParti {
-            relaisTache?.cancel()
-            relaisTache = nil
+        switch voieDuCycle {
+        case .chatgpt?:
+            if state == .processing, Relais.partage.messageParti {
+                relaisTache?.cancel()
+                relaisTache = nil
+            } else {
+                abandonnerLeCycleRelais()
+            }
             return
-        }
-        if relaisEnCours {
-            abandonnerLeCycleRelais()
-            return
+        case .apple?, nil:
+            break
         }
         guard state == .recording else { return }
         recorder.cancel()
         stopPreview()
         overlay.hide()
         Feedback.cancelled()
+        voieDuCycle = nil
         state = .idle
     }
 
@@ -387,7 +409,7 @@ final class DictationController {
         cycle &+= 1
         relaisTache?.cancel()
         relaisTache = nil
-        relaisEnCours = false
+        voieDuCycle = nil
         Relais.partage.rendreLaMain()
         Relais.partage.interrompre(
             quitterLaDiscussion: Relais.partage.sortieCourante != .aucune)
@@ -398,8 +420,8 @@ final class DictationController {
 
     // MARK: - Étapes
 
-    private func startRecording() async {
-        let parRelais = relaisEnCours
+    private func startRecording(voie: VoieDeDictee) async {
+        let parRelais = voie == .chatgpt
         // Toute sortie qui n'aboutit pas à l'écoute rend la page, et quitte
         // `.starting`. Une ligne par chemin de sortie, c'était la promesse d'en
         // oublier un — et il y en avait deux : un micro ou une accessibilité
@@ -410,9 +432,12 @@ final class DictationController {
         defer {
             relaisDemarrage = nil
             if state == .starting { state = .idle }
-            if parRelais, state != .recording {
-                relaisEnCours = false
-                Relais.partage.rendreLaMain()
+            if state != .recording {
+                voieDuCycle = nil
+                switch voie {
+                case .apple: break
+                case .chatgpt: Relais.partage.rendreLaMain()
+                }
             }
         }
         switch AudioRecorder.microphoneAccess {
@@ -450,7 +475,8 @@ final class DictationController {
             //
             // L'aperçu en direct est donc impossible ici, et c'est définitif :
             // il faudrait un second flux micro, celui-là même qui casse tout.
-            if parRelais {
+            switch voie {
+            case .chatgpt:
                 relaisDebut = Date()
                 // La barre s'ouvre avant l'écoute : on voit ChatGPT démarrer,
                 // et la page, enfin à l'écran, cesse d'être différée par le
@@ -465,7 +491,7 @@ final class DictationController {
                 // Interrompu à l'instant où la page commençait à écouter :
                 // l'annulation l'emporte, la page est arrêtée plus bas.
                 try Task.checkCancellation()
-            } else {
+            case .apple:
                 try recorder.start()
             }
             Log.info("enregistrement démarré")
@@ -475,9 +501,10 @@ final class DictationController {
             // Échap est pris au passage (cf. `ajusterEchap`).
             state = .recording
             overlay.showRecording(overlayStatus)
-            if parRelais {                                         // RELAIS —
+            switch voie {
+            case .chatgpt:
                 overlay.setPreviewNotice("ChatGPT transcrit à la fin de la dictée")
-            } else {
+            case .apple:
                 startPreview()
             }
             Feedback.recordingStarted()
@@ -521,10 +548,10 @@ final class DictationController {
     /// transcription relève la mort à son tour suivant, et le démarrage au
     /// clic suivant.
     private func pageRelaisInterrompue() {
-        guard relaisEnCours, state == .recording else { return }
+        guard voieDuCycle == .chatgpt, state == .recording else { return }
         let erreur = RelaisPage.Erreur.pageInterrompue
         Log.error("relais : la page est morte pendant l'écoute")
-        relaisEnCours = false
+        voieDuCycle = nil
         Relais.partage.rendreLaMain()
         Relais.partage.masquerBarre()
         overlay.showFailure(erreur.raisonCourte ?? "La page ChatGPT s'est fermée")
@@ -534,12 +561,16 @@ final class DictationController {
     private func finishRecording() async {
         // Abandonnée entre l'appui et l'exécution de cette tâche : il n'y a
         // plus d'écoute à arrêter, et la poursuivre prendrait le chemin
-        // ordinaire — le drapeau du relais vient d'être remis à faux.
-        guard state == .recording else { return }
-        // RELAIS — rien n'a été enregistré de notre côté : ni durée minimale à
-        // vérifier, ni audio à conserver pour un « Réessayer » qui n'aurait
-        // rien à rejouer. La page a le son, elle seule.
-        if relaisEnCours {
+        // ordinaire — la voie du cycle vient d'être oubliée.
+        guard state == .recording, let voie = voieDuCycle else { return }
+        switch voie {
+        case .apple:
+            break
+        case .chatgpt:
+            // Rien n'a été enregistré de notre côté : ni durée minimale à
+            // vérifier, ni audio à conserver pour un « Réessayer » qui n'aurait
+            // rien à rejouer. La page a le son, elle seule.
+            //
             // Échap est rendu, contrairement à ce qui avait été fait ici.
             //
             // Le raisonnement de départ était juste — l'attente peut durer des
@@ -562,7 +593,7 @@ final class DictationController {
                                    progress: { Relais.partage.avancement })
             Log.info("fin de dictée relais : "
                      + "\(String(format: "%.1f", Date().timeIntervalSince(relaisDebut))) s")
-            await transcribeAndInject([])
+            await transcribeAndInject([], voie: voie)
             return
         }
         let samples = recorder.stop()
@@ -585,11 +616,12 @@ final class DictationController {
         guard samples.count > Int(AudioRecorder.targetSampleRate * 0.3) else {
             Log.info("trop court, ignoré")
             overlay.hide()
+            voieDuCycle = nil
             state = .idle
             return
         }
 
-        await transcribeAndInject(samples)
+        await transcribeAndInject(samples, voie: voie)
     }
 
     /// Transcrit puis insère, en gardant l'audio tant que ce n'est pas réussi.
@@ -598,15 +630,17 @@ final class DictationController {
     /// était arrêté ou a échoué obligerait à tout redire — c'est le pire échec
     /// possible pour cette application. L'audio n'est donc libéré qu'après une
     /// insertion réussie, et `retryLast()` permet de relancer sans reparler.
-    private func transcribeAndInject(_ samples: [Float]) async {
+    private func transcribeAndInject(_ samples: [Float], voie: VoieDeDictee) async {
         // Le cycle que cette transcription sert. S'il a été abandonné quand
         // elle reprend la main, elle n'a plus rien à faire : l'abandon a déjà
         // tout défait, et un autre cycle a peut-être commencé.
         let numero = cycle
         state = .processing
-        // RELAIS — le relais se conforme au protocole des moteurs, donc tout ce
-        // qui suit (insertion, historique, échecs, barre) marche sans le savoir.
-        let parRelais = relaisEnCours
+        // Le relais se conforme au protocole des moteurs, donc tout ce qui suit
+        // (insertion, historique, échecs, barre) marche sans le savoir — à la
+        // poignée de différences près que ce drapeau porte, en attendant que
+        // chaque voie ait la sienne.
+        let parRelais = voie == .chatgpt
         // RELAIS — vrai quand l'échec laisse la transcription dans la page, à
         // récupérer dans la fenêtre qu'on ouvre pour cela.
         var texteLaisseDansLaPage = false
@@ -615,8 +649,8 @@ final class DictationController {
         // chaque endroit serait la promesse d'en oublier un, et un oubli
         // condamne la page jusqu'au redémarrage.
         func acheverLeCycle() {
-            relaisEnCours = false
-            Relais.partage.rendreLaMain()
+            voieDuCycle = nil
+            if parRelais { Relais.partage.rendreLaMain() }
             // RELAIS — et la page est rendue prête pour la prochaine, pendant
             // qu'on ne s'en sert pas. Sauf si l'on vient d'y laisser un texte
             // à récupérer : la préparer maintenant le détruirait sous les yeux
@@ -657,7 +691,10 @@ final class DictationController {
         defer {
             if numero == cycle { acheverLeCycle() }
         }
-        let moteur: any SpeechEngine = parRelais ? RelaisEngine() : writer
+        let moteur: any SpeechEngine = switch voie {
+        case .apple: writer
+        case .chatgpt: RelaisEngine()
+        }
         do {
             let result = try await moteur.transcribe(
                 TranscriptionRequest(samples: samples, language: language))
@@ -995,7 +1032,10 @@ final class DictationController {
         // Posé tout de suite, et non par la tâche : entre les deux, un appui
         // aurait trouvé l'état au repos et ouvert un cycle par-dessus.
         state = .processing
-        Task { await transcribeAndInject(pendingAudio) }
+        // Seule la voie macOS garde de l'audio : c'est elle qui le rejoue,
+        // quelle que soit la voie retenue depuis.
+        voieDuCycle = .apple
+        Task { await transcribeAndInject(pendingAudio, voie: .apple) }
     }
 
     /// Insère ce que l'aperçu en direct avait écrit, faute de mieux.

@@ -1,17 +1,17 @@
 import SwiftUI
 import CasprCore
 
-/// La bascule du relais, en tête de l'onglet Moteur IA.
+/// La bascule entre les deux voies, en tête de l'onglet Moteur IA.
 ///
 /// **Un interrupteur, pas un choix de moteur.** ChatGPT et les moteurs de
-/// Caspr s'excluent, et ce n'est pas une préférence de présentation : les deux
+/// macOS s'excluent, et ce n'est pas une préférence de présentation : les deux
 /// ne peuvent pas ouvrir le micro en même temps. Une capture par la page
 /// ChatGPT laisse celle de Caspr sur du silence — mesuré au niveau crête, 0.072
 /// avant, 0.000 après. Les proposer côte à côte dans une même liste laisserait
 /// croire qu'on peut passer de l'un à l'autre d'une dictée sur l'autre ; on ne
 /// peut pas, et l'exclusion doit se voir.
 ///
-/// Elle a aussi une vertu pratique : tant que le relais est allumé, Caspr ne
+/// Elle a aussi une vertu pratique : tant que la voie est ChatGPT, Caspr ne
 /// touche jamais au micro, donc la page peut rester ouverte entre deux dictées.
 /// C'est ce qui rend le raccourci instantané au lieu de recharger chatgpt.com à
 /// chaque fois.
@@ -23,7 +23,9 @@ import CasprCore
 struct RelaisCard<Moteurs: View>: View {
     @ViewBuilder var moteurs: Moteurs
 
-    @State private var actif = Relais.partage.actif
+    /// La voie ChatGPT est-elle retenue ? Relue sur `Preferences.voie`, la
+    /// seule décision — cf. `relire`.
+    @State private var actif = Self.voieChatGPT
     @State private var calibre = Relais.partage.estCalibre
     @State private var depart = Relais.partage.departPersonnalise
     @State private var modules = RelaisCatalogue.tous
@@ -102,7 +104,7 @@ struct RelaisCard<Moteurs: View>: View {
                 }
             }
         } else {
-            // Les moteurs de Caspr n'apparaissent qu'à l'extinction. Les
+            // Les moteurs de macOS n'apparaissent que sur leur voie. Les
             // laisser visibles sous un interrupteur qui les neutralise invite
             // à y cliquer, puis à chercher pourquoi rien ne change.
             moteurs
@@ -156,7 +158,7 @@ struct RelaisCard<Moteurs: View>: View {
     /// laissait donc périmée : les réglages annonçaient « configuration
     /// inachevée » à quelqu'un qui venait de la terminer.
     private func relire() {
-        actif = Relais.partage.actif
+        actif = Self.voieChatGPT
         calibre = Relais.partage.estCalibre
         depart = Relais.partage.departPersonnalise
         modules = RelaisCatalogue.tous
@@ -176,8 +178,17 @@ struct RelaisCard<Moteurs: View>: View {
         return nil
     }
 
+    private static var voieChatGPT: Bool {
+        switch Preferences.shared.voie {
+        case .chatgpt: true
+        case .apple: false
+        }
+    }
+
+    /// Vaut pour la dictée suivante : une dictée en cours garde la voie
+    /// qu'elle avait à l'appui.
     private func basculer(_ nouveau: Bool) {
-        Relais.partage.actif = nouveau
+        Preferences.shared.voie = nouveau ? .chatgpt : .apple
         actif = nouveau
         if nouveau, !Relais.partage.estCalibre {
             Relais.partage.calibrerTout(relire)

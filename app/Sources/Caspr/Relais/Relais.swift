@@ -6,60 +6,67 @@ import WebKit
 /// Le relais : dicter par le transcripteur de ChatGPT, sur la touche de dictée
 /// habituelle.
 ///
-/// C'est un **mode exclusif**, pas un moteur de plus. Allumé, ChatGPT écrit et
-/// les moteurs de Caspr sont arrêtés ; éteint, Caspr redevient exactement ce
-/// qu'il était. L'exclusion n'est pas une préférence de présentation : les deux
-/// ne peuvent pas ouvrir le micro en même temps — mesuré au niveau crête de
-/// l'enregistrement, 0,072 avant tout usage du relais, 0,000 après.
+/// C'est **l'une des deux voies** de Caspr, pas un moteur de plus. Sur la voie
+/// ChatGPT, la page écoute et Caspr n'ouvre jamais son micro ; sur la voie
+/// macOS, la page n'existe pas. L'exclusion n'est pas une préférence de
+/// présentation : les deux ne peuvent pas ouvrir le micro en même temps —
+/// mesuré au niveau crête de l'enregistrement, 0,072 avant tout usage du
+/// relais, 0,000 après. C'est pourquoi elle est la forme d'un type,
+/// `VoieDeDictee`, et non un interrupteur que le relais tiendrait seul.
 ///
-/// **Cette fonctionnalité est destinée à être retirée.** Elle est personnelle,
-/// elle dépend d'un service tiers piloté par sa page web, et elle n'a pas sa
-/// place dans un produit vendu. Tout ce qui la concerne vit donc dans ce
-/// dossier, et les points d'accroche dans le reste de l'application sont
-/// marqués `RELAIS —` pour être retrouvés d'un `grep`. La marche à suivre est
-/// dans `RELAIS.md`.
-///
-/// Trois règles tenues pour que ce retrait reste trivial :
-///
-/// 1. **Rien n'entre dans `CasprCore`.** Pas de cas `.relais` dans
-///    `EngineChoice` : il faudrait le traiter dans les réglages, le
-///    gestionnaire de sécurité, les statistiques — autant d'endroits à défaire
-///    ensuite.
-/// 2. **Rien n'entre dans `Preferences`.** Les réglages du relais sont dans
-///    `UserDefaults` sous le préfixe `relais.`, lus ici seulement.
-/// 3. **Rien n'est construit tant que ce n'est pas activé.** La WKWebView et la
-///    session ChatGPT n'existent pas pour qui n'a jamais coché la case.
+/// **Rien n'est construit tant que la voie n'est pas ChatGPT.** La WKWebView et
+/// la session ChatGPT n'existent pas pour qui dicte par macOS.
 @MainActor
 final class Relais: ObservableObject {
     static let partage = Relais()
 
-    private static let cleActif = "relais.actif"
-
-    /// ChatGPT écrit-il à la place des moteurs de Caspr ?
+    /// La voie retenue est-elle ChatGPT ?
     ///
-    /// Éteint, le relais ne coûte rien : la page n'est pas construite et aucune
-    /// requête n'est faite. Allumé, elle est chargée tout de suite, pour que la
-    /// première dictée ne paie pas l'ouverture de chatgpt.com.
-    var actif: Bool {
-        get { UserDefaults.standard.bool(forKey: Self.cleActif) }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Self.cleActif)
-            guard !newValue else {
-                // Allumé, on charge tout de suite : la première dictée ne doit
-                // pas payer le chargement de chatgpt.com. C'est possible parce
-                // que Caspr n'ouvrira plus le micro tant que ce mode dure.
-                _ = try? pageActive()
-                return
-            }
-            // Tout de suite, sans attendre la libération : une dictée en vol
-            // doit trouver le relais éteint dès maintenant (cf. `pageActive`).
-            oublierCeQuiVitSurLaPage()
-            // Rendre le micro avant de lâcher la page : décocher la case doit
-            // rendre Caspr exactement à l'état d'avant, y compris pour la
-            // dictée sur la touche principale. C'est la porte de sortie, elle
-            // doit être sans reste.
-            Task { await libererPage() }
+    /// Relue à chaque fois, jamais recopiée : la voie a un seul endroit où
+    /// vivre, et une copie ici serait une seconde décision à tenir d'accord.
+    private var voieChatGPT: Bool {
+        switch Preferences.shared.voie {
+        case .chatgpt: true
+        case .apple: false
         }
+    }
+
+    /// Fait exister la page, ou la détruit, selon la voie qu'on vient de
+    /// choisir.
+    ///
+    /// Vers ChatGPT, elle est chargée tout de suite : la première dictée ne
+    /// doit pas payer l'ouverture de chatgpt.com. Vers macOS, elle part — son
+    /// processus tient le micro de la machine, et le magnétophone de Caspr
+    /// n'entendrait que du silence tant qu'elle vit.
+    ///
+    /// Sauf pendant une dictée ChatGPT : la voie est figée à l'appui, et
+    /// celle-ci va au bout sur la page qu'elle a prise. C'est la fin du cycle
+    /// qui la détruit alors (cf. `rendreLaMain`).
+    func suivreLaVoie() {
+        switch Preferences.shared.voie {
+        case .chatgpt:
+            _ = try? pageActive()
+        case .apple:
+            guard occupation != .dictee else { return }
+            quitterLaPage()
+        }
+    }
+
+    /// La page a-t-elle encore une raison d'exister ?
+    ///
+    /// La voie ChatGPT, ou la dictée ChatGPT commencée avant qu'on en change :
+    /// elle va au bout sur la page qu'elle a prise.
+    private var pageVoulue: Bool { voieChatGPT || occupation == .dictee }
+
+    /// Détruit la page que la voie macOS ne veut plus.
+    private func quitterLaPage() {
+        // Tout de suite, sans attendre la libération : ni discussion ni
+        // préparation ne doivent survivre à la décision.
+        oublierCeQuiVitSurLaPage()
+        // Rendre le micro avant de lâcher la page : passer à macOS doit rendre
+        // Caspr exactement à l'état d'avant. C'est la porte de sortie, elle
+        // doit être sans reste.
+        Task { await libererPage() }
     }
 
     /// Ce que le relais est en train de faire — la seule source de vérité.
@@ -106,9 +113,16 @@ final class Relais: ObservableObject {
     }
 
     /// Rend la main à la fin d'un cycle de dictée, quelle qu'en soit l'issue.
+    ///
+    /// C'est aussi là que part la page quand on a choisi macOS pendant la
+    /// dictée : elle attendait que celle-ci s'achève (cf. `suivreLaVoie`).
     func rendreLaMain() {
         guard occupation == .dictee else { return }
         occupation = .libre
+        switch Preferences.shared.voie {
+        case .chatgpt: break
+        case .apple: if page != nil { quitterLaPage() }
+        }
     }
 
     /// Le parcours de calibration en cours, retenu pour pouvoir y renoncer.
@@ -137,17 +151,19 @@ final class Relais: ObservableObject {
     /// Construite à la première utilisation, jamais avant.
     private var page: RelaisPage?
 
-    /// La page, construite au besoin — **jamais quand le relais est éteint.**
+    /// La page, construite au besoin — **jamais sur la voie macOS**, hors de la
+    /// dictée ChatGPT qui a commencé avant qu'on la choisisse.
     ///
     /// Elle se reconstruisait sans rien demander. Éteindre le relais en pleine
     /// dictée détruisait la page, puis l'étape suivante du cycle en faisait
     /// une neuve : chatgpt.com rouvert derrière une case décochée, et le micro
     /// repris par une page que plus personne n'attendait — la dictée macOS
-    /// suivante n'enregistrait que du silence. Le cycle en cours apprend
-    /// désormais que le relais a disparu, et s'arrête là.
+    /// suivante n'enregistrait que du silence. Une dictée en vol garde
+    /// désormais sa page jusqu'au bout, et c'est sa fin qui la détruit ; hors
+    /// d'elle, rien ne la reconstruit.
     private func pageActive() throws -> RelaisPage {
         if let page { return page }
-        guard actif else { throw RelaisPage.Erreur.relaisEteint }
+        guard pageVoulue else { throw RelaisPage.Erreur.relaisEteint }
         let neuve = RelaisPage()
         neuve.surFermeture = { [weak self] in self?.fenetreFermee() }
         neuve.surMort = { [weak self] in self?.surPageInterrompue?() }
@@ -168,7 +184,7 @@ final class Relais: ObservableObject {
     /// Vrai quand la réponse est récupérée par le bouton de ChatGPT.
     var saitCopier: Bool { RelaisSelecteurs.charger().saitCopier }
 
-    /// Charge la page au lancement quand le mode est déjà actif.
+    /// Charge la page au lancement quand la voie est déjà ChatGPT.
     ///
     /// Sans elle, la toute première dictée d'une session crée la vue, lance le
     /// chargement de chatgpt.com, puis interroge une session qui n'existe pas
@@ -179,7 +195,7 @@ final class Relais: ObservableObject {
     /// privait de son le micro de Caspr. Les deux modes s'excluant désormais,
     /// Caspr n'ouvre plus le micro du tout dans ce mode : la raison a disparu.
     func prechauffer() {
-        guard actif, estCalibre else { return }
+        guard voieChatGPT, estCalibre else { return }
         _ = try? pageActive()
     }
 
@@ -342,9 +358,10 @@ final class Relais: ObservableObject {
         preparationDifferee = false
         numeroPreparation &+= 1
         let numero = numeroPreparation
-        // Relais éteint : il n'y a plus de page à préparer, et surtout pas une
-        // neuve à construire (cf. `pageActive`).
-        guard let page = try? pageActive() else {
+        // Voie macOS : il n'y a plus de page à préparer, et surtout pas une
+        // neuve à construire (cf. `pageActive`) — ni celle qu'on s'apprête à
+        // détruire, que la fin d'une dictée demanderait sinon de préparer.
+        guard pageVoulue, let page = try? pageActive() else {
             preparation = nil
             return
         }
@@ -447,20 +464,20 @@ final class Relais: ObservableObject {
         return try await pageActive().arreterEtLire(attente)
     }
 
-    /// Détruit la page, à l'extinction du mode.
+    /// Détruit la page, quand on passe à la voie macOS.
     ///
     /// Le processus de contenu de WebKit part avec elle, et c'est lui qui tient
     /// le micro de la machine. Tant qu'une page ChatGPT vit, l'enregistrement
-    /// de Caspr ne capte que du silence : décocher la case doit donc rendre
+    /// de Caspr ne capte que du silence : choisir macOS doit donc rendre
     /// l'appareil, pas seulement cesser de s'en servir.
     ///
-    /// Appelée à l'extinction seulement, jamais entre deux dictées : les deux
-    /// modes s'excluant, personne ne dispute le micro à la page tant que le
-    /// relais est allumé, et la garder ouverte rend le raccourci instantané.
+    /// Jamais entre deux dictées : les deux voies s'excluant, personne ne
+    /// dispute le micro à la page tant que ChatGPT est retenu, et la garder
+    /// ouverte rend le raccourci instantané.
     func libererPage() async {
         guard let ancienne = page else { return }
         page = nil
-        // « Se déconnecter » passe aussi par ici, relais allumé : sans cela,
+        // « Se déconnecter » passe aussi par ici, voie ChatGPT : sans cela,
         // une discussion affichée gardait Échap pris après la destruction de
         // sa fenêtre, et avalait la frappe dans n'importe quelle application.
         oublierCeQuiVitSurLaPage()
@@ -534,7 +551,9 @@ final class Relais: ObservableObject {
     /// « Une discussion est ouverte » veut dire une chose et une seule : une
     /// fenêtre attend qu'on en sorte, et la touche de dictée y poursuit le fil.
     func entrerEnDiscussion() {
-        guard actif else { return }
+        // Choisir macOS pendant la dictée condamne la page à sa fin : un fil
+        // ouvert dessus n'aurait nulle part où continuer.
+        guard voieChatGPT else { return }
         enDiscussion = true
         // La fenêtre ne s'ouvre que si le module l'a demandée. « Rien » veut
         // dire rien, ici comme pendant la dictée : on discute à la voix, la
@@ -928,7 +947,7 @@ final class Relais: ObservableObject {
         let limite = Date.now.addingTimeInterval(600)
         while Date.now < limite {
             try? await Task.sleep(for: .seconds(1))
-            guard actif, !Task.isCancelled else { return false }
+            guard voieChatGPT, !Task.isCancelled else { return false }
             if await page.etatConnexion(patience: 1) == .connecte { return true }
         }
         return false

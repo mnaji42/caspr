@@ -37,8 +37,8 @@ final class RelaisPage: NSObject {
         case pageInterrompue
         /// Personne n'a cliqué pendant qu'un guetteur de calibration attendait.
         case calibrationSansClic(RelaisCible)
-        /// Le relais a été éteint pendant la dictée : la page n'existe plus,
-        /// et n'est pas reconstruite (cf. `Relais.pageActive`).
+        /// La voie est macOS : la page n'existe pas, et rien hors d'une dictée
+        /// ChatGPT déjà commencée ne la reconstruit (cf. `Relais.pageActive`).
         case relaisEteint
 
         /// Ce que la barre affiche, quand la raison générique mentirait.
@@ -55,7 +55,7 @@ final class RelaisPage: NSObject {
             case .attenteEpuisee(let abandon): return abandon.raisonCourte
             case .pontMuet: return "ChatGPT ne répond plus — page rechargée, réessayez"
             case .pageInterrompue: return "La page ChatGPT s'est fermée — dictée perdue"
-            case .relaisEteint: return "ChatGPT désactivé pendant la dictée"
+            case .relaisEteint: return "ChatGPT n'est plus la voie de dictée"
             default: return nil
             }
         }
@@ -96,8 +96,8 @@ final class RelaisPage: NSObject {
                 "Aucun clic sur \(c.libelle) en trois minutes : la calibration est "
                 + "abandonnée. Relancez-la quand vous serez prêt."
             case .relaisEteint:
-                "ChatGPT Web Preview a été désactivé pendant la dictée : elle est "
-                + "abandonnée, et la page ChatGPT fermée."
+                "La dictée passe désormais par macOS : la page ChatGPT est "
+                + "fermée."
             }
         }
     }

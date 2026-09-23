@@ -235,7 +235,10 @@ struct LanguagePicker: View, ValidatingComponent {
     /// une langue que macOS ne sait pas écrire dirait « indisponible » à
     /// quelqu'un qui peut la dicter tout de suite.
     private func isUsable(_ language: Language) -> Bool {
-        if Relais.partage.actif { return true }                    // RELAIS —
+        switch Preferences.shared.voie {
+        case .chatgpt: return true
+        case .apple: break
+        }
         if !measured { return true }
         if systemLocales.contains(language.code) { return true }
         return LegacySpeechEngine.isAvailable(for: language.code)

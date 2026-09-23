@@ -56,11 +56,14 @@ enum SetupRecoveryGuard {
             // n'ont rien pour travailler.
             return AppleEngineCard.isValid
         case .chatgpt:
-            // Connecté et calibré. La connexion est la dernière que la page a
-            // montrée : l'interroger n'est pas synchrone, et une garde l'est.
-            // Une session perdue compte donc dès que la page a affiché
-            // l'écran de connexion, ou qu'on s'est déconnecté ; avant, c'est
-            // l'appui qui la découvre, et le dit.
+            // Connecté et calibré. La connexion est la dernière mesure de la
+            // page — prise à chacun de ses chargements, au lancement comme
+            // après chaque dictée, et à chaque ouverture de sa fenêtre —, pas
+            // une mesure prise ici : l'interroger n'est pas synchrone, et une
+            // garde l'est. La prendre à l'appui, ce serait décider à l'appui,
+            // ce que le relais s'interdit ; et `demarrer` la reprend de toute
+            // façon, et devant une session perdue ouvre la fenêtre où l'on se
+            // reconnecte — un meilleur recours que de rouvrir l'accueil.
             return Relais.partage.saitDicter
         }
     }

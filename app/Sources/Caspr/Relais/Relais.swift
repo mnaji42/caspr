@@ -216,13 +216,18 @@ final class Relais: ObservableObject {
     /// La calibration en cours est-elle le parcours automatique ? Abandonné,
     /// il laisse une page à remettre d'aplomb (cf. `abandonnerCalibration`).
     private var calibrationAutomatique = false
-    /// Le numéro du parcours automatique en cours : une fin qui arrive après
-    /// un abandon ne rend pas la main à la place de ce qui a commencé depuis.
+    /// Le numéro du parcours en cours, automatique ou manuel, changé aussi
+    /// par l'abandon : un parcours abandonné qui finit plus tard — une copie
+    /// attendue jusqu'à cinq secondes, un appel au pont en suspens — ne rend
+    /// pas la main à la place de celui qui a commencé depuis. L'occupation ne
+    /// suffisait pas à le dire : une calibration manuelle lancée entre-temps
+    /// la remet à `.calibration`, et l'ancienne tâche la lui retirait.
     private var numeroCalibration = 0
 
     /// Met fin à la calibration, d'où qu'on le demande.
     func abandonnerCalibration() {
         guard calibration != nil else { return }
+        numeroCalibration &+= 1
         calibration?.cancel()
         calibration = nil
         occupation = .libre
@@ -1126,7 +1131,7 @@ final class Relais: ObservableObject {
             let aLaMain = await menerLaCalibrationAutomatique(page)
             // Abandonnée entre-temps : l'abandon a déjà rendu la main, et ce
             // qui a commencé depuis n'est pas à nous.
-            guard numeroCalibration == numero, occupation == .calibration else {
+            guard numeroCalibration == numero else {
                 termine?()
                 return
             }
@@ -1343,9 +1348,15 @@ final class Relais: ObservableObject {
             return
         }
         occupation = .calibration
+        numeroCalibration &+= 1
+        let numero = numeroCalibration
         page.montrer()
         calibration = Task {
-            defer { calibration = nil; occupation = .libre; termine?() }
+            defer {
+                // Même règle que le parcours automatique (cf. `numeroCalibration`).
+                if numeroCalibration == numero { calibration = nil; occupation = .libre }
+                termine?()
+            }
 
             guard await attendreConnexion(page) else { return }
 

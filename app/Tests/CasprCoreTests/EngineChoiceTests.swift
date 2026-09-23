@@ -23,27 +23,28 @@ struct EngineChoiceTests {
     func appleWinsWhenReady() {
         for legacy in [true, false] {
             #expect(EngineChoice.automatic(appleReady: true, legacyReady: legacy,
-                                           appleUnanswered: false) == .apple)
+                                           appleNotRefused: false) == .apple)
         }
     }
 
-    /// Le cas de la machine virtuelle : Apple Intelligence se dit disponible
-    /// sans modèle. Seule une réponse du système la rend prête ; sans elle,
-    /// la Dictée qui marche doit écrire.
+    /// Apple Intelligence qui propose la langue sans en avoir le modèle —
+    /// ou la machine virtuelle, où elle se dit disponible sans rien savoir
+    /// faire. La Dictée qui marche doit écrire, plutôt qu'une transcription
+    /// qui commencerait par un téléchargement, et échouerait hors ligne.
     @Test("La Dictée prête écrit quand Apple Intelligence ne l'est pas")
     func legacyWhenAppleIsNotReady() {
-        for unanswered in [true, false] {
+        for notRefused in [true, false] {
             #expect(EngineChoice.automatic(appleReady: false, legacyReady: true,
-                                           appleUnanswered: unanswered) == .appleLegacy)
+                                           appleNotRefused: notRefused) == .appleLegacy)
         }
     }
 
-    @Test("Aucune prête : Apple Intelligence si le système n'a pas encore répondu")
+    @Test("Aucune prête : Apple Intelligence si le système ne l'a pas refusée")
     func noneReady() {
         #expect(EngineChoice.automatic(appleReady: false, legacyReady: false,
-                                       appleUnanswered: true) == .apple)
+                                       appleNotRefused: true) == .apple)
         #expect(EngineChoice.automatic(appleReady: false, legacyReady: false,
-                                       appleUnanswered: false) == .appleLegacy)
+                                       appleNotRefused: false) == .appleLegacy)
     }
 
     @Test("Deux versions ne portent jamais le même libellé")

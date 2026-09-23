@@ -57,24 +57,29 @@ public enum EngineChoice: String, CaseIterable, Sendable, Codable {
     /// ne désignaient deux choses que parce que la passe finale pouvait être
     /// CrisperWhisper. Il reste une règle.
     ///
-    /// - Apple Intelligence dès qu'elle est **prête** pour la langue : le
-    ///   système a répondu qu'il la propose. Pas avant — sur une machine
-    ///   virtuelle en macOS 26, elle se disait disponible sans aucun modèle
-    ///   et rendait une chaîne vide, pendant que la Dictée marchait.
-    /// - Sinon la Dictée, si elle est prête.
+    /// - Apple Intelligence dès qu'elle est **prête** : le système a répondu
+    ///   qu'il propose la langue, **et** son modèle est sur le disque. Une
+    ///   langue proposée ne suffit pas — sans le modèle, la transcription
+    ///   commence par le télécharger, pendant « Transcription… », des minutes
+    ///   durant, et échoue hors ligne. Sur une machine virtuelle en macOS 26,
+    ///   elle se disait même disponible sans aucun modèle et rendait une
+    ///   chaîne vide, pendant que la Dictée marchait.
+    /// - Sinon la Dictée, si elle est prête : elle écrit tout de suite, sur
+    ///   l'appareil, pendant que le modèle manque.
     /// - Sinon aucune ne l'est, et l'on prend celle qui a encore une chance :
-    ///   Apple Intelligence si le système n'a simplement pas encore répondu,
-    ///   la Dictée autrement — c'est elle qui dira pourquoi elle ne peut pas
-    ///   écrire, plutôt qu'un moteur absent.
+    ///   Apple Intelligence si le système ne l'a pas refusée pour cette
+    ///   langue — il reste à aller chercher son modèle —, la Dictée
+    ///   autrement, qui dira pourquoi elle ne peut pas écrire plutôt qu'un
+    ///   moteur absent.
     ///
     /// La Dictée n'est donc jamais proposée comme choix : elle écrit là où
     /// Apple Intelligence ne sait pas, et seulement là. Mesurée sur 129
     /// dictées, elle avale environ 44 % des mots.
     public static func automatic(appleReady: Bool, legacyReady: Bool,
-                                 appleUnanswered: Bool) -> EngineChoice {
+                                 appleNotRefused: Bool) -> EngineChoice {
         if appleReady { return .apple }
         if legacyReady { return .appleLegacy }
-        return appleUnanswered ? .apple : .appleLegacy
+        return appleNotRefused ? .apple : .appleLegacy
     }
 
     /// Ce que change le choix de version, sous le sélecteur.

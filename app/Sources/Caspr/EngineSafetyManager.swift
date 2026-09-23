@@ -15,8 +15,9 @@ import CasprCore
 /// Il n'y a plus de réglage à suppléer : la voie macOS n'a pas de version à
 /// choisir, elle prend celle qui sait écrire la langue
 /// (`EngineChoice.automatic`). Ce qui reste ici, c'est la garantie : la
-/// disponibilité se **mesure** — le système a répondu pour cette langue — et
-/// ne se déduit jamais d'un numéro de version ni d'une absence de refus.
+/// disponibilité se **mesure** — le système a répondu pour cette langue, le
+/// modèle est sur le disque, le droit est accordé — et ne se déduit jamais
+/// d'un numéro de version ni d'une absence de refus.
 @MainActor
 enum EngineSafetyManager {
 
@@ -33,32 +34,43 @@ enum EngineSafetyManager {
         EngineChoice.automatic(
             appleReady: isReady(.apple, for: language),
             legacyReady: isReady(.appleLegacy, for: language),
-            // Disponible sans être prête : le système n'a pas encore dit s'il
-            // propose la langue (cf. `isReady`).
-            appleUnanswered: EngineChoice.apple.isAvailable(for: language))
+            // Pas prête sans être refusée : le système n'a pas encore
+            // répondu, ou le modèle reste à télécharger (cf. `isReady`).
+            appleNotRefused: EngineChoice.apple.isAvailable(for: language))
     }
 
-    /// Cette version est-elle prête à écrire, ici et dans cette langue ?
+    /// Cette version est-elle prête à écrire, ici, maintenant et dans cette
+    /// langue — sans rien télécharger ni rien demander ?
     ///
-    /// `isAvailable` mesure déjà le gros — version de macOS présente, Dictée
-    /// allumée, langue proposée.
+    /// `isAvailable` mesure déjà le gros — version de macOS présente, langue
+    /// pas refusée. Il est **volontairement optimiste**, pour que les cartes
+    /// n'annoncent pas « non pris en charge » pendant la fraction de seconde
+    /// où la question est en vol. Cet optimisme est sans danger dans une vue,
+    /// et ruineux ici : on n'envoie une dictée qu'à une version dont on a
+    /// constaté qu'elle sait travailler.
     static func isReady(_ choice: EngineChoice, for language: String) -> Bool {
         guard choice.isAvailable(for: language) else { return false }
         switch choice {
         case .apple:
-            // ## Apple Intelligence exige une réponse, pas une absence de refus
+            // ## Une langue proposée, et son modèle sur le disque
             //
-            // `isAvailable` est **volontairement optimiste** : tant que le
-            // système n'a rien dit pour cette langue, elle ne la déclare pas
-            // indisponible, sans quoi les cartes annonceraient « non pris en
-            // charge » pendant la fraction de seconde où la question est en vol.
-            //
-            // Cet optimisme-là est sans danger dans une vue et ruineux ici :
-            // router une dictée vers un moteur dont personne n'a jamais mesuré
-            // qu'il sait travailler, c'est ce qui a fait rendre une chaîne vide.
+            // La première moitié ne suffisait pas. Sans le modèle,
+            // `AppleSpeechEngine.transcribe` commence par l'installer : des
+            // minutes sous « Transcription… », sans explication, et un échec
+            // à chaque dictée hors ligne — « Réessayer » compris —, alors que
+            // la Dictée, sur l'appareil, aurait écrit. `SpeechAssets` le
+            // mesure déjà (`installedLocales`) : c'est cette mesure qui
+            // décide. Un état encore inconnu ne vaut pas « prête » : le
+            // sondage du lancement répond en une fraction de seconde.
             return Language.appleSupports(language) == true
+                && SpeechAssets.shared.state(of: language) == .ready
         case .appleLegacy:
-            return true
+            // Ce que `LegacySpeechEngine.isReady` exige avant d'écrire : le
+            // droit de reconnaissance vocale, et la Dictée allumée — éteinte,
+            // le recogniseur accepte la tâche et ne rend jamais rien. Sans
+            // eux, la préférer à Apple Intelligence ferait demander un droit
+            // et un interrupteur à qui n'a qu'un modèle à télécharger.
+            return LegacySpeechEngine.isAuthorised && !SystemDictation.isDisabled
         }
     }
 }

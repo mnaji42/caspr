@@ -143,6 +143,11 @@ struct AppleEngineCard: View, ValidatingComponent {
             // pour rien.
             SystemDictationRow()
             SpeechAccessRow(explains: true)
+            // La Dictée peut écrire parce que le modèle d'Apple Intelligence
+            // manque : c'est ici qu'on va le chercher, sans quoi elle
+            // écrirait pour toujours à sa place. Rien d'affiché là où Apple
+            // Intelligence ne propose pas la langue (cf. `models`).
+            models
         case .apple:
             models
         }
@@ -275,7 +280,9 @@ struct AppleEngineCard: View, ValidatingComponent {
                         .font(.system(size: 13, weight: .semibold))
                     Text("macOS fournit ce modèle mais ne l'embarque pas : il "
                          + "faut aller le chercher une fois. Environ "
-                         + "\(prefs.primary.estimatedSizeLabel).")
+                         + "\(prefs.primary.estimatedSizeLabel)."
+                         + (shownTechnology == .appleLegacy
+                            ? " D'ici là, la Dictée écrit à sa place." : ""))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -328,11 +335,17 @@ struct AppleEngineCard: View, ValidatingComponent {
                      + "allemand, italien, portugais, japonais, coréen, chinois…")
             }
         case .appleLegacy:
-            // Apple Intelligence existe ici, mais pas pour cette langue : c'est
-            // la raison du choix, et la seule chose qu'on puisse y faire est
-            // de le savoir.
-            if let count = assets.appleLocaleCount, count > 0,
+            if Language.appleSupports(prefs.primaryLanguage) == true {
+                // Proposée, mais pas prête : son modèle manque ou arrive. La
+                // Dictée n'écrit qu'en attendant.
+                Note("Apple Intelligence sait écrire le "
+                     + "**\(prefs.primary.displayName)**, mais son modèle n'est "
+                     + "pas encore sur ce Mac : la Dictée écrit en attendant.")
+            } else if let count = assets.appleLocaleCount, count > 0,
                Language.appleSupports(prefs.primaryLanguage) == false {
+                // Apple Intelligence existe ici, mais pas pour cette langue :
+                // c'est la raison du choix, et la seule chose qu'on puisse y
+                // faire est de le savoir.
                 Note("Apple Intelligence ne propose pas le "
                      + "**\(prefs.primary.displayName)** sur ce Mac : la Dictée "
                      + "écrit à sa place, dans ses \(LegacySpeechEngine.supportedLocaleCount) "

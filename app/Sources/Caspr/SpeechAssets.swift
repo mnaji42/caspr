@@ -5,12 +5,16 @@ import Speech
 /// Les modèles de reconnaissance de macOS, langue par langue.
 ///
 /// Ce n'est pas une option. Ce sont les actifs de la version **Apple
-/// Intelligence** du moteur de macOS — celle qui est retenue par défaut là où
-/// elle existe, et qui assure alors l'aperçu en direct sous la barre
-/// d'enregistrement : sans son modèle, Caspr ne montre rien pendant qu'on
-/// parle et n'écrit rien à la fin. Il n'y a donc pas de choix à proposer, mais
-/// un prérequis à satisfaire — et à satisfaire **avant** le premier essai,
-/// pas pendant.
+/// Intelligence** du moteur de macOS — celle qui écrit là où elle existe, et
+/// qui assure alors l'aperçu en direct sous la barre d'enregistrement. Il n'y
+/// a donc pas de choix à proposer, mais un prérequis à satisfaire — et à
+/// satisfaire **avant** le premier essai, pas pendant.
+///
+/// C'est aussi une **mesure** : tant que le modèle de la langue n'est pas
+/// `.ready`, Apple Intelligence n'est pas retenue pour écrire, et la Dictée
+/// écrit à sa place quand elle le peut (cf. `EngineSafetyManager`). Sans
+/// quoi la dictée commençait par télécharger le modèle, et échouait hors
+/// ligne.
 ///
 /// La version **Dictée** n'a rien à voir avec ce fichier : ses modèles sont
 /// ceux que Réglages Système › Clavier › Dictée installe, et Caspr ne fait
@@ -108,7 +112,13 @@ final class SpeechAssets {
             return
         }
         if case .installing = state(of: language) { return }
-        states[language] = .checking
+        // `.checking` seulement quand on ne savait rien. Revérifier une langue
+        // connue — chaque ouverture de la carte le fait — ne doit pas oublier
+        // ce qu'on sait le temps de la réponse : c'est sur `.ready` que
+        // `EngineSafetyManager` choisit la version qui écrit, et l'effacer
+        // faisait passer la carte, et une dictée lancée à cet instant, à la
+        // Dictée pour une fraction de seconde.
+        if case .unknown = state(of: language) { states[language] = .checking }
 
         guard let locale = await Self.locale(for: language) else {
             Language.recordAppleSupport(language, supported: false)

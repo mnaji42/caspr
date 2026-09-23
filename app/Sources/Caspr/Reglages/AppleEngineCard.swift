@@ -255,21 +255,23 @@ struct AppleEngineCard: View, ValidatingComponent {
                 }
             }
         } else if shownTechnology == .appleLegacy {
-            Note(legacyReason)
+            Note(Self.legacyReason(for: prefs.primary))
         }
     }
 
-    private var legacyReason: String {
-        switch Language.appleSupports(prefs.primaryLanguage) {
+    /// Aussi dit sous la langue active, dans l'onglet Général
+    /// (cf. `PrimaryLanguageSelector`) : c'est là qu'on la change.
+    static func legacyReason(for language: Language) -> String {
+        switch Language.appleSupports(language.code) {
         case true?:
             // Proposée, mais pas prête : son modèle manque ou arrive.
-            "Apple Intelligence sait écrire le **\(prefs.primary.displayName)**, "
+            "Apple Intelligence sait écrire le **\(language.displayName)**, "
                 + "mais son modèle n'est pas encore sur ce Mac : la Dictée de "
                 + "macOS écrit en attendant, moins fidèle."
         case false?:
             // La seule chose qu'on puisse y faire est de le savoir.
             "Apple Intelligence ne propose pas le "
-                + "**\(prefs.primary.displayName)** sur ce Mac : la Dictée de "
+                + "**\(language.displayName)** sur ce Mac : la Dictée de "
                 + "macOS écrit à sa place, moins fidèle."
         // Pas de réponse du système : Apple Intelligence absente de ce Mac,
         // ou pas encore interrogée. On ne dit que ce qu'on sait.

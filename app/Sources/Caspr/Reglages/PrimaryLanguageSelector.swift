@@ -58,9 +58,13 @@ struct PrimaryLanguageSelector: View {
                 // Ne dit plus « la première est celle avec laquelle Caspr
                 // dicte » : c'est devenu faux le jour où la langue principale
                 // a cessé de se déduire de l'ordre de la liste.
-                Note(prefs.selectedLanguages.count > Self.pillLimit
-                     ? "Vous avez \(prefs.selectedLanguages.count) langues actives configurées."
-                     : "La langue principale pilote la reconnaissance vocale.")
+                if let moteur = avertissementMoteur {
+                    Note(moteur.texte, warning: moteur.bloque)
+                } else {
+                    Note(prefs.selectedLanguages.count > Self.pillLimit
+                         ? "Vous avez \(prefs.selectedLanguages.count) langues actives configurées."
+                         : "La langue principale pilote la reconnaissance vocale.")
+                }
             }
 
             Divider().opacity(0.25)
@@ -74,6 +78,30 @@ struct PrimaryLanguageSelector: View {
         // Au tout premier affichage, la langue n'a peut-être jamais été
         // sondée : « inconnue » ne dit rien à personne.
         .onAppear { SpeechAssets.shared.probe([prefs.primaryLanguage]) }
+    }
+
+    /// Ce que la carte du moteur, dans l'onglet Voie, dit de la langue active
+    /// quand Apple Intelligence ne l'écrira pas.
+    ///
+    /// Le bandeau qui le disait ici est parti avec CrisperWhisper. Sans lui,
+    /// passer à une langue dont le modèle manque basculait en silence sur la
+    /// Dictée, moins fidèle — valide, donc sans badge nulle part —, ou vers
+    /// une dictée qui ne pourra pas écrire, et seul l'onglet Voie le montrait.
+    /// On le redit ici, en lisant les mêmes critères que la carte, sans en
+    /// dupliquer les boutons : l'onglet Voie les porte.
+    ///
+    /// Rien sous ChatGPT : c'est la page qui écoute, et la langue n'y impose
+    /// aucun modèle local.
+    private var avertissementMoteur: (texte: String, bloque: Bool)? {
+        guard prefs.voie == .apple else { return nil }
+        if let manque = AppleEngineCard.validate() {
+            return ((manque.errorDescription ?? "") + " L'onglet Voie dit quoi faire.", true)
+        }
+        if EngineSafetyManager.engine(for: prefs.primaryLanguage) == .appleLegacy {
+            return (AppleEngineCard.legacyReason(for: prefs.primary)
+                    + " Le détail est dans l'onglet Voie.", false)
+        }
+        return nil
     }
 
     /// Le bouton qui déplie le catalogue — **toute la ligne**, pas le chevron.

@@ -114,10 +114,10 @@ final class RelaisAttente: ObservableObject {
     /// bornes disent « absent », pas « trop lent » : elles restent, mais
     /// aucune ne peut repousser la fin de la dictée.
     ///
-    /// Ce qui suit une observation réussie n'y passe pas : ramasser la copie
-    /// d'une réponse finie, cliquer « lire à haute voix » sous elle. Ces
-    /// gestes n'attendent plus ChatGPT, et les couper à l'échéance jetterait
-    /// un résultat déjà obtenu.
+    /// Ce qui suit une observation réussie n'y passe pas : voir immobile la
+    /// transcription revenue, ramasser la copie d'une réponse finie, cliquer
+    /// « lire à haute voix » sous elle. Ces gestes n'attendent plus ChatGPT,
+    /// et les couper à l'échéance jetterait un résultat déjà obtenu.
     func limite(dans secondes: TimeInterval) -> Date {
         min(Date.now.addingTimeInterval(secondes), echeance)
     }

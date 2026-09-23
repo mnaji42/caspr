@@ -80,9 +80,13 @@ extension RelaisPage {
     /// **Le texte doit ensuite cesser de bouger.** Il arrive par fragments :
     /// lire au premier caractère rendrait une phrase tronquée.
     ///
-    /// Les deux attentes vont jusqu'à l'échéance de la dictée, et plus
-    /// jusqu'à un budget chacune : la stabilisation avait sa minute à elle,
-    /// qui s'ajoutait à celle de la transcription.
+    /// La première va jusqu'à l'échéance de la dictée, et plus jusqu'à un
+    /// budget à elle. La seconde n'attend plus ChatGPT : la zone est revenue,
+    /// il reste à la voir immobile. Elle a donc sa borne propre, courte —
+    /// assez pour une seconde de texte stable ou quatre de zone vide — et qui
+    /// peut dépasser l'échéance (cf. `RelaisAttente.limite`) : coupée net, une
+    /// zone revenue dans les dernières secondes faisait dire « n'a pas
+    /// transcrit » devant la transcription affichée.
     func arreterEtLire(_ attente: RelaisAttente) async throws -> String {
         // Après l'arrêt, ChatGPT passe par un état intermédiaire — le mot
         // « Transcription » et une roue — pendant lequel la zone de saisie
@@ -147,10 +151,11 @@ extension RelaisPage {
         // non 500 ms : le flux marque entre deux fragments des pauses plus
         // longues qu'on ne l'imagine, et c'est précisément là que le seuil
         // précédent coupait la phrase.
+        let finStabilisation = max(attente.echeance, Date.now.addingTimeInterval(5))
         var precedent = ""
         var stable = 0
         var vide = 0
-        while !attente.expiree {
+        while Date.now < finStabilisation {
             try Task.checkCancellation()
             try verifierLaPage()
             try? await Task.sleep(for: .milliseconds(250))
@@ -206,6 +211,10 @@ extension RelaisPage {
             }
             precedent = texte
         }
+        // Un texte qui bouge encore après tout cela n'est pas rendu : coupé
+        // au milieu, il s'insérerait sans que rien signale la coupure, ce qui
+        // est pire que pas de texte. Il reste dans la page, que l'échec
+        // ouvre pour qu'on l'y copie.
         throw attente.epuisee()
     }
 

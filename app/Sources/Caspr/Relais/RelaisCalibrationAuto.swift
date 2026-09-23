@@ -68,6 +68,11 @@ struct RelaisCalibrationAuto {
     /// autrement.
     private static let empreinte = "Caspr pour repérer les boutons"
 
+    /// La raison d'un repère essayé dont le clic n'a rien trouvé. Sans elle,
+    /// le rapport le disait « pas essayé : une étape précédente a échoué »,
+    /// et envoyait chercher la panne une étape trop tôt.
+    private static let clicPerdu = "au moment du clic, son repère ne désignait plus un bouton"
+
     /// Mène le parcours jusqu'au premier repère qui ne se prouve pas.
     ///
     /// Lève `CancellationError` quand on l'abandonne : il n'y a alors rien à
@@ -132,7 +137,10 @@ struct RelaisCalibrationAuto {
             return nil
         }
         for sel in liste {
-            guard await cliquer(.micro, sel) else { continue }
+            guard await cliquer(.micro, sel) else {
+                issue.preuves.manque(.micro, Self.clicPerdu)
+                continue
+            }
             // Quinze secondes : la première fois, macOS demande l'accès au
             // micro, et il faut le temps de lire la question.
             let ecoute = try await observer(pendant: 15) {
@@ -166,7 +174,10 @@ struct RelaisCalibrationAuto {
             issue.preuves.manque(.stop, "aucun bouton d'arrêt n'y est seul à son repère")
         }
         for sel in liste {
-            guard await cliquer(.stop, sel) else { continue }
+            guard await cliquer(.stop, sel) else {
+                issue.preuves.manque(.stop, Self.clicPerdu)
+                continue
+            }
             // Trente secondes : la zone revient après la transcription, qui
             // suit la durée parlée — ici, une seconde ou deux.
             let revenue = try await observer(pendant: 30) {
@@ -219,8 +230,17 @@ struct RelaisCalibrationAuto {
         let releve = try? await page.appeler("return window.__relais.releve();")
         issue.reponsesAvant = (releve?["reponses"] as? Int) ?? 0
         for sel in liste {
-            guard await lire(composeur)?.contains(Self.empreinte) == true else { break }
-            guard await cliquer(.envoi, sel) else { continue }
+            guard await lire(composeur)?.contains(Self.empreinte) == true else {
+                // Parti entre deux candidats : peut-être envoyé, et en tout cas
+                // pas deux fois.
+                issue.messageEnvoye = true
+                issue.preuves.manque(.envoi, "le message d'essai a quitté la zone avant le clic")
+                break
+            }
+            guard await cliquer(.envoi, sel) else {
+                issue.preuves.manque(.envoi, Self.clicPerdu)
+                continue
+            }
             let parti = try await observer(pendant: 15) {
                 await etat(micro, stop, composeur)?["conversation"] as? Bool == true
             }

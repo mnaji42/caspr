@@ -79,6 +79,9 @@ public enum LegacyCleanup {
         // La marque qui retenait l'effacement de `caspr.engine` tant que la
         // version courante n'avait pas relu l'installation.
         "caspr.schema.migrated",
+        // Le côté de la touche Option, qui n'est plus un réglage depuis que
+        // seule la droite est écoutée : plus rien ne la relit.
+        "caspr.trigger.side",
     ]
 
     /// Efface les réglages qui n'ont plus d'objet, et range l'étape d'accueil

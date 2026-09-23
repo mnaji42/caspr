@@ -78,6 +78,20 @@ struct LegacyCleanupTests {
         }
     }
 
+    /// Seule la touche Option de droite est écoutée : le côté n'est plus un
+    /// choix, mais les versions qui le proposaient l'ont écrit. Le type de
+    /// déclencheur, lui, est toujours lu.
+    @Test("Le côté de la touche Option part, le type de déclencheur reste")
+    func removesTriggerSide() {
+        Self.withDefaults { defaults in
+            defaults.set("left", forKey: "caspr.trigger.side")
+            defaults.set("option", forKey: "caspr.trigger.kind")
+            LegacyCleanup.migrateSettings(defaults)
+            #expect(defaults.object(forKey: "caspr.trigger.side") == nil)
+            #expect(defaults.string(forKey: "caspr.trigger.kind") == "option")
+        }
+    }
+
     /// L'accueil rouvre là où on l'a quitté. Relu comme un rang, l'ancien
     /// index désignerait l'écran d'après dès que l'accueil en perd un.
     @Test("L'étape d'accueil passe d'un rang à un nom, et l'ancien rang part")

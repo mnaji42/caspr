@@ -31,7 +31,6 @@ final class Preferences {
     static let shared = Preferences()
 
     private enum Key {
-        static let triggerSide = "caspr.trigger.side"
         static let triggerEnabled = "caspr.trigger.enabled"   // hérité, migré vers triggerKind
         static let triggerKind = "caspr.trigger.kind"
         static let language = "caspr.language"          // hérité, migré vers languages

@@ -37,8 +37,8 @@ import CasprCore
 ///   menu « … » de la réponse porte « Régénérer » et « Supprimer ». D'où
 ///   « Lire à haute voix », qui s'y cache parfois, laissé à la main.
 /// - **Garder le presse-papiers.** Il appartient à l'utilisateur : sauvegardé
-///   tout entier, tous types compris, avant chaque essai de « copier », et
-///   rendu après.
+///   tout entier, tous types compris, avant les essais de « copier », et
+///   rendu après le dernier.
 ///
 /// Chaque attente **observe** — la page qui enregistre, la zone qui revient, la
 /// réponse qui cesse de s'écrire — et une borne l'arrête ; aucune ne se
@@ -277,12 +277,20 @@ struct RelaisCalibrationAuto {
             issue.preuves.manque(.copier, "aucun bouton « copier » n'est seul sous la réponse")
             return
         }
+        // Sauvegardé une fois pour tous les candidats, et rendu en sortant,
+        // abandon compris. Une sauvegarde par candidat pouvait capturer la
+        // copie tardive du précédent — la réponse de ChatGPT — et la rendre
+        // à la place de ce que l'utilisateur y avait mis.
+        let presse = NSPasteboard.general
+        let sauvegarde = PressePapiers(presse)
+        let depart = presse.changeCount
+        defer { if presse.changeCount != depart { sauvegarde.rendre(presse) } }
         for candidat in liste {
             try Task.checkCancellation()
             let sel = (candidat["selecteur"] as? String) ?? ""
             let parent = (candidat["parent"] as? String) ?? ""
             guard !sel.isEmpty else { continue }
-            guard let copie = await copierPuisRendre(parent: parent, selecteur: sel) else {
+            guard let copie = await copier(parent: parent, selecteur: sel) else {
                 issue.preuves.manque(.copier, "au moment du clic, son repère ne désignait "
                                      + "plus un bouton seul")
                 continue
@@ -357,31 +365,31 @@ struct RelaisCalibrationAuto {
 
     // MARK: - Le presse-papiers
 
-    /// Clique « copier » comme la dictée le fera, rend ce qui a été copié — une
-    /// chaîne vide si rien ne l'a été, `nil` si le repère n'a rien cliqué — et
-    /// remet le presse-papiers tel qu'on l'a trouvé.
+    /// Clique « copier » comme la dictée le fera, et rend ce qui a été copié —
+    /// une chaîne vide si rien ne l'a été, `nil` si le repère n'a rien cliqué
+    /// ou que l'appel n'a pas répondu. C'est `prouverCopier` qui rend le
+    /// presse-papiers.
     ///
     /// L'attente de la copie ne cède pas à l'abandon : le clic est parti, et sa
     /// copie atterrit quoi qu'il arrive, une fraction de seconde plus tard.
-    /// Sortir avant, c'était la laisser écraser le presse-papiers sans plus
-    /// personne pour le rendre (cf. `copierReponse`).
-    private func copierPuisRendre(parent: String, selecteur: String) async -> String? {
+    /// Sortir avant, c'était rendre le presse-papiers avant qu'elle ne
+    /// l'écrase (cf. `copierReponse`). Un appel sans réponse — abandonné, ou
+    /// resté muet — a pu cliquer quand même : sa copie s'attend de même.
+    private func copier(parent: String, selecteur: String) async -> String? {
         let presse = NSPasteboard.general
-        let sauvegarde = PressePapiers(presse)
         let avant = presse.changeCount
         let r = try? await page.appeler(
             "return window.__relais.copierLaReponse(selParent, selCopier, selReponse);",
             ["selParent": parent, "selCopier": selecteur, "selReponse": ancien.reponse])
-        guard r?["ok"] as? Bool == true else { return nil }
+        if let r, r["ok"] as? Bool != true { return nil }
         let fin = Date.now.addingTimeInterval(5)
         while presse.changeCount == avant, Date.now < fin {
             // Une tâche à part, que l'annulation de celle-ci n'atteint pas.
             await Task { try? await Task.sleep(for: .milliseconds(100)) }.value
         }
+        guard r != nil else { return nil }
         guard presse.changeCount != avant else { return "" }
-        let copie = presse.string(forType: .string) ?? ""
-        sauvegarde.rendre(presse)
-        return copie
+        return presse.string(forType: .string) ?? ""
     }
 
     // MARK: - Appels au pont, avec les repères qu'on éprouve

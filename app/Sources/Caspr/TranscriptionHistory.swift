@@ -14,13 +14,29 @@ final class TranscriptionHistory {
         let id: UUID
         let text: String
         let date: Date
+        /// Ce que ChatGPT avait transcrit, quand un module l'a repris et que
+        /// le texte inséré en diffère.
+        ///
+        /// La reprise est une seconde passe, et une seconde passe peut se
+        /// tromper — résumer ce qu'il fallait garder, suivre de travers une
+        /// consigne dite trop vite. Ce qu'on a dit mot pour mot ne devait pas
+        /// disparaître parce qu'elle a abouti.
+        ///
+        /// Facultatif, et c'est ce qui garde le format : le décodage
+        /// synthétisé lit une clé absente comme `nil` pour un optionnel, et
+        /// l'encodage n'en écrit aucune. Les entrées d'avant se relisent donc
+        /// telles quelles, et celles-ci se relisent dans une version qui ne
+        /// connaît pas le champ — le décodeur ignore les clés qu'il ne connaît
+        /// pas.
+        let brut: String?
         // Les entrées écrites avant la refonte portent aussi un champ `mode`,
         // du temps où la dictée en avait deux. Le décodeur ignore les clés
         // qu'il ne connaît pas : elles se relisent telles quelles.
-        init(text: String) {
+        init(text: String, brut: String? = nil) {
             self.id = UUID()
             self.text = text
             self.date = Date()
+            self.brut = brut
         }
 
         /// « à l'instant », « il y a 3 min » — repère plus utile qu'une heure
@@ -35,8 +51,11 @@ final class TranscriptionHistory {
             }
         }
 
-        var preview: String {
-            let flat = text.replacingOccurrences(of: "\n", with: " ")
+        var preview: String { Self.apercu(de: text) }
+
+        /// Une ligne de menu : le texte aplati, coupé à soixante caractères.
+        static func apercu(de texte: String) -> String {
+            let flat = texte.replacingOccurrences(of: "\n", with: " ")
             return flat.count <= 60 ? flat : String(flat.prefix(58)) + "…"
         }
     }
@@ -103,12 +122,17 @@ final class TranscriptionHistory {
         }
     }
 
-    func add(_ text: String) {
+    /// `brut` : la transcription de ChatGPT quand un module l'a reprise.
+    /// Gardée seulement si elle diffère du texte inséré — quand la reprise a
+    /// échoué, c'est le brut lui-même qui s'insère.
+    func add(_ text: String, brut: String? = nil) {
         guard isEnabled else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        let brut = (brut?.trimmingCharacters(in: .whitespacesAndNewlines))
+            .flatMap { $0.isEmpty || $0 == trimmed ? nil : $0 }
 
-        entries.insert(Entry(text: trimmed), at: 0)
+        entries.insert(Entry(text: trimmed, brut: brut), at: 0)
         if entries.count > limit {
             entries.removeLast(entries.count - limit)
         }

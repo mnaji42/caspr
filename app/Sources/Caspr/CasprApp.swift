@@ -490,40 +490,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Une dictée ratée après plusieurs minutes de parole doit pouvoir être
-        // relancée sans tout redire : l'audio est encore là.
+        // relancée sans tout redire : l'audio est encore là. Sur la voie
+        // ChatGPT, il n'y a pas d'audio, mais la transcription brute, gardée
+        // dès qu'elle est lue (cf. `Livraison.garderLeBrut`) : elle passe par
+        // la même entrée que l'aperçu de macOS.
         //
-        // Au repos seulement : pendant une dictée, ces trois entrées agissaient
-        // sur l'audio de la précédente et remettaient l'état au repos
+        // Au repos seulement : pendant une dictée, ces entrées agissaient
+        // sur le recours de la précédente et remettaient l'état au repos
         // par-dessus un enregistrement en cours.
-        if controller.hasPendingAudio, controller.isAtRest {
+        let preview = controller.pendingPreviewText
+        if controller.isAtRest, controller.hasPendingAudio || preview != nil {
             // L'aperçu d'abord, et c'est délibéré : quand la passe finale
             // échoue pour une raison qui tient — un modèle absent, la Dictée
             // éteinte —, réessayer échouera de la même façon, alors que le
             // texte de l'aperçu est déjà écrit. C'est l'issue qui aboutit dans
-            // le plus grand nombre de cas, donc celle qu'on lit en premier. Absente quand il n'y a rien à insérer — l'aperçu est
-            // coupé, ou l'on a déclenché sans parler.
-            if let preview = controller.pendingPreviewText {
-                let insert = NSMenuItem(title: "Insérer l'aperçu de macOS",
-                                        action: #selector(insertPreview),
-                                        keyEquivalent: "")
+            // le plus grand nombre de cas, donc celle qu'on lit en premier.
+            // Absente quand il n'y a rien à insérer — l'aperçu est coupé, ou
+            // l'on a déclenché sans parler.
+            if let preview {
+                let insert: NSMenuItem
+                switch controller.pendingPreviewVoie {
+                case .apple:
+                    insert = NSMenuItem(title: "Insérer l'aperçu de macOS",
+                                        action: #selector(insertPreview), keyEquivalent: "")
+                    insert.toolTip = "Écrit ce que macOS avait transcrit pendant que "
+                        + "vous parliez, moins soigné que la transcription "
+                        + "finale.\n\n\(preview)"
+                case .chatgpt:
+                    insert = NSMenuItem(title: "Insérer la transcription brute de ChatGPT",
+                                        action: #selector(insertPreview), keyEquivalent: "")
+                    insert.toolTip = "Écrit ce que ChatGPT avait transcrit, avant que "
+                        + "la suite de la dictée n'échoue.\n\n\(preview)"
+                }
                 insert.target = self
-                insert.toolTip = "Écrit ce que macOS avait transcrit pendant que "
-                    + "vous parliez, moins soigné que la transcription "
-                    + "finale.\n\n\(preview)"
                 menu.addItem(insert)
             }
 
-            let minutes = controller.pendingDuration / 60
-            let label = minutes >= 1
-                ? String(format: "Réessayer avec le moteur (%.1f min conservées)", minutes)
-                : String(format: "Réessayer avec le moteur (%.0f s conservées)", controller.pendingDuration)
-            let retry = NSMenuItem(title: label, action: #selector(retry), keyEquivalent: "")
-            retry.target = self
-            retry.toolTip = "Relance la transcription sur l'enregistrement "
-                + "conservé, avec \(EngineSafetyManager.effectiveEngine.fullLabel)."
-            menu.addItem(retry)
+            if controller.hasPendingAudio {
+                let minutes = controller.pendingDuration / 60
+                let label = minutes >= 1
+                    ? String(format: "Réessayer avec le moteur (%.1f min conservées)", minutes)
+                    : String(format: "Réessayer avec le moteur (%.0f s conservées)",
+                             controller.pendingDuration)
+                let retry = NSMenuItem(title: label, action: #selector(retry), keyEquivalent: "")
+                retry.target = self
+                retry.toolTip = "Relance la transcription sur l'enregistrement "
+                    + "conservé, avec \(EngineSafetyManager.effectiveEngine.fullLabel)."
+                menu.addItem(retry)
+            }
 
-            let discard = NSMenuItem(title: "Abandonner cet enregistrement",
+            let discard = NSMenuItem(title: controller.hasPendingAudio
+                                        ? "Abandonner cet enregistrement"
+                                        : "Oublier cette transcription",
                                      action: #selector(discard), keyEquivalent: "")
             discard.target = self
             menu.addItem(discard)
@@ -575,7 +593,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 item.target = self
                 item.representedObject = entry.text
                 item.toolTip = "\(entry.relativeAge)\n\n\(entry.text)"
+                    + (entry.brut == nil ? "" : "\n\n⌥ : la transcription brute de ChatGPT.")
                 menu.addItem(item)
+                // Ce que ChatGPT avait transcrit avant qu'un module ne le
+                // reprenne, sous ⌥ : une ligne de plus par dictée doublerait
+                // la liste pour un recours qu'on cherche rarement.
+                if let brut = entry.brut {
+                    let alternative = NSMenuItem(
+                        title: "  Brut : \(TranscriptionHistory.Entry.apercu(de: brut))",
+                        action: #selector(reinsert(_:)), keyEquivalent: "")
+                    alternative.target = self
+                    alternative.representedObject = brut
+                    alternative.toolTip = "Ce que ChatGPT avait transcrit, avant la "
+                        + "reprise du module.\n\n\(brut)"
+                    alternative.keyEquivalentModifierMask = [.option]
+                    alternative.isAlternate = true
+                    menu.addItem(alternative)
+                }
             }
 
             let clear = NSMenuItem(title: "  Effacer l'historique",

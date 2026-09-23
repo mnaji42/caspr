@@ -29,7 +29,11 @@ final class Livraison {
 
     /// Écrit le texte d'une dictée à sa destination, là où l'on parlait, puis
     /// l'archive.
-    func livrer(_ text: String, _ dictee: DicteeEnCours) async throws {
+    ///
+    /// `brut` : la transcription de ChatGPT, quand un module l'a reprise —
+    /// l'historique la garde à côté du texte inséré (cf.
+    /// `TranscriptionHistory.Entry.brut`).
+    func livrer(_ text: String, _ dictee: DicteeEnCours, brut: String? = nil) async throws {
         // Rendre le clavier avant d'écrire. Après une discussion, ou si l'on
         // bascule vers un module qui écrit en pleine dictée, la fenêtre du
         // relais est au premier plan : le texte y partirait.
@@ -43,14 +47,16 @@ final class Livraison {
         case .chatgpt: await Relais.partage.rendreLeClavier()
         case .apple: break
         }
-        try await ecrire(text, vers: dictee.destination, depuis: dictee.applicationVisee)
+        try await ecrire(text, vers: dictee.destination, depuis: dictee.applicationVisee,
+                         brut: brut)
     }
 
     /// `visee` est l'application capturée à l'appui : l'insertion par
     /// accessibilité vise l'élément focalisé **au moment d'écrire**, et l'on a
     /// pu changer d'application pendant la transcription.
     private func ecrire(_ text: String, vers target: DictationTarget,
-                        depuis visee: NSRunningApplication?) async throws {
+                        depuis visee: NSRunningApplication?,
+                        brut: String? = nil) async throws {
         switch target {
         case .caret: await ramener(visee)
         case .file: break
@@ -66,7 +72,7 @@ final class Livraison {
         let devant = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
         Log.info("insertion vers \(devant)")
         try await deliver(text, to: target)
-        history.add(text)
+        history.add(text, brut: brut)
     }
 
     /// Achemine le texte vers une destination.
@@ -209,7 +215,8 @@ final class Livraison {
     private(set) var pendingAudio: [Float]?
 
     /// Ce que l'aperçu en direct avait déjà écrit, quand la passe finale a
-    /// échoué.
+    /// échoué — ou, sur la voie ChatGPT, sa transcription brute (cf.
+    /// `garderLeBrut`).
     ///
     /// Le moteur de macOS a transcrit pendant qu'on parlait. Si la passe finale
     /// échoue, ce texte existe, il est bon — moins soigné que la passe finale,
@@ -222,6 +229,11 @@ final class Livraison {
     /// dernier est remis à zéro au début de la dictée suivante, et l'on peut
     /// très bien reparler avant de décider quoi faire de la précédente.
     private var pendingPreview: String?
+
+    /// La voie qui a laissé le recours : l'aperçu de macOS, ou la
+    /// transcription brute de ChatGPT. Le menu les nomme différemment, et
+    /// seule la seconde a pu laisser la fenêtre du relais devant.
+    private(set) var voieDuRecours: VoieDeDictee = .apple
 
     /// Garde de quoi reprendre une dictée ratée, et le dit dans la barre.
     ///
@@ -237,7 +249,28 @@ final class Livraison {
                    echec: String = "Transcription impossible — « Réessayer » dans le menu") {
         pendingAudio = audio
         pendingPreview = apercu
+        voieDuRecours = .apple
         overlay.showFailure(echec, hint: Self.rescueHint(preview: apercu))
+    }
+
+    /// Garde la transcription de ChatGPT dès qu'elle est lue, **avant** que
+    /// le module ne la reprenne.
+    ///
+    /// C'est le filet de la voie ChatGPT, qui n'a pas d'audio à rejouer. La
+    /// transcription existait et mourait dans une variable : quand la suite
+    /// échouait — l'insertion refusée, l'attente d'une réponse abandonnée à
+    /// la touche —, il ne restait qu'à aller la chercher dans la page, si
+    /// elle y était encore. Gardée ici, elle passe par l'entrée de menu qui
+    /// servait déjà à l'aperçu de macOS.
+    ///
+    /// Elle remplace le recours d'une dictée précédente : le menu ne propose
+    /// que celui de la dernière, et un « Réessayer » posé au-dessus du brut
+    /// d'une autre dictée ne se lirait pas. Une livraison réussie l'oublie
+    /// comme elle oublie l'aperçu.
+    func garderLeBrut(_ brut: String) {
+        pendingAudio = nil
+        pendingPreview = brut
+        voieDuRecours = .chatgpt
     }
 
     /// Insère ce que l'aperçu en direct avait écrit, faute de mieux.
@@ -259,6 +292,13 @@ final class Livraison {
     /// autre problème que celui qu'on essayait de contourner, et il se répare.
     func insererLApercu() async throws {
         guard let text = pendingPreviewText else { return }
+        // Un échec de la voie ChatGPT ouvre la fenêtre du relais pour qu'on y
+        // récupère le texte, et Caspr passe devant : le brut s'écrirait dans
+        // la page. Même geste qu'à la livraison (cf. `livrer`).
+        switch voieDuRecours {
+        case .chatgpt: await Relais.partage.rendreLeClavier()
+        case .apple: break
+        }
         try await ecrire(text, vers: Preferences.shared.effectiveTarget,
                          depuis: Self.applicationDevant())
         oublierLeRecours()
@@ -269,6 +309,7 @@ final class Livraison {
     func oublierLeRecours() {
         pendingAudio = nil
         pendingPreview = nil
+        voieDuRecours = .apple
     }
 
     var hasPendingAudio: Bool { pendingAudio != nil }

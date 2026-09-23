@@ -398,7 +398,8 @@ struct CheckBox: View {
 private struct HistoryTab: View {
     let history: TranscriptionHistory
     @State private var entries: [TranscriptionHistory.Entry] = []
-    @State private var justCopied: UUID?
+    /// Le bouton qui vient de copier : l'entrée, ou sa transcription brute.
+    @State private var justCopied: String?
     @State private var enabled = true
     @State private var limit = TranscriptionHistory.defaultLimit
 
@@ -498,7 +499,13 @@ private struct HistoryTab: View {
             Text(entry.relativeAge)
                 .font(.system(size: 10.5))
                 .foregroundStyle(Style.textTertiary)
-            copyButton(entry)
+            if let brut = entry.brut {
+                copyButton(brut, cle: "\(entry.id)-brut", libelle: "Brut",
+                           aide: "Copier ce que ChatGPT avait transcrit, avant la "
+                               + "reprise du module")
+            }
+            copyButton(entry.text, cle: entry.id.uuidString, libelle: nil,
+                       aide: "Copier le texte entier")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -513,15 +520,19 @@ private struct HistoryTab: View {
     ///
     /// Sans le retour visuel, copier ne produit **aucun** signe : le
     /// presse-papiers est invisible, et on reclique pour être sûr.
-    private func copyButton(_ entry: TranscriptionHistory.Entry) -> some View {
-        let copied = justCopied == entry.id
+    ///
+    /// `libelle` nomme ce qu'il copie quand ce n'est pas l'entrée elle-même :
+    /// deux icônes identiques côte à côte ne diraient pas laquelle est le brut.
+    private func copyButton(_ texte: String, cle: String, libelle: String?,
+                            aide: String) -> some View {
+        let copied = justCopied == cle
         return Button {
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(entry.text, forType: .string)
-            justCopied = entry.id
+            NSPasteboard.general.setString(texte, forType: .string)
+            justCopied = cle
             Task {
                 try? await Task.sleep(for: .milliseconds(1500))
-                if justCopied == entry.id { justCopied = nil }
+                if justCopied == cle { justCopied = nil }
             }
         } label: {
             HStack(spacing: 4) {
@@ -529,6 +540,8 @@ private struct HistoryTab: View {
                     .font(.system(size: 11, weight: copied ? .semibold : .regular))
                 if copied {
                     Text("Copié").font(.system(size: 10, weight: .semibold))
+                } else if let libelle {
+                    Text(libelle).font(.system(size: 10, weight: .semibold))
                 }
             }
             .foregroundStyle(copied ? Style.accent : Style.textSecondary)
@@ -543,7 +556,7 @@ private struct HistoryTab: View {
                                       lineWidth: 1)))
         }
         .buttonStyle(.plain)
-        .help("Copier le texte entier")
+        .help(aide)
         .animation(.easeOut(duration: 0.15), value: copied)
     }
 

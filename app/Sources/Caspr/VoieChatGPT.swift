@@ -203,8 +203,18 @@ final class VoieChatGPT {
                                progress: { [relais] in relais.avancement })
         Log.info("fin de dictée relais : \(String(format: "%.1f", dictee.duree)) s")
         let debut = ContinuousClock.now
+        // La transcription de ChatGPT a-t-elle été gardée pour le menu ?
+        var brutGarde = false
         do {
             let brut = try await relais.arreterEtLire(secondesDictees: dictee.duree)
+            // Le filet, posé dès que le brut est lu et avant la seconde passe :
+            // ce qui échoue ensuite — l'insertion, une attente abandonnée à la
+            // touche — ne le perd plus. Pas pour un cycle qui n'est plus le
+            // sien : le recours appartient à la dictée d'après.
+            if !brut.isEmpty, estEnCours() {
+                livraison.garderLeBrut(brut)
+                brutGarde = true
+            }
             // La seconde passe, quand le module la demande. Elle rend le brut
             // si elle échoue : rien de ce qui a été dit ne se perd.
             let texte = try await relais.transformer(brut, module: module)
@@ -225,6 +235,10 @@ final class VoieChatGPT {
                 if Task.isCancelled, !relais.messageParti {
                     throw CancellationError()
                 }
+                // Parti, le message n'a plus rien à insérer : le brut gardé
+                // pour le menu promettrait un recours sans objet. Resté dans
+                // la zone — un envoi impossible —, il reste à portée.
+                if relais.messageParti { livraison.oublierLeRecours() }
                 // Sauf un refus — un quota, un envoi impossible : sans voix
                 // ni texte à insérer, la barre est le seul endroit où le lire.
                 // L'avertissement se suffit, en une ligne : un titre « n'a pas
@@ -232,7 +246,10 @@ final class VoieChatGPT {
                 // faisait que le répéter.
                 let issue: Issue
                 if let avertissement = relais.prendreAvertissement() {
-                    overlay.showFailure(avertissement)
+                    // Resté dans la zone, le message a encore son recours.
+                    overlay.showFailure(avertissement, hint: relais.messageParti || !brutGarde
+                        ? nil
+                        : "Rien n'est perdu : insérer la transcription brute, dans le menu de Caspr.")
                     issue = .echec("\(avertissement).")
                 } else {
                     overlay.hide()
@@ -251,7 +268,9 @@ final class VoieChatGPT {
             }
             relais.masquerBarre()
             overlay.hide()
-            try await livraison.livrer(texte, dictee)
+            // Le brut va à l'historique à côté du texte remanié, quand ils
+            // diffèrent (cf. `TranscriptionHistory.Entry.brut`).
+            try await livraison.livrer(texte, dictee, brut: brut)
             // Abandonné pendant l'insertion : le texte est écrit, et c'est
             // tout ce qui reste de ce cycle. L'état appartient au suivant.
             guard estEnCours() else { return .sansSuite }
@@ -282,20 +301,30 @@ final class VoieChatGPT {
             Log.error("échec de transcription : \(error.localizedDescription)")
             let recuperable = (error as? RelaisPage.Erreur)?.laissePeutEtreLeTexte ?? true
             // Un refus de ChatGPT porte sa raison, un quota par exemple : la
-            // barre la montre telle quelle.
+            // barre la montre telle quelle. Et quand le brut a été lu, rien
+            // n'est perdu : c'est le recours qu'on nomme d'abord, celui qui
+            // ne demande pas d'aller fouiller une page.
+            let recours: String? = brutGarde
+                ? "Rien n'est perdu : insérer la transcription brute, dans le menu de Caspr."
+                : recuperable ? "Le texte est peut-être encore dans la fenêtre de ChatGPT."
+                              : nil
             overlay.showFailure(
                 (error as? RelaisPage.Erreur)?.raisonCourte ?? "Transcription impossible",
-                hint: recuperable ? "Le texte est peut-être encore dans la fenêtre de ChatGPT."
-                                  : nil)
-            guard recuperable else { return .echec(error.localizedDescription) }
+                hint: recours)
+            let dansLeMenu = "la transcription brute est dans le menu de Caspr"
+            guard recuperable else {
+                return .echec(brutGarde ? "\(error.localizedDescription) — \(dansLeMenu)."
+                                        : error.localizedDescription)
+            }
             // La fenêtre du relais s'ouvre sur la page : quand la lecture
             // échoue, le texte y est encore, et c'est le seul moyen de le
             // récupérer. Elle redevient donc utilisable au clavier, pour qu'un
             // ⌘C y soit possible. Rien n'est rechargé, et rien ne se collera à
             // la dictée suivante — celle-ci vide la zone avant d'écouter.
             relais.ouvrirFenetre()
-            return .echec("\(error.localizedDescription) — le texte est peut-être encore "
-                          + "dans la fenêtre du relais.",
+            return .echec("\(error.localizedDescription) — "
+                          + (brutGarde ? "\(dansLeMenu), et le texte " : "le texte est ")
+                          + "peut-être encore dans la fenêtre du relais.",
                           texteLaisseDansLaPage: true)
         }
     }

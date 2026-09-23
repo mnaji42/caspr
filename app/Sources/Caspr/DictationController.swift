@@ -553,7 +553,8 @@ final class DictationController {
         }
     }
 
-    /// Libère l'audio conservé. Appelé quand l'utilisateur renonce.
+    /// Libère l'audio ou le brut conservés. Appelé quand l'utilisateur
+    /// renonce.
     func discardPending() {
         guard isAtRest else { return }
         livraison.oublierLeRecours()
@@ -562,6 +563,8 @@ final class DictationController {
 
     var hasPendingAudio: Bool { livraison.hasPendingAudio }
     var pendingPreviewText: String? { livraison.pendingPreviewText }
+    /// L'aperçu de macOS, ou la transcription brute de ChatGPT.
+    var pendingPreviewVoie: VoieDeDictee { livraison.voieDuRecours }
     var pendingDuration: TimeInterval { livraison.pendingDuration }
 
     /// Met fin à la discussion ChatGPT depuis le menu.

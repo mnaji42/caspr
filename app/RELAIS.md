@@ -90,6 +90,15 @@ prochain remaniement de la page.
 Une transformation qui échoue rend la **transcription brute**. Une dictée de
 dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
 
+Et ce brut est gardé **dès qu'il est lu**, avant la seconde passe
+(`Livraison.garderLeBrut`). Si la suite échoue — l'insertion refusée, une
+réponse qu'on renonce à attendre —, « Insérer la transcription brute de
+ChatGPT », dans le menu de Caspr, le rend : c'est l'entrée qui sert à l'aperçu
+de macOS, puisque la voie ChatGPT n'a pas d'audio à rejouer. Une livraison
+réussie l'oublie. Quand un module a remanié le texte, l'historique garde le
+brut à côté (sous ⌥ dans le menu, « Brut » dans les réglages) : une seconde
+passe qui aboutit peut quand même avoir perdu ce qu'on avait dit.
+
 ### La calibration
 
 Deux parcours, qui apprennent les mêmes repères. **L'automatique** essaie
@@ -167,7 +176,8 @@ distingue de la voie macOS, et pourquoi.
 - **`VoieChatGPT.swift`** — le chemin de la voie ChatGPT : prendre la page,
   attendre qu'elle écoute sans ouvrir le micro de Caspr, puis arrêter et lire,
   transformer, ouvrir la discussion ou livrer, laisser le texte dans la page
-  quand ça échoue. Aucun audio à conserver, donc pas de « Réessayer ». Le
+  quand ça échoue. Aucun audio à conserver, donc pas de « Réessayer » : le
+  recours est la transcription brute, gardée dès qu'elle est lue. Le
   pendant de `VoieApple.swift`, qui ne partage avec elle que la livraison.
 - **`DicteeEnCours.swift`** — le module et la destination, figés à l'arrêt de
   l'écoute et portés jusqu'à la livraison : `RelaisCatalogue.courant` relit
@@ -274,7 +284,9 @@ et le raccourci reste instantané.
 ## Ce qu'il ne fait délibérément pas
 
 **Aucun aperçu en direct.** Il faudrait un second flux micro — celui-là même
-qui casse tout. La barre le dit au lieu d'afficher une attente sans fin.
+qui casse tout. La barre le dit au lieu d'afficher une attente sans fin. Ce
+que l'aperçu apporte à la voie macOS quand la passe finale échoue — un texte à
+insérer malgré tout —, la voie ChatGPT le tient de sa transcription brute.
 
 **Aucun banc d'essai.** Le relais n'accepte pas d'audio enregistré : la page
 veut un micro en direct. Rejouer des dictées enregistrées contre ChatGPT

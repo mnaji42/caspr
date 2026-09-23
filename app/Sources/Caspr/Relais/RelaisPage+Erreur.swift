@@ -74,6 +74,11 @@ extension RelaisPage {
             case .pageInterrompue:
                 "WebKit a fermé la page ChatGPT pendant la dictée. Elle a été rechargée, "
                 + "mais ce qui avait été dit est perdu."
+            // Seul repère facultatif, et le dernier des deux parcours : ce qui
+            // a été appris avant lui est gardé.
+            case .calibrationSansClic(.lecture):
+                "Aucun clic sur « Lire à haute voix » en trois minutes : ce repère, "
+                + "facultatif, n'a pas été appris. Le reste est gardé."
             case .calibrationSansClic(let c):
                 "Aucun clic sur \(c.libelle) en trois minutes : la calibration est "
                 + "abandonnée. Relancez-la quand vous serez prêt."

@@ -1450,17 +1450,25 @@ final class Relais: ObservableObject {
                 qu'on fait entendre à quelqu'un, par exemple. Elle est facultative : \
                 abandonnez maintenant si elle ne vous sert pas, le reste est déjà appris.
                 """) else { abandonnerCalibration(); return }
+            // Facultative, la lecture ne défait pas les cinq repères appris
+            // avant elle : son échec se dit dans le message de fin, selon ce
+            // que la page sait faire — il annonçait sinon « lire à haute
+            // voix » juste après l'alerte disant qu'aucun clic ne l'avait
+            // désignée.
             do { try await page.calibrerLecture() }
             catch is CancellationError { return }
-            catch { Self.alerter("Relais", error.localizedDescription) }
+            catch { Log.error("relais : « Lire à haute voix » non appris — \(error.localizedDescription)") }
 
             page.charger()
             page.cacher()
             NSApp.hide(nil)
-            Self.alerter("C'est appris",
-                         "Caspr sait dicter, envoyer, récupérer une réponse et la faire "
-                         + "lire à haute voix. Les modules qui en ont besoin sont "
-                         + "désormais utilisables.")
+            Self.alerter("C'est appris", page.selecteurs.saitLire
+                ? "Caspr sait dicter, envoyer, récupérer une réponse et la faire "
+                  + "lire à haute voix. Les modules qui en ont besoin sont "
+                  + "désormais utilisables."
+                : "Caspr sait dicter, envoyer et récupérer une réponse. « Lire à "
+                  + "haute voix » n'a pas été appris : il est facultatif, et se "
+                  + "montre en relançant la calibration.")
         }
     }
 

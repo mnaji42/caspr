@@ -84,7 +84,25 @@ public enum RelaisScripts {
         ],
       };
 
-      const visible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
+      // Dessiné à l'écran. Une page jamais affichée n'a rien de dessiné :
+      // WebKit ne la dispose pas, et la nôtre naît hors champ (cf. `trouver`).
+      const vu = (el) => el.getClientRects().length > 0;
+      const visible = (el) => !!el && el.isConnected && vu(el);
+      // Les visibles s'il y en a, sinon tous : sur une page jamais affichée,
+      // aucun ne l'est, et le dernier de tous reste le bon.
+      const vusSinon = (els) => { const vus = els.filter(vu); return vus.length ? vus : els; };
+
+      // Tout ce qui répond au sélecteur. Un sélecteur invalide — un repère
+      // appris d'une page qui a changé — ne désigne rien, et ne lève rien.
+      const tous = (selecteur, portee = document) => {
+        try { return [...portee.querySelectorAll(selecteur)]; } catch (e) { return []; }
+      };
+
+      const champ = (el) => el.tagName === 'TEXTAREA' || el.tagName === 'INPUT';
+
+      // L'espace insécable vient du rendu, pas de la dictée : le laisser
+      // ferait arriver des U+00A0 dans le code et les terminaux.
+      const net = (t) => (t || '').replace(/\u00a0/g, ' ').trim();
 
       // Ce qu'un repère doit désigner pour vouloir dire quelque chose.
       //
@@ -116,18 +134,11 @@ public enum RelaisScripts {
         bouton: 'button, [role="button"], [role="menuitem"]',
       };
 
+      // Un bouton : ce que `CLIQUABLE` dit cliquable, une seule règle.
       const convient = (genre, el) => {
         if (!el) return false;
-        if (genre === 'saisie') {
-          return el.isContentEditable
-            || el.tagName === 'TEXTAREA' || el.tagName === 'INPUT';
-        }
-        if (genre === 'bouton') {
-          return el.tagName === 'BUTTON'
-            || el.getAttribute('role') === 'button'
-            || el.getAttribute('role') === 'menuitem';
-        }
-        return true;
+        if (genre === 'saisie') return el.isContentEditable || champ(el);
+        return genre !== 'bouton' || el.matches(CLIQUABLE.bouton);
       };
 
       // Le filet tant que rien n'a été appris. Des paris sur des libellés, pas
@@ -212,10 +223,7 @@ public enum RelaisScripts {
       // permises : la page pose un bouton « copier » sous chaque message, et
       // c'est le bloc parent, retenu au même clic, qui dira lequel.
       function repereValide(selecteur, el, genre) {
-        let candidats = [];
-        try { candidats = [...document.querySelectorAll(selecteur)]; }
-        catch (e) { return false; }
-        return candidats.filter((c) => convient(genre, c)).includes(el);
+        return tous(selecteur).filter((c) => convient(genre, c)).includes(el);
       }
 
       // Les repères qu'un élément porte, du plus solide au plus fragile.
@@ -246,9 +254,9 @@ public enum RelaisScripts {
       // ce qui répond compte : c'est la règle de la paire « copier », où la
       // page prend le premier élément du bloc sans rien filtrer.
       const seulDans = (selecteur, portee, el, genre) => {
-        let tous = [];
-        try { tous = [...portee.querySelectorAll(selecteur)]; } catch (e) { return false; }
-        const retenus = genre ? tous.filter((c) => c.isConnected && convient(genre, c)) : tous;
+        const repondent = tous(selecteur, portee);
+        const retenus = genre
+          ? repondent.filter((c) => c.isConnected && convient(genre, c)) : repondent;
         return retenus.length === 1 && retenus[0] === el;
       };
 
@@ -289,11 +297,7 @@ public enum RelaisScripts {
         let n = el.parentElement;
         for (let i = 0; i < 5 && n; i++) {
           for (const selParent of reperesPossibles(n)) {
-            let blocs = [];
-            try { blocs = [...document.querySelectorAll(selParent)]; } catch (e) { continue; }
-            const vus = blocs.filter((b) => b.getClientRects().length > 0);
-            const liste = vus.length ? vus : blocs;
-            if (liste[liste.length - 1] !== n) continue;
+            if (vusSinon(tous(selParent)).pop() !== n) continue;
             const selecteur = repereUnique(el, n, null);
             if (selecteur) return { selecteur, parent: selParent };
           }
@@ -314,17 +318,12 @@ public enum RelaisScripts {
       // aurait rendu à sa place le premier `article` venu — le message de
       // l'utilisateur, dans un fil neuf.
       function derniereReponse(selReponse) {
-        let reponses = [];
-        if (selReponse) {
-          try { reponses = [...document.querySelectorAll(selReponse)]; } catch (e) {}
-        } else {
-          for (const s of HEURISTIQUES.reponse) {
-            reponses = [...document.querySelectorAll(s)];
-            if (reponses.length) break;
-          }
+        let reponses = selReponse ? tous(selReponse) : [];
+        for (const s of selReponse ? [] : HEURISTIQUES.reponse) {
+          reponses = tous(s);
+          if (reponses.length) break;
         }
-        const vues = reponses.filter((el) => el.getClientRects().length > 0);
-        return vues.length ? vues[vues.length - 1] : null;
+        return reponses.filter(vu).pop() || null;
       }
 
       // Le bouton que désigne un repère « copier » appris sans bloc : en
@@ -338,9 +337,7 @@ public enum RelaisScripts {
       function copierAutour(depart, selCopier) {
         let noeud = depart;
         for (let niveau = 0; niveau < 6 && noeud; niveau++) {
-          let els = [];
-          try { els = [...noeud.querySelectorAll(selCopier)]; } catch (e) { return null; }
-          const boutons = els.filter((b) => visible(b) && convient('bouton', b));
+          const boutons = tous(selCopier, noeud).filter((b) => visible(b) && convient('bouton', b));
           if (boutons.length) return boutons.length === 1 ? boutons[0] : null;
           noeud = noeud.parentElement;
         }
@@ -412,8 +409,7 @@ public enum RelaisScripts {
 
       // Les textes des alertes affichées. `role="alert"` est un rôle
       // d'accessibilité normalisé, et non une classe générée.
-      const alertesVisibles = () => [...document.querySelectorAll('[role="alert"]')]
-        .filter((el) => el.getClientRects().length > 0)
+      const alertesVisibles = () => tous('[role="alert"]').filter(vu)
         .map((el) => (el.innerText || '').trim())
         .filter((t) => t);
 
@@ -446,8 +442,7 @@ public enum RelaisScripts {
           for (const el of zone.querySelectorAll('div, span, p')) {
             if (el.closest(MESSAGE) || el.querySelector(MESSAGE)) continue;
             const t = (el.innerText || '').trim();
-            if (t && t.length < 120 && MOTIFS_ECHEC.test(t)
-                && el.getClientRects().length > 0) textes.push(t);
+            if (t && t.length < 120 && MOTIFS_ECHEC.test(t) && vu(el)) textes.push(t);
           }
         }
         return textes;
@@ -470,6 +465,79 @@ public enum RelaisScripts {
         return false;
       };
 
+      // Remplace le contenu de la zone de saisie — `delete` pour la vider,
+      // `insertText` pour y écrire.
+      //
+      // Par `execCommand` et non en écrasant le DOM : le composeur est un
+      // éditeur ProseMirror, dont l'état interne se désynchronise si on le
+      // modifie dans son dos — le message partirait vide, ou un brouillon
+      // effacé reviendrait à la frappe suivante.
+      const remplacer = (selecteur, commande, texte) => {
+        const el = trouver('composeur', selecteur);
+        if (!el) return { ok: false, raison: 'introuvable' };
+        el.focus();
+        let fait = false;
+        try {
+          document.execCommand('selectAll', false, null);
+          fait = document.execCommand(commande, false, commande === 'delete' ? null : texte);
+        } catch (e) { fait = false; }
+        if (!fait) {
+          if (champ(el)) el.value = texte;
+          else el.textContent = texte;
+        }
+        return relacher(el);
+      };
+
+      // Rendre le focus. Le prendre était nécessaire — ProseMirror n'écrit ni
+      // ne se vide autrement — mais le garder faisait de cette page le champ
+      // focalisé du système, et la dictée s'écrivait ici au lieu de l'éditeur
+      // de l'utilisateur.
+      const relacher = (el) => {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.blur();
+        return { ok: true };
+      };
+
+      // Écoute les clics de l'utilisateur jusqu'à ce que `retenir` en garde
+      // un — il rend alors ce que la calibration a appris, `null` sinon.
+      //
+      // Le clic n'est pas intercepté : il atteint la page. Sans quoi
+      // désigner le bouton d'arrêt serait impossible, puisqu'il n'existe
+      // qu'une fois l'enregistrement démarré.
+      const guetter = (retenir) => new Promise((resolve) => {
+        const surClic = (ev) => {
+          // Seuls les clics de la main comptent.
+          //
+          // `isTrusted` est faux pour tout événement produit par du code —
+          // et Caspr en produit : c'est ainsi qu'il pilote la page. Sans ce
+          // filtre, une dictée lancée pendant une calibration lui faisait
+          // enregistrer les boutons que Caspr venait de cliquer lui-même,
+          // décalés d'un cran, et la calibration devenait silencieusement
+          // fausse : le micro pointait sur la zone de texte.
+          //
+          // Une barrière logique empêche les deux flux de se croiser ;
+          // celle-ci rend l'accident impossible même si elle cédait.
+          if (!ev.isTrusted) return;
+          const appris = retenir(ev);
+          if (appris) terminer(appris);
+        };
+        const terminer = (resultat) => {
+          document.removeEventListener('click', surClic, true);
+          window.__relaisAbandon = null;
+          resolve(resultat);
+        };
+        // De quoi renoncer depuis Swift (cf. `abandonnerCalibration`).
+        //
+        // Sans cela, une calibration qu'on abandonne — la fenêtre qu'on
+        // ferme, un imprévu — laissait cette promesse attendre un clic qui
+        // ne viendrait jamais. L'appel Swift restait suspendu, le parcours
+        // se croyait en cours, et l'application devenait inutilisable
+        // jusqu'à son redémarrage. Une attente sans issue n'est pas une
+        // attente, c'est un blocage.
+        window.__relaisAbandon = () => terminer({ ok: false, raison: 'abandon' });
+        document.addEventListener('click', surClic, true);
+      });
+
       window.__relais = {
         cliquer(cible, selecteur) {
           const el = trouver(cible, selecteur);
@@ -481,66 +549,15 @@ public enum RelaisScripts {
         lire(selecteur) {
           const el = trouver('composeur', selecteur);
           if (!el) return { ok: false, raison: 'introuvable' };
-          const t = (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')
-            ? el.value : el.innerText;
-          // L'espace insécable vient du rendu, pas de la dictée : le laisser
-          // ferait arriver des U+00A0 dans le code et les terminaux.
-          return { ok: true, texte: (t || '').replace(/ /g, ' ').trim() };
+          return { ok: true, texte: net(champ(el) ? el.value : el.innerText) };
         },
 
-        vider(selecteur) {
-          const el = trouver('composeur', selecteur);
-          if (!el) return { ok: false, raison: 'introuvable' };
-          el.focus();
-          // Passer par execCommand plutôt qu'écraser textContent : le composeur
-          // est un éditeur ProseMirror, dont l'état interne se désynchronise si
-          // on modifie le DOM dans son dos. Le symptôme serait un brouillon qui
-          // réapparaît à la frappe suivante.
-          let fait = false;
-          try {
-            document.execCommand('selectAll', false, null);
-            fait = document.execCommand('delete', false, null);
-          } catch (e) { fait = false; }
-          if (!fait) {
-            if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') el.value = '';
-            else el.textContent = '';
-          }
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          // Rendre le focus. Le prendre était nécessaire — ProseMirror ne se
-          // vide pas autrement — mais le garder faisait de cette page le champ
-          // focalisé du système, et la dictée s'écrivait ici au lieu de
-          // l'éditeur de l'utilisateur.
-          el.blur();
-          return { ok: true };
-        },
+        vider(selecteur) { return remplacer(selecteur, 'delete', ''); },
 
         // Dépose un texte dans la zone de saisie, en remplaçant ce qui s'y
-        // trouve.
-        //
-        // `insertText` et non une écriture directe dans le DOM : le composeur
-        // est un éditeur ProseMirror, dont l'état interne se désynchronise si
-        // on le modifie dans son dos — le message partirait vide. Les retours
-        // à la ligne du texte n'envoient rien : seule une frappe sur Entrée le
-        // ferait, et on ne la simule pas.
-        ecrire(selecteur, texte) {
-          const el = trouver('composeur', selecteur);
-          if (!el) return { ok: false, raison: 'introuvable' };
-          el.focus();
-          let fait = false;
-          try {
-            document.execCommand('selectAll', false, null);
-            fait = document.execCommand('insertText', false, texte);
-          } catch (e) { fait = false; }
-          if (!fait) {
-            if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') el.value = texte;
-            else el.textContent = texte;
-          }
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          // Rendre le focus : le garder ferait de cette page le champ focalisé
-          // du système, et l'insertion au curseur écrirait ici.
-          el.blur();
-          return { ok: true };
-        },
+        // trouve. Les retours à la ligne du texte n'envoient rien : seule une
+        // frappe sur Entrée le ferait, et on ne la simule pas.
+        ecrire(selecteur, texte) { return remplacer(selecteur, 'insertText', texte); },
 
         // Encadre le texte déjà présent, sans le réécrire.
         //
@@ -575,11 +592,7 @@ public enum RelaisScripts {
           } catch (e) {
             return { ok: false, raison: String(e) };
           }
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          // Rendre le focus : le garder ferait de cette page le champ focalisé
-          // du système, et l'insertion au curseur écrirait ici.
-          el.blur();
-          return { ok: true };
+          return relacher(el);
         },
 
         // Clique le bouton « copier » de la réponse.
@@ -603,17 +616,10 @@ public enum RelaisScripts {
         copierLaReponse(selParent, selCopier, selReponse) {
           if (!selCopier) return { ok: false, raison: 'pas de repère' };
           if (selParent) {
-            let parents = [];
-            try { parents = [...document.querySelectorAll(selParent)]; } catch (e) {}
-            const vus = parents.filter((p) => p.getClientRects().length > 0);
-            const liste = vus.length ? vus : parents;
             // Le dernier : un fil neuf n'a qu'une réponse, mais un
             // rechargement qui n'aurait pas abouti en laisserait plusieurs.
-            let bouton = null;
-            if (liste.length) {
-              try { bouton = liste[liste.length - 1].querySelector(selCopier); }
-              catch (e) { bouton = null; }
-            }
+            const bloc = vusSinon(tous(selParent)).pop();
+            const bouton = bloc && tous(selCopier, bloc)[0];
             if (!bouton) return { ok: false, raison: 'paire absente' };
             bouton.click();
             return { ok: true, voie: 'paire' };
@@ -654,9 +660,8 @@ public enum RelaisScripts {
           const reponses = document.querySelectorAll(REPONSES);
           const enCours = generationEnCours();
           if (reponses.length <= avant) return { ok: true, nouvelle: false, enCours };
-          const t = reponses[reponses.length - 1].innerText || '';
           return { ok: true, nouvelle: true, enCours,
-                   texte: t.replace(/\u00a0/g, ' ').trim() };
+                   texte: net(reponses[reponses.length - 1].innerText) };
         },
 
         // Clique un bouton, éventuellement cadré dans un bloc.
@@ -667,19 +672,8 @@ public enum RelaisScripts {
         // qui n'existe qu'un à la fois.
         cliquerBouton(selParent, selBouton) {
           if (!selBouton) return { ok: false, raison: 'pas de sélecteur' };
-          let candidats = [];
-          try {
-            if (selParent) {
-              const blocs = [...document.querySelectorAll(selParent)]
-                .filter((b) => b.getClientRects().length > 0);
-              const bloc = blocs[blocs.length - 1];
-              candidats = bloc ? [...bloc.querySelectorAll(selBouton)] : [];
-            } else {
-              candidats = [...document.querySelectorAll(selBouton)];
-            }
-          } catch (e) { return { ok: false, raison: String(e) }; }
-          const vus = candidats.filter((b) => b.getClientRects().length > 0);
-          const cible = (vus.length ? vus : candidats).pop();
+          const bloc = selParent ? tous(selParent).filter(vu).pop() : document;
+          const cible = bloc && vusSinon(tous(selBouton, bloc)).pop();
           if (!cible) return { ok: false, raison: 'introuvable' };
           cible.click();
           return { ok: true };
@@ -700,8 +694,7 @@ public enum RelaisScripts {
         lireReponse(selecteur) {
           const derniere = derniereReponse(selecteur);
           if (!derniere) return { ok: false, raison: 'introuvable' };
-          const t = derniere.innerText || '';
-          return { ok: true, texte: t.replace(/\u00a0/g, ' ').trim() };
+          return { ok: true, texte: net(derniere.innerText) };
         },
 
         // Ce que la page affiche avant qu'on lui demande quelque chose : ses
@@ -810,7 +803,7 @@ public enum RelaisScripts {
           // offre une seconde, et la page se déclarait alors « pas en train
           // d'enregistrer » pendant qu'elle enregistrait.
           const zone = trouver('composeur', selComposeur);
-          const composeur = !!zone && zone.getClientRects().length > 0;
+          const composeur = !!zone && vu(zone);
           const stop = !!trouver('stop', selStop);
           const micro = !!trouver('micro', selMicro);
 
@@ -869,7 +862,7 @@ public enum RelaisScripts {
           const invite = /^(se connecter|connexion|log ?in|sign ?up|s'inscrire|inscription)/i;
           let deconnecte = false;
           for (const el of document.querySelectorAll('button, a')) {
-            if (el.getClientRects().length === 0) continue;
+            if (!vu(el)) continue;
             // Rien de ce qu'écrit la conversation : un message peut porter un
             // lien ou un libellé « Sign up » sans que la page, elle, demande
             // quoi que ce soit — la même exclusion que `generationEnCours`.
@@ -906,61 +899,22 @@ public enum RelaisScripts {
           };
         },
 
-        // Le clic n'est pas intercepté : il atteint la page. Sans quoi
-        // désigner le bouton d'arrêt serait impossible, puisqu'il n'existe
-        // qu'une fois l'enregistrement démarré.
         calibrer(genre) {
-          return new Promise((resolve) => {
-            const surClic = (ev) => {
-              // Seuls les clics de la main comptent.
-              //
-              // `isTrusted` est faux pour tout événement produit par du code —
-              // et Caspr en produit : c'est ainsi qu'il pilote la page. Sans ce
-              // filtre, une dictée lancée pendant une calibration lui faisait
-              // enregistrer les boutons que Caspr venait de cliquer lui-même,
-              // décalés d'un cran, et la calibration devenait silencieusement
-              // fausse : le micro pointait sur la zone de texte.
-              //
-              // Une barrière logique empêche les deux flux de se croiser ;
-              // celle-ci rend l'accident impossible même si elle cédait.
-              if (!ev.isTrusted) return;
-
-              // Un clic hors sujet ne compte pas — on continue d'écouter.
-              //
-              // À l'étape du bouton d'envoi, on demande d'abord d'écrire
-              // quelque chose : le premier clic de l'utilisateur tombe donc
-              // dans la zone de texte, et il était retenu comme s'il désignait
-              // le bouton. La calibration passait à l'étape suivante en ayant
-              // appris la zone de saisie à la place de la flèche bleue.
-              //
-              // Ignorer plutôt que refuser : on ne peut pas prévenir de ce
-              // qu'on n'a pas demandé, et l'utilisateur cliquera le bon
-              // élément juste après, ce qui est exactement ce qu'on attend.
-              const el = ev.target.closest(CLIQUABLE[genre] || '*');
-              if (!convient(genre, el)) return;
-
-              terminer();
-              resolve({ ok: true,
-                        selecteur: selecteurStable(el, genre),
-                        parent: selecteurAncetre(el) });
-            };
-            const terminer = () => {
-              document.removeEventListener('click', surClic, true);
-              window.__relaisAbandon = null;
-            };
-            // De quoi renoncer depuis Swift.
+          return guetter((ev) => {
+            // Un clic hors sujet ne compte pas — on continue d'écouter.
             //
-            // Sans cela, une calibration qu'on abandonne — la fenêtre qu'on
-            // ferme, un imprévu — laissait cette promesse attendre un clic qui
-            // ne viendrait jamais. L'appel Swift restait suspendu, le parcours
-            // se croyait en cours, et l'application devenait inutilisable
-            // jusqu'à son redémarrage. Une attente sans issue n'est pas une
-            // attente, c'est un blocage.
-            window.__relaisAbandon = () => {
-              terminer();
-              resolve({ ok: false, raison: 'abandon' });
-            };
-            document.addEventListener('click', surClic, true);
+            // À l'étape du bouton d'envoi, on demande d'abord d'écrire
+            // quelque chose : le premier clic de l'utilisateur tombe donc
+            // dans la zone de texte, et il était retenu comme s'il désignait
+            // le bouton. La calibration passait à l'étape suivante en ayant
+            // appris la zone de saisie à la place de la flèche bleue.
+            //
+            // Ignorer plutôt que refuser : on ne peut pas prévenir de ce
+            // qu'on n'a pas demandé, et l'utilisateur cliquera le bon
+            // élément juste après, ce qui est exactement ce qu'on attend.
+            const el = ev.target.closest(CLIQUABLE[genre] || '*');
+            if (!convient(genre, el)) return null;
+            return { ok: true, selecteur: selecteurStable(el, genre), parent: selecteurAncetre(el) };
           });
         },
 
@@ -977,9 +931,7 @@ public enum RelaisScripts {
           const genre = GENRE[cible];
           const liste = [];
           for (const s of (HEURISTIQUES[cible] || [])) {
-            let els = [];
-            try { els = [...document.querySelectorAll(s)]; } catch (e) { continue; }
-            for (const el of els) {
+            for (const el of tous(s)) {
               if (!visible(el) || !convient(genre, el)) continue;
               if (genre === 'bouton' && ouvreUnMenu(el)) continue;
               const sel = repereUnique(el, document, genre);
@@ -1021,10 +973,8 @@ public enum RelaisScripts {
           for (const s of HEURISTIQUES.copier) {
             let noeud = derniere;
             for (let niveau = 0; niveau < 6 && noeud; niveau++) {
-              let els = [];
-              try { els = [...noeud.querySelectorAll(s)]; } catch (e) { break; }
-              const boutons = els.filter((b) => visible(b) && convient('bouton', b)
-                                                && !ouvreUnMenu(b));
+              const boutons = tous(s, noeud).filter((b) => visible(b) && convient('bouton', b)
+                                                        && !ouvreUnMenu(b));
               if (boutons.length) {
                 if (boutons.length === 1) {
                   const el = boutons[0];
@@ -1074,35 +1024,14 @@ public enum RelaisScripts {
         // d'écouter ; le suivant est le bouton cherché. S'il n'y a pas de menu,
         // le premier clic est déjà le bon et l'on s'arrête là.
         calibrerAvecMenu() {
-          return new Promise((resolve) => {
-            let menu = null;
-            const surClic = (ev) => {
-              if (!ev.isTrusted) return;
-              const el = ev.target.closest(CLIQUABLE.bouton);
-              if (!convient('bouton', el)) return;
-              const ouvreUnMenu = el.getAttribute('aria-haspopup')
-                || el.getAttribute('aria-expanded') !== null;
-              if (ouvreUnMenu && !menu) {
-                menu = { selecteur: selecteurStable(el, 'bouton'),
-                         parent: selecteurAncetre(el) };
-                return;                      // on attend le vrai bouton
-              }
-              terminer();
-              resolve({ ok: true,
-                        selecteur: selecteurStable(el, 'bouton'),
-                        parent: selecteurAncetre(el),
-                        menu: menu ? menu.selecteur : '',
-                        menuParent: menu ? menu.parent : '' });
-            };
-            const terminer = () => {
-              document.removeEventListener('click', surClic, true);
-              window.__relaisAbandon = null;
-            };
-            window.__relaisAbandon = () => {
-              terminer();
-              resolve({ ok: false, raison: 'abandon' });
-            };
-            document.addEventListener('click', surClic, true);
+          let menu = null;
+          return guetter((ev) => {
+            const el = ev.target.closest(CLIQUABLE.bouton);
+            if (!convient('bouton', el)) return null;
+            const repere = { selecteur: selecteurStable(el, 'bouton'), parent: selecteurAncetre(el) };
+            if (ouvreUnMenu(el) && !menu) { menu = repere; return null; } // on attend le vrai bouton
+            return { ok: true, ...repere,
+                     menu: menu ? menu.selecteur : '', menuParent: menu ? menu.parent : '' };
           });
         },
 

@@ -89,6 +89,62 @@ struct RelaisScriptsTests {
         }
     }
 
+    /// Un pont posé sur un faux document : `querySelectorAll` lève sur un
+    /// sélecteur invalide, comme le vrai, et ne connaît que le bouton d'envoi.
+    static func pontSurFauxDocument() -> JSContext {
+        let ctx = JSContext()!
+        ctx.evaluateScript("""
+            var window = this, ecouteur = null, resultat = null;
+            var bouton = { tagName: 'BUTTON', nodeType: 1, id: '', parentElement: null,
+              matches() { return true; }, closest() { return bouton; },
+              getAttribute(n) { return n === 'data-testid' ? 'send-button' : null; } };
+            var document = {
+              querySelectorAll(s) {
+                if (s.startsWith('[[')) throw new SyntaxError('sélecteur invalide');
+                return s.includes('send-button') ? [bouton] : [];
+              },
+              addEventListener(n, f) { ecouteur = f; },
+              removeEventListener() { ecouteur = null; }
+            };
+            var location = { hostname: 'chatgpt.com' };
+            """)
+        ctx.evaluateScript(RelaisScripts.pont)
+        return ctx
+    }
+
+    /// Un repère appris d'une page qui a changé peut ne plus se lire. Il ne
+    /// désigne alors rien — « introuvable », que l'attente sait observer —, et
+    /// ne lève pas : une exception se lirait comme un silence du pont.
+    @Test("Un repère devenu invalide ne désigne rien, et ne lève rien")
+    func repereInvalide() {
+        let ctx = Self.pontSurFauxDocument()
+        for appel in ["cliquerBouton('[[', 'button')", "cliquerBouton('', '[[')",
+                      "copierLaReponse('[[', 'button', '')", "copierLaReponse('', '[[', '[[')",
+                      "lireReponse('[[')", "candidatsCopier('[[')"] {
+            #expect(ctx.evaluateScript("window.__relais.\(appel).ok")!.toBool() == false, "\(appel)")
+        }
+        #expect(ctx.exception == nil)
+    }
+
+    /// Caspr clique la page pour la piloter : un de ses clics retenu par une
+    /// calibration en cours y apprendrait le mauvais bouton.
+    @Test("La calibration ne retient qu'un clic de la main, et renonce sur demande")
+    func calibrationGuette() {
+        let ctx = Self.pontSurFauxDocument()
+        ctx.evaluateScript("window.__relais.calibrer('bouton').then((r) => { resultat = r; });")
+        ctx.evaluateScript("ecouteur({ isTrusted: false, target: bouton });")
+        #expect(ctx.evaluateScript("resultat === null")!.toBool())
+        ctx.evaluateScript("ecouteur({ isTrusted: true, target: bouton });")
+        #expect(ctx.evaluateScript("resultat.ok && resultat.selecteur")!.toString()
+                == #"[data-testid="send-button"]"#)
+        #expect(ctx.evaluateScript("ecouteur === null")!.toBool())
+
+        ctx.evaluateScript("resultat = null; window.__relais.calibrerAvecMenu().then((r) => { resultat = r; });")
+        #expect(ctx.evaluateScript("window.__relais.abandonnerCalibration().ok")!.toBool())
+        #expect(ctx.evaluateScript("resultat.ok === false && ecouteur === null")!.toBool())
+        #expect(ctx.exception == nil)
+    }
+
     @Test("La page reçoit la promesse d'origine, et rien d'autre ne change pour elle")
     func promesseIntacte() throws {
         let ctx = Self.contexte()

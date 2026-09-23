@@ -57,6 +57,11 @@ final class RelaisPage: NSObject {
     /// elle qui puisse l'écraser ou le faire passer pour installé. Depuis ce
     /// monde, `click`, `execCommand('insertText')` et son événement `input`,
     /// `localStorage` agissent sur la page comme depuis le sien (mesuré).
+    /// Éprouvé fonction par fonction, dans ce monde et dans celui de la page,
+    /// sur chatgpt.com déconnecté et sur un vrai ProseMirror : mêmes
+    /// résultats, à la seule visibilité du pont près — ProseMirror voit
+    /// l'écriture et l'encadrement, « copier » remplit le presse-papiers, un
+    /// clic de Caspr n'est pas retenu par la calibration, un clic réel l'est.
     ///
     /// Celui du relais de l'écho, qui y vit déjà. Revenir au monde de la
     /// page, si ChatGPT cessait d'y répondre : `.page`, ici, et rien d'autre —

@@ -290,9 +290,13 @@ du cycle : la page part quand on la ferme, ou à l'appui de la dictée macOS
 suivante, avant que le magnétophone n'écoute — en rendant alors le premier
 plan que sa fenêtre tenait, sans quoi cette dictée s'écrirait chez Caspr
 (`Relais.libererLaPageGardee`). Dans l'autre sens, choisir ChatGPT pendant
-une dictée macOS ne construit la page — ni ne lance la calibration — qu'une fois
-le magnétophone arrêté (`Relais.ecouteMacOS`) : née plus tôt, elle aurait
-réduit au silence le reste de l'enregistrement.
+une dictée macOS ne construit la page qu'une fois le magnétophone arrêté
+(`Relais.ecouteMacOS`) : née plus tôt, elle aurait réduit au silence le reste
+de l'enregistrement. La calibration automatique que ce choix lance d'ordinaire
+n'est alors pas relancée — l'arrêt précède la livraison au curseur, qu'elle
+aurait privée de son premier plan : « Calibrer automatiquement… » se rallume à
+l'arrêt, et la dictée suivante renvoie à Réglages › Voie tant qu'elle n'a pas
+eu lieu.
 
 **Les deux voies se rejoignent à la livraison, pas en amont.** Le relais s'est
 d'abord conformé au protocole des moteurs de macOS, `SpeechEngine`, pour

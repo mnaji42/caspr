@@ -426,7 +426,6 @@ final class DictationController {
     // MARK: - Étapes
 
     private func startRecording(voie: VoieDeDictee) async {
-        let parRelais = voie == .chatgpt
         // Toute sortie qui n'aboutit pas à l'écoute rend la page, et quitte
         // `.starting`. Une ligne par chemin de sortie, c'était la promesse d'en
         // oublier un — et il y en avait deux : un micro ou une accessibilité
@@ -532,7 +531,10 @@ final class DictationController {
             // l'écoute, elle restait à flotter au-dessus du travail, sans
             // rapport visible avec le message d'échec. Pas la grande fenêtre,
             // si elle vient de s'ouvrir : c'est là qu'on se connecte.
-            if parRelais {
+            switch voie {
+            case .apple:
+                break
+            case .chatgpt:
                 if let courte = (error as? RelaisPage.Erreur)?.raisonCourte {
                     overlay.showFailure(courte)
                 } else {
@@ -553,7 +555,14 @@ final class DictationController {
     /// transcription relève la mort à son tour suivant, et le démarrage au
     /// clic suivant.
     private func pageRelaisInterrompue() {
-        guard voieDuCycle == .chatgpt, state == .recording else { return }
+        guard state == .recording else { return }
+        // La page d'un cycle macOS n'existe pas : elle ne peut pas y mourir.
+        // Une page détruite après un cycle ChatGPT, elle, ne regarde plus
+        // personne.
+        switch voieDuCycle {
+        case .chatgpt?: break
+        case .apple?, nil: return
+        }
         let erreur = RelaisPage.Erreur.pageInterrompue
         Log.error("relais : la page est morte pendant l'écoute")
         voieDuCycle = nil
@@ -646,9 +655,13 @@ final class DictationController {
         state = .processing
         // Le relais se conforme au protocole des moteurs, donc tout ce qui suit
         // (insertion, historique, échecs, barre) marche sans le savoir — à la
-        // poignée de différences près que ce drapeau porte, en attendant que
-        // chaque voie ait la sienne.
-        let parRelais = voie == .chatgpt
+        // poignée de différences près que ce drapeau porte. Il est tiré d'un
+        // `switch` sans `default` : une voie de plus obligerait à dire ici de
+        // quel côté elle se range.
+        let parRelais = switch voie {
+        case .apple: false
+        case .chatgpt: true
+        }
         // RELAIS — vrai quand l'échec laisse la transcription dans la page, à
         // récupérer dans la fenêtre qu'on ouvre pour cela.
         var texteLaisseDansLaPage = false

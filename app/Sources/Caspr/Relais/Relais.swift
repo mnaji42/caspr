@@ -54,9 +54,15 @@ final class Relais: ObservableObject {
 
     /// La page a-t-elle encore une raison d'exister ?
     ///
-    /// La voie ChatGPT, ou la dictée ChatGPT commencée avant qu'on en change :
-    /// elle va au bout sur la page qu'elle a prise.
-    private var pageVoulue: Bool { voieChatGPT || occupation == .dictee }
+    /// Sur la voie ChatGPT, toujours. Sur la voie macOS, seulement pour la
+    /// dictée ChatGPT commencée avant qu'on en change : elle va au bout sur la
+    /// page qu'elle a prise.
+    private var pageVoulue: Bool {
+        switch Preferences.shared.voie {
+        case .chatgpt: true
+        case .apple: occupation == .dictee
+        }
+    }
 
     /// Détruit la page que la voie macOS ne veut plus.
     private func quitterLaPage() {

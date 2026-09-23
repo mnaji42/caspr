@@ -502,11 +502,17 @@ final class DictationController {
     // MARK: - Destination
 
     /// Insère un texte déjà transcrit — réinsertion depuis l'historique.
+    ///
+    /// Le menu la propose même pendant une dictée. Son échec ne dit donc
+    /// l'état qu'au repos, comme `insertPendingPreview` : posé par-dessus une
+    /// écoute, `.failed` passait pour un repos, et l'appui suivant rouvrait
+    /// un cycle sur une page ou un micro encore pris — plus rien n'arrêtait
+    /// l'écoute avant le redémarrage.
     func insert(_ text: String) async {
         do {
             try await livraison.deliver(text, to: target)
         } catch {
-            state = .failed(error.localizedDescription)
+            if isAtRest { state = .failed(error.localizedDescription) }
         }
     }
 

@@ -284,14 +284,20 @@ extension RelaisPage {
       // Une seule fonction pour la dictée et pour la calibration automatique :
       // un bouton « copier » éprouvé depuis une autre réponse que celle d'où
       // la dictée partira n'aurait rien prouvé.
+      //
+      // Le filet ne sert qu'à qui n'a pas de repère : un repère appris qui ne
+      // trouve rien dit que la réponse n'est pas encore là, et le filet
+      // aurait rendu à sa place le premier `article` venu — le message de
+      // l'utilisateur, dans un fil neuf.
       function derniereReponse(selReponse) {
         let reponses = [];
         if (selReponse) {
           try { reponses = [...document.querySelectorAll(selReponse)]; } catch (e) {}
-        }
-        for (const s of HEURISTIQUES.reponse) {
-          if (reponses.length) break;
-          reponses = [...document.querySelectorAll(s)];
+        } else {
+          for (const s of HEURISTIQUES.reponse) {
+            reponses = [...document.querySelectorAll(s)];
+            if (reponses.length) break;
+          }
         }
         const vues = reponses.filter((el) => el.getClientRects().length > 0);
         return vues.length ? vues[vues.length - 1] : null;
@@ -559,58 +565,41 @@ extension RelaisPage {
         // laisserait tomber tout le monde ailleurs. C'est la calibration qui
         // les apprend, l'un et l'autre, d'un seul clic.
         //
-        // `sansRepli` : pour la calibration automatique, qui éprouve un repère
-        // et non le filet. Le repli clique ce que les libellés désignent, quel
-        // que soit le repère ; une copie obtenue par lui ne dirait rien de
-        // celui qu'on s'apprête à enregistrer.
-        copierLaReponse(selParent, selCopier, selReponseRepli, sansRepli) {
-          if (selParent && selCopier) {
+        // Le repère appris, et lui seul. Ne rien trouver veut dire que le
+        // bouton n'est **pas encore là** — il n'apparaît qu'une fois la
+        // réponse finie —, et la dictée continue d'observer jusqu'à son
+        // échéance. Un repli sur les libellés cliquait, en pleine génération,
+        // le premier « Copier le code » de la réponse : le seul bloc de code
+        // s'insérait au curseur à la place du texte, sans que rien ne le dise.
+        copierLaReponse(selParent, selCopier, selReponse) {
+          if (!selCopier) return { ok: false, raison: 'pas de repère' };
+          if (selParent) {
             let parents = [];
             try { parents = [...document.querySelectorAll(selParent)]; } catch (e) {}
             const vus = parents.filter((p) => p.getClientRects().length > 0);
             const liste = vus.length ? vus : parents;
+            // Le dernier : un fil neuf n'a qu'une réponse, mais un
+            // rechargement qui n'aurait pas abouti en laisserait plusieurs.
+            let bouton = null;
             if (liste.length) {
-              // Le dernier : un fil neuf n'a qu'une réponse, mais un
-              // rechargement qui n'aurait pas abouti en laisserait plusieurs.
-              let bouton = null;
               try { bouton = liste[liste.length - 1].querySelector(selCopier); }
               catch (e) { bouton = null; }
-              if (bouton) { bouton.click(); return { ok: true, voie: 'paire' }; }
             }
+            if (!bouton) return { ok: false, raison: 'paire absente' };
+            bouton.click();
+            return { ok: true, voie: 'paire' };
           }
 
-          const derniere = derniereReponse(selReponseRepli);
+          // Sans bloc, le repère est cherché autour de la dernière réponse,
+          // là où il est seul (cf. `copierAutour`). C'est ce chemin que la
+          // calibration automatique éprouve quand aucun bloc ne se laisse
+          // désigner.
+          const derniere = derniereReponse(selReponse);
           if (!derniere) return { ok: false, raison: 'pas de réponse' };
-          // Sans bloc, le repère appris vaut encore quelque chose : cherché
-          // autour de la dernière réponse, là où il est seul (cf.
-          // `copierAutour`). Le repli l'ignorait, et un repère n'était alors
-          // qu'un libellé de plus. C'est ce chemin que la calibration
-          // automatique éprouve quand aucun bloc ne se laisse désigner.
-          if (selCopier && !selParent) {
-            const bouton = copierAutour(derniere, selCopier);
-            if (bouton) { bouton.click(); return { ok: true, voie: 'repere' }; }
-          }
-          if (sansRepli) return { ok: false, raison: 'repère introuvable ou ambigu' };
-
-          // Repli pour les configurations calibrées avant que la paire
-          // n'existe, et pour un repère sans bloc qui ne désigne plus un
-          // bouton seul : on part de la dernière réponse et on cherche
-          // autour. La visibilité est exigée, elle : le bouton d'une réponse
-          // est toujours affiché, celui d'un message d'utilisateur ne l'est
-          // qu'au survol — c'est donc elle qui les distingue.
-          let noeud = derniere;
-          for (let niveau = 0; niveau < 6 && noeud; niveau++) {
-            for (const s of HEURISTIQUES.copier) {
-              let trouves = [];
-              try { trouves = [...noeud.querySelectorAll(s)]; } catch (e) { continue; }
-              const vus = trouves.filter((b) => b.getClientRects().length > 0);
-              if (!vus.length) continue;
-              vus[vus.length - 1].click();
-              return { ok: true, voie: 'repli', niveau };
-            }
-            noeud = noeud.parentElement;
-          }
-          return { ok: false, raison: 'pas de bouton copier' };
+          const bouton = copierAutour(derniere, selCopier);
+          if (!bouton) return { ok: false, raison: 'repère absent ou ambigu' };
+          bouton.click();
+          return { ok: true, voie: 'repere' };
         },
 
         // Où en est la réponse attendue ?
@@ -662,20 +651,16 @@ extension RelaisPage {
         // mais rien ne garantit qu'un rechargement ait abouti, et lire la
         // première rendrait alors la réponse d'avant sans que rien ne le
         // signale.
+        //
+        // Par `derniereReponse` : le filet pour qui n'a pas de repère, et
+        // pour qui en a un, « introuvable » tant qu'il ne trouve rien. Le
+        // filet prenait sinon, avant que la réponse n'apparaisse, le message
+        // de l'utilisateur — et deux secondes et demie de stabilité le
+        // faisaient rendre comme la réponse.
         lireReponse(selecteur) {
-          let elements = [];
-          if (selecteur) {
-            try { elements = [...document.querySelectorAll(selecteur)]; } catch (e) {}
-          }
-          if (!elements.length) {
-            for (const s of HEURISTIQUES.reponse) {
-              elements = [...document.querySelectorAll(s)];
-              if (elements.length) break;
-            }
-          }
-          const visibles = elements.filter((el) => el.getClientRects().length > 0);
-          if (!visibles.length) return { ok: false, raison: 'introuvable' };
-          const t = visibles[visibles.length - 1].innerText || '';
+          const derniere = derniereReponse(selecteur);
+          if (!derniere) return { ok: false, raison: 'introuvable' };
+          const t = derniere.innerText || '';
           return { ok: true, texte: t.replace(/\u00a0/g, ' ').trim() };
         },
 
@@ -970,7 +955,7 @@ extension RelaisPage {
         // bouton-là et à nul autre : un repère qui en désigne plusieurs
         // laisserait la page choisir, et la preuve porterait sur son choix,
         // pas sur le repère. Swift éprouve l'un ou l'autre par
-        // `copierLaReponse`, sans repli.
+        // `copierLaReponse`, comme la dictée le suivra.
         //
         // `selReponse` : le repère de la réponse que la dictée consultera,
         // pour partir de la même réponse qu'elle.

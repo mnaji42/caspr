@@ -134,11 +134,13 @@ sélecteur retrouve l'élément qu'on a trouvé par lui ne vérifierait rien.
 
 « Copier » y compris quand aucun bloc ne le porte sans ambiguïté : son repère
 doit alors être seul autour de la dernière réponse, selon la règle même de la
-dictée (`copierAutour`), et l'essai se fait **sans le repli des libellés**.
-Le repli clique ce que les libellés désignent, quel que soit le repère : une
-copie obtenue par lui — celle d'un bloc de code, par exemple, non vide et
-étrangère au message envoyé — aurait « prouvé » un repère que la dictée
-n'aurait jamais suivi.
+dictée (`copierAutour`). L'essai passe par `copierLaReponse`, comme la
+dictée, et ni l'un ni l'autre ne retombe sur les libellés : un repère qui ne
+trouve rien veut dire que le bouton n'est pas encore là. Ce repli existait,
+et il cliquait en pleine génération le « Copier le code » d'un bloc de code —
+une copie non vide, étrangère au message envoyé, qui s'insérait à la place
+de la réponse. La lecture de la réponse suit la même règle : le filet ne sert
+qu'à qui n'a pas de repère.
 
 Ce que l'automate s'interdit, et pourquoi :
 

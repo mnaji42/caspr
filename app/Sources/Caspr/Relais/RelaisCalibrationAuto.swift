@@ -349,11 +349,9 @@ struct RelaisCalibrationAuto {
         let presse = NSPasteboard.general
         let sauvegarde = PressePapiers(presse)
         let avant = presse.changeCount
-        // Sans repli : le repli clique ce que désignent les libellés, quel
-        // que soit le repère, et sa copie ne prouverait rien de celui-ci.
         let r = try? await page.appeler(
-            "return window.__relais.copierLaReponse(selParent, selCopier, selRepli, true);",
-            ["selParent": parent, "selCopier": selecteur, "selRepli": ancien.reponse])
+            "return window.__relais.copierLaReponse(selParent, selCopier, selReponse);",
+            ["selParent": parent, "selCopier": selecteur, "selReponse": ancien.reponse])
         guard r?["ok"] as? Bool == true else { return nil }
         let fin = Date.now.addingTimeInterval(5)
         while presse.changeCount == avant, Date.now < fin {

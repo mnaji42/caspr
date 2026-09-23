@@ -534,13 +534,14 @@ extension RelaisPage {
             try verifierLaPage()
             try? await Task.sleep(for: .milliseconds(250))
             let r = try? await appeler(
-                "return window.__relais.copierLaReponse(selParent, selCopier, selRepli);",
+                "return window.__relais.copierLaReponse(selParent, selCopier, selReponse);",
                 ["selParent": selecteurs.copierParent,
                  "selCopier": selecteurs.copier,
-                 "selRepli": selecteurs.reponse])
+                 "selReponse": selecteurs.reponse])
             if r?["ok"] as? Bool == true {
-                // Le niveau et le nombre de candidats, pour que le prochain
-                // défaut se lise dans le journal plutôt que dans une capture.
+                // La voie suivie — la paire, ou le repère sans bloc —, pour
+                // que le prochain défaut se lise dans le journal plutôt que
+                // dans une capture.
                 Log.info("relais : copier cliqué (\(r?["voie"] ?? "?"))")
                 clique = true
                 break

@@ -27,7 +27,8 @@ structure des sélecteurs, modules livrés), rangés dans
 | Fichier | Responsabilité |
 |---|---|
 | `Relais.swift` | La façade et le cycle de vie. `apresLivraison` y tient la règle « la fin d'une dictée prépare la suivante ». |
-| `RelaisPage.swift` | La `WKWebView`, ses **deux** fenêtres, la session, l'appel borné au pont, le micro. Au premier montage de chaque lancement, elle vide le cache disque de WebKit — jamais les cookies ni le stockage de la page, qui portent la session. |
+| `RelaisPage.swift` | La `WKWebView`, la session, l'appel borné au pont, le micro. Au premier montage de chaque lancement, elle vide le cache disque de WebKit — jamais les cookies ni le stockage de la page, qui portent la session. |
+| `RelaisFenetres.swift` | Les **deux** fenêtres, et la vue web qui passe de l'une à l'autre (cf. « Les deux fenêtres » plus bas). |
 | `RelaisPage+Dictee.swift` | Ce que la page fait pendant une dictée : écouter, rendre la transcription, envoyer, attendre et copier la réponse, la faire lire, vider la zone pour la suivante. |
 | `RelaisPage+Calibration.swift` | Le message d'essai et les guetteurs de clic, pour les deux calibrations. |
 | `RelaisPage+Navigation.swift` | Les délégués WebKit : l'autorisation du micro, les popups de connexion, les navigations échouées, le processus tué. |

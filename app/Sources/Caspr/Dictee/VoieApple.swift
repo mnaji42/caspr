@@ -182,6 +182,16 @@ final class VoieApple {
             Log.info("transcrit en \(Log.ms(depuis: debut)) ms, \(text.count) caractères")
             return nil
         } catch {
+            // Transcrite mais pas insérée, la dictée est dans l'historique :
+            // c'est là qu'on la reprend, et non par « Réessayer » ou l'aperçu,
+            // qui échoueraient pareil tant que la cause demeure. L'audio n'est
+            // gardé que sans historique, où il reste le seul recours.
+            if let insertion = error as? Livraison.EchecDInsertion, insertion.enHistorique {
+                Log.error("échec d'insertion : \(insertion.localizedDescription)")
+                overlay.showFailure("Insertion impossible",
+                                    hint: "Le texte est dans l'historique, menu de Caspr.")
+                return insertion.localizedDescription
+            }
             let minutes = Double(samples.count) / AudioRecorder.targetSampleRate / 60
             Log.error("échec de transcription : \(error.localizedDescription) — "
                       + "\(String(format: "%.1f", minutes)) min conservées")

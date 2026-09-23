@@ -51,6 +51,27 @@ final class Livraison {
                          brut: brut)
     }
 
+    /// L'insertion a échoué sur un texte qui, lui, existe : l'accessibilité
+    /// retirée, le fichier de notes devenu illisible.
+    ///
+    /// Distincte des échecs de transcription, parce qu'elle ne se reprend pas
+    /// pareil. Confondue avec eux, elle faisait dire « Transcription
+    /// impossible » à la barre ; sous ChatGPT, elle ouvrait la fenêtre du
+    /// relais comme si la page avait échoué, et le texte remanié n'était
+    /// plus nulle part — ni dans l'historique, ni dans le menu, qui ne gardait
+    /// que le brut.
+    struct EchecDInsertion: LocalizedError {
+        let cause: Error
+        /// Faux quand l'historique est désactivé : ne pas promettre qu'on
+        /// l'y retrouvera.
+        let enHistorique: Bool
+
+        var errorDescription: String? {
+            cause.localizedDescription
+                + (enHistorique ? " Le texte est dans l'historique." : "")
+        }
+    }
+
     /// `visee` est l'application capturée à l'appui : l'insertion par
     /// accessibilité vise l'élément focalisé **au moment d'écrire**, et l'on a
     /// pu changer d'application pendant la transcription.
@@ -71,8 +92,15 @@ final class Livraison {
         // indiagnosticable de l'extérieur.
         let devant = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
         Log.info("insertion vers \(devant)")
-        try await deliver(text, to: target)
+        // Archivé avant d'écrire, et donc même quand l'écriture échoue :
+        // l'historique est le filet d'un texte qu'une insertion aurait perdu,
+        // et c'est exactement ce cas-là.
         history.add(text, brut: brut)
+        do {
+            try await deliver(text, to: target)
+        } catch {
+            throw EchecDInsertion(cause: error, enHistorique: history.isEnabled)
+        }
         // Le texte est écrit : l'audio, l'aperçu ou le brut gardés pour le
         // reprendre n'ont plus d'objet. Oublié ici, et non par chaque
         // appelant après coup : la voie ChatGPT le faisait après avoir vérifié

@@ -301,6 +301,16 @@ final class VoieChatGPT {
         } catch is CancellationError {
             // L'abandon a tout défait (cf. `abandonner`).
             return .sansSuite
+        } catch let echec as Livraison.EchecDInsertion {
+            // Seule l'écriture a échoué : la page n'y est pour rien, et le
+            // texte n'y est pas à chercher — pas de fenêtre à ouvrir. Le brut
+            // reste au menu : rien n'a été écrit.
+            guard estEnCours() else { return .sansSuite }
+            Log.error("échec d'insertion : \(echec.localizedDescription)")
+            overlay.showFailure("Insertion impossible", hint: echec.enHistorique
+                ? "Le texte est dans l'historique, menu de Caspr."
+                : "La transcription brute est dans le menu de Caspr.")
+            return .echec(echec.localizedDescription)
         } catch {
             guard estEnCours() else { return .sansSuite }
             // Ce qui reste à reprendre : le texte resté dans la fenêtre du

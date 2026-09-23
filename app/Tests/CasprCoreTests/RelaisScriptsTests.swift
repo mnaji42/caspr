@@ -74,6 +74,21 @@ struct RelaisScriptsTests {
         #expect(ctx.evaluateScript("window.__relais === premier")!.toBool())
     }
 
+    /// La façade appelle le pont par ces noms-là : qu'un seul lui manque, et
+    /// la dictée attendrait sans fin la réponse d'une fonction qui n'existe
+    /// pas. Une fonction du pont que la façade ne nomme pas est du code mort.
+    @Test("Le pont expose exactement les fonctions que la façade appelle")
+    func fonctionsDuPont() {
+        let ctx = JSContext()!
+        ctx.evaluateScript("var window = this, document = {}, location = { hostname: 'chatgpt.com' };")
+        ctx.evaluateScript(RelaisScripts.pont)
+        let cles = ctx.evaluateScript("Object.keys(window.__relais)")!.toArray() as? [String] ?? []
+        #expect(cles.sorted() == RelaisScripts.Fonction.allCases.map(\.rawValue).sorted())
+        for cle in cles {
+            #expect(ctx.evaluateScript("typeof window.__relais['\(cle)']")!.toString() == "function")
+        }
+    }
+
     @Test("La page reçoit la promesse d'origine, et rien d'autre ne change pour elle")
     func promesseIntacte() throws {
         let ctx = Self.contexte()

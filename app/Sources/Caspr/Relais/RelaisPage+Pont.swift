@@ -38,13 +38,13 @@ extension RelaisPage {
     ///
     /// **Sans délai** : c'est le chemin d'une dictée (cf. `appeler`). Au
     /// repos, où un silence doit se constater, on l'enveloppe dans `sonder`.
-    func pont<T: Decodable>(_ fonction: String, _ args: Any...) async throws -> T {
+    func pont<T: Decodable>(_ fonction: RelaisScripts.Fonction, _ args: Any...) async throws -> T {
         try JSONDecoder().decode(T.self, from: await appeler(fonction, args))
     }
 
     /// Les relevés que la page rend en vrac — `etat`, `releve`, `erreur`,
     /// `etatReponse` —, sans type dédié : ils seront fondus en un seul.
-    func pont(_ fonction: String, _ args: Any...) async throws -> [String: Any] {
+    func pont(_ fonction: RelaisScripts.Fonction, _ args: Any...) async throws -> [String: Any] {
         try JSONSerialization.jsonObject(with: await appeler(fonction, args)) as? [String: Any] ?? [:]
     }
 
@@ -69,7 +69,7 @@ extension RelaisPage {
     /// Un pont absent d'une page chargée est un échec prouvé
     /// (`Erreur.pontAbsent`) : le script ne s'y est pas installé, et rien ne
     /// l'y installera. Attendre, sans échéance, ce serait attendre toujours.
-    private func appeler(_ fonction: String, _ args: [Any]) async throws -> Data {
+    private func appeler(_ fonction: RelaisScripts.Fonction, _ args: [Any]) async throws -> Data {
         // Une tâche déjà annulée ne touche plus à la page : le clic qu'elle
         // demandait n'est plus voulu par personne.
         try Task.checkCancellation()
@@ -78,6 +78,12 @@ extension RelaisPage {
         // déjà patienter devant un chargement.
         if rechargementRetenu { charger() }
         let vue: WKWebView = webView
+        // Qu'une page se charge, `chargementEnCours` le dit dès l'ordre de
+        // `charger()`, et `isLoading` pour toutes les autres navigations :
+        // « Recharger » de la grande fenêtre, une redirection après la
+        // connexion. Relu avant l'appel aussi : une absence relevée pendant un
+        // chargement qui s'achève entre-temps ne prouve rien.
+        let chargeait = chargementEnCours || vue.isLoading
         let appel = AppelAnnulable<String?>()
         enSuspens.append(appel)
         defer { enSuspens.removeAll { $0 === appel } }
@@ -87,7 +93,7 @@ extension RelaisPage {
                     const r = window.__relais;
                     if (!r) return '{"__absent":true}';
                     return JSON.stringify(await r[f](...a));
-                    """, arguments: ["f": fonction, "a": args], in: nil, contentWorld: Self.monde)
+                    """, arguments: ["f": fonction.rawValue, "a": args], in: nil, contentWorld: Self.monde)
                 appel.rendre(.success(brut as? String))
             } catch {
                 appel.rendre(.failure(error))
@@ -98,7 +104,7 @@ extension RelaisPage {
             // Pendant un chargement, le pont n'est pas encore posé ; sans page
             // web — rien de chargé, hors ligne —, il n'a nulle part où l'être.
             let pageWeb = ["http", "https"].contains(vue.url?.scheme ?? "")
-            guard !chargementEnCours, pageWeb else { throw PontPasEncoreLa() }
+            guard !chargeait, !chargementEnCours, !vue.isLoading, pageWeb else { throw PontPasEncoreLa() }
             Log.error("relais : le pont est absent d'une page chargée (\(fonction))")
             throw Erreur.pontAbsent
         }
@@ -140,70 +146,70 @@ extension RelaisPage {
     // MARK: - Les fonctions de la page
 
     func cliquer(_ cible: RelaisCible, sel: String) async throws -> Bool {
-        try await (pont("cliquer", cible.rawValue, sel) as Rendu).ok
+        try await (pont(.cliquer, cible.rawValue, sel) as Rendu).ok
     }
 
     /// Le texte de la zone de saisie ; `nil` quand elle est introuvable.
-    func lire(sel: String) async throws -> String? { try await texte(pont("lire", sel)) }
+    func lire(sel: String) async throws -> String? { try await texte(pont(.lire, sel)) }
 
     @discardableResult
     func ecrire(_ texte: String, sel: String) async throws -> Bool {
-        try await (pont("ecrire", sel, texte) as Rendu).ok
+        try await (pont(.ecrire, sel, texte) as Rendu).ok
     }
 
-    func vider(sel: String) async throws { let _: Rendu = try await pont("vider", sel) }
+    func vider(sel: String) async throws { let _: Rendu = try await pont(.vider, sel) }
 
     func encadrer(sel: String, avant: String, apres: String) async throws -> Bool {
-        try await (pont("encadrer", sel, avant, apres) as Rendu).ok
+        try await (pont(.encadrer, sel, avant, apres) as Rendu).ok
     }
 
     /// Le message a-t-il quitté la zone ? Ce qu'elle porte encore — `nil`
     /// quand elle est absente, ce qui ne prouve rien —, et si ChatGPT répond.
     func depart(sel: String, avant: Int) async throws -> (zone: String?, repond: Bool) {
-        let r: Rendu = try await pont("depart", sel, avant)
+        let r: Rendu = try await pont(.depart, sel, avant)
         return (r.zone, r.repond == true)
     }
 
     /// Clique « copier » ; rend la voie suivie — la paire, ou le repère seul
     /// autour de la dernière réponse —, `nil` quand rien n'a été cliqué.
     func copierLaReponse(parent: String, copier: String, reponse: String) async throws -> String? {
-        let r: Rendu = try await pont("copierLaReponse", parent, copier, reponse)
+        let r: Rendu = try await pont(.copierLaReponse, parent, copier, reponse)
         return r.ok ? r.voie ?? "?" : nil
     }
 
     func cliquerBouton(parent: String, bouton: String) async throws -> Bool {
-        try await (pont("cliquerBouton", parent, bouton) as Rendu).ok
+        try await (pont(.cliquerBouton, parent, bouton) as Rendu).ok
     }
 
     /// Le texte de la dernière réponse ; `nil` quand elle est introuvable.
     func lireReponse(sel: String) async throws -> String? {
-        try await texte(pont("lireReponse", sel))
+        try await texte(pont(.lireReponse, sel))
     }
 
     private func texte(_ r: Rendu) -> String? { r.ok ? r.texte ?? "" : nil }
 
-    func oublierBrouillon() async throws { let _: Rendu = try await pont("oublierBrouillon") }
+    func oublierBrouillon() async throws { let _: Rendu = try await pont(.oublierBrouillon) }
 
     func compacter(_ actif: Bool, sel: String) async throws {
-        let _: Rendu = try await pont("compacter", actif, sel)
+        let _: Rendu = try await pont(.compacter, actif, sel)
     }
 
     /// Les repères que la calibration automatique éprouvera, dans l'ordre.
     func candidats(_ cible: RelaisCible) async throws -> [String] {
-        try await (pont("candidats", cible.rawValue) as Liste<String>).candidats ?? []
+        try await (pont(.candidats, cible.rawValue) as Liste<String>).candidats ?? []
     }
 
     /// Les boutons « copier » de la dernière réponse, avec leur bloc.
     func candidatsCopier(reponse: String) async throws -> [Repere] {
-        try await (pont("candidatsCopier", reponse) as Liste<Repere>).candidats ?? []
+        try await (pont(.candidatsCopier, reponse) as Liste<Repere>).candidats ?? []
     }
 
     /// Guette un clic de l'utilisateur sur un élément de ce genre ; `nil` à
     /// l'abandon (cf. `abandonnerCalibration`).
-    func calibrer(genre: String) async throws -> Repere? { try await repere(pont("calibrer", genre)) }
+    func calibrer(genre: String) async throws -> Repere? { try await repere(pont(.calibrer, genre)) }
 
     /// Guette un clic, ouvre-menu compris (cf. `calibrerAvecMenu` du pont).
-    func calibrerAvecMenu() async throws -> Repere? { try await repere(pont("calibrerAvecMenu")) }
+    func calibrerAvecMenu() async throws -> Repere? { try await repere(pont(.calibrerAvecMenu)) }
 
     private func repere(_ r: Rendu) -> Repere? {
         r.ok ? Repere(selecteur: r.selecteur ?? "", parent: r.parent ?? "",
@@ -212,22 +218,22 @@ extension RelaisPage {
 
     /// Fait renoncer une calibration qui attend un clic — au repos.
     func abandonnerCalibration() async {
-        _ = await sonder { try await self.pont("abandonnerCalibration") as Rendu }
+        _ = await sonder { try await self.pont(.abandonnerCalibration) as Rendu }
     }
 
     /// Connecté ou non, en train d'écouter ou non — par les repères du
     /// calibrage, sauf ceux qu'on donne.
     func etat(micro: String? = nil, stop: String? = nil,
               composeur: String? = nil) async throws -> [String: Any] {
-        try await pont("etat", micro ?? selecteurs.micro, stop ?? selecteurs.stop,
+        try await pont(.etat, micro ?? selecteurs.micro, stop ?? selecteurs.stop,
                        composeur ?? selecteurs.composeur)
     }
 
-    func releve() async throws -> [String: Any] { try await pont("releve") }
+    func releve() async throws -> [String: Any] { try await pont(.releve) }
 
     func erreur(connues: [String], nouvelles: Bool, avant: Int) async throws -> [String: Any] {
-        try await pont("erreur", connues, nouvelles, avant)
+        try await pont(.erreur, connues, nouvelles, avant)
     }
 
-    func etatReponse(avant: Int) async throws -> [String: Any] { try await pont("etatReponse", avant) }
+    func etatReponse(avant: Int) async throws -> [String: Any] { try await pont(.etatReponse, avant) }
 }

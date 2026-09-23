@@ -8,6 +8,19 @@ import Foundation
 /// ne le dirait.
 public enum RelaisScripts {
 
+    /// Les fonctions de `window.__relais`, par leur nom.
+    ///
+    /// Un nom mal écrit ne faisait qu'une erreur JavaScript, avalée comme un
+    /// silence : sans échéance, une attente sans fin. Ici, il ne compile pas,
+    /// et les tests vérifient que le pont expose ces fonctions-là, et elles
+    /// seules.
+    public enum Fonction: String, CaseIterable, Sendable {
+        case cliquer, lire, vider, ecrire, encadrer, depart, copierLaReponse, cliquerBouton
+        case lireReponse, compacter, oublierBrouillon, candidats, candidatsCopier
+        case calibrer, calibrerAvecMenu, abandonnerCalibration
+        case etat, releve, erreur, etatReponse
+    }
+
     /// Le pont injecté dans la page.
     ///
     /// Il ne fait rien qu'un utilisateur ne ferait à la souris : cliquer deux

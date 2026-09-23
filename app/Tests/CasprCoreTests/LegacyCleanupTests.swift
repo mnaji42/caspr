@@ -227,6 +227,23 @@ struct LegacyCleanupTests {
         #expect(!Self.paths(all).contains(support))
     }
 
+    /// Les restes de l'ancien nom, y compris ceux que macOS range sous son
+    /// identifiant de bundle — et jamais rien sous celui de Caspr : la session
+    /// ChatGPT et le cache de la page vivent là.
+    @Test("Les restes de Sofler sont pris, jamais ceux de Caspr")
+    func soflerLeftovers() {
+        let paths = Self.paths(LegacyCleanup.otherLocations(home: Self.home))
+        for expected in ["Library/Application Support/Sofler",
+                         "Library/Caches/sofler",
+                         "Library/Logs/Sofler",
+                         "Library/Preferences/fr.lyriastudio.sofler.plist",
+                         "Library/Caches/fr.lyriastudio.sofler",
+                         "Library/HTTPStorages/fr.lyriastudio.sofler"] {
+            #expect(paths.contains("/Users/quelquun/\(expected)"), "\(expected)")
+        }
+        #expect(!paths.contains { $0.contains("fr.lyriastudio.caspr") })
+    }
+
     @Test("Le descripteur se relit sans le type qui l'écrivait")
     func readsDescriptor() {
         let data = Data("""

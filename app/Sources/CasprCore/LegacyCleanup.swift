@@ -273,6 +273,15 @@ public enum LegacyCleanup {
                      "dossier de Sofler"),
             Location(home.appending(path: "Library/Caches/sofler"), "cache de Sofler"),
             Location(home.appending(path: "Library/Logs/Sofler"), "journaux de Sofler"),
+            // Ceux que macOS fabriquait sous l'identifiant de bundle de Sofler,
+            // dès ses premières requêtes réseau — la vérification de mise à
+            // jour : un cache et ses cookies HTTP. Le renommage ne les avait
+            // jamais repris, et ils n'appartiennent qu'à lui. Pas de dossier
+            // WebKit : Sofler n'a jamais eu de page web.
+            Location(home.appending(path: "Library/Caches/fr.lyriastudio.sofler"),
+                     "cache système de Sofler"),
+            Location(home.appending(path: "Library/HTTPStorages/fr.lyriastudio.sofler"),
+                     "stockage HTTP de Sofler"),
             // Le domaine de réglages de Sofler. Le renommage le laissait
             // exprès, pour pouvoir revenir en arrière à la main ; depuis que
             // la reprise de ses réglages a été retirée, rien ne le relit plus.

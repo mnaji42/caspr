@@ -262,7 +262,7 @@ enum Uninstall {
     /// y vit —, et `HTTPStorages` à la première requête réseau, c'est-à-dire
     /// dès la première vérification de mise à jour. Ni l'un ni l'autre n'était
     /// retiré, et un balayage après désinstallation les retrouvait tous les
-    /// deux.
+    /// deux. Ceux de l'ancien nom, Sofler, sont repris par la migration.
     private static var cacheDirectories: [URL] {
         [home.appending(path: "Library/Caches/caspr"),
          home.appending(path: "Library/Caches/\(bundleIdentifier)"),

@@ -278,6 +278,45 @@ extension RelaisPage {
         return null;
       }
 
+      // La dernière réponse visible, cherchée comme la dictée la cherche : par
+      // le repère appris de la réponse s'il y en a un, par le filet sinon.
+      //
+      // Une seule fonction pour la dictée et pour la calibration automatique :
+      // un bouton « copier » éprouvé depuis une autre réponse que celle d'où
+      // la dictée partira n'aurait rien prouvé.
+      function derniereReponse(selReponse) {
+        let reponses = [];
+        if (selReponse) {
+          try { reponses = [...document.querySelectorAll(selReponse)]; } catch (e) {}
+        }
+        for (const s of HEURISTIQUES.reponse) {
+          if (reponses.length) break;
+          reponses = [...document.querySelectorAll(s)];
+        }
+        const vues = reponses.filter((el) => el.getClientRects().length > 0);
+        return vues.length ? vues[vues.length - 1] : null;
+      }
+
+      // Le bouton que désigne un repère « copier » appris sans bloc : en
+      // remontant depuis la dernière réponse, au premier niveau où le repère
+      // répond, et à condition d'y répondre **seul**.
+      //
+      // Plus haut, on entrerait dans les messages voisins. Plusieurs au même
+      // niveau, c'est par exemple une réponse qui porte aussi un bloc de
+      // code — et deviner lequel est le bouton du tour, c'est ce qui s'est
+      // trompé chaque fois qu'on l'a essayé : `null`, plutôt qu'un choix.
+      function copierAutour(depart, selCopier) {
+        let noeud = depart;
+        for (let niveau = 0; niveau < 6 && noeud; niveau++) {
+          let els = [];
+          try { els = [...noeud.querySelectorAll(selCopier)]; } catch (e) { return null; }
+          const boutons = els.filter((b) => visible(b) && convient('bouton', b));
+          if (boutons.length) return boutons.length === 1 ? boutons[0] : null;
+          noeud = noeud.parentElement;
+        }
+        return null;
+      }
+
       // Un sélecteur qui a une chance de survivre au prochain déploiement.
       //
       // Par ordre de solidité : `data-testid`, identifiant, libellé
@@ -519,7 +558,12 @@ extension RelaisPage {
         // la langue de l'interface, et un sélecteur codé pour le français
         // laisserait tomber tout le monde ailleurs. C'est la calibration qui
         // les apprend, l'un et l'autre, d'un seul clic.
-        copierLaReponse(selParent, selCopier, selReponseRepli) {
+        //
+        // `sansRepli` : pour la calibration automatique, qui éprouve un repère
+        // et non le filet. Le repli clique ce que les libellés désignent, quel
+        // que soit le repère ; une copie obtenue par lui ne dirait rien de
+        // celui qu'on s'apprête à enregistrer.
+        copierLaReponse(selParent, selCopier, selReponseRepli, sansRepli) {
           if (selParent && selCopier) {
             let parents = [];
             try { parents = [...document.querySelectorAll(selParent)]; } catch (e) {}
@@ -535,23 +579,26 @@ extension RelaisPage {
             }
           }
 
-          // Repli pour les configurations calibrées avant que la paire
-          // n'existe : on part de la dernière réponse et on cherche autour.
-          // La visibilité est exigée, elle : le bouton d'une réponse est
-          // toujours affiché, celui d'un message d'utilisateur ne l'est qu'au
-          // survol — c'est donc elle qui les distingue.
-          let reponses = [];
-          if (selReponseRepli) {
-            try { reponses = [...document.querySelectorAll(selReponseRepli)]; } catch (e) {}
+          const derniere = derniereReponse(selReponseRepli);
+          if (!derniere) return { ok: false, raison: 'pas de réponse' };
+          // Sans bloc, le repère appris vaut encore quelque chose : cherché
+          // autour de la dernière réponse, là où il est seul (cf.
+          // `copierAutour`). Le repli l'ignorait, et un repère n'était alors
+          // qu'un libellé de plus. C'est ce chemin que la calibration
+          // automatique éprouve quand aucun bloc ne se laisse désigner.
+          if (selCopier && !selParent) {
+            const bouton = copierAutour(derniere, selCopier);
+            if (bouton) { bouton.click(); return { ok: true, voie: 'repere' }; }
           }
-          for (const s of HEURISTIQUES.reponse) {
-            if (reponses.length) break;
-            reponses = [...document.querySelectorAll(s)];
-          }
-          const visiblesR = reponses.filter((el) => el.getClientRects().length > 0);
-          if (!visiblesR.length) return { ok: false, raison: 'pas de réponse' };
+          if (sansRepli) return { ok: false, raison: 'repère introuvable ou ambigu' };
 
-          let noeud = visiblesR[visiblesR.length - 1];
+          // Repli pour les configurations calibrées avant que la paire
+          // n'existe, et pour un repère sans bloc qui ne désigne plus un
+          // bouton seul : on part de la dernière réponse et on cherche
+          // autour. La visibilité est exigée, elle : le bouton d'une réponse
+          // est toujours affiché, celui d'un message d'utilisateur ne l'est
+          // qu'au survol — c'est donc elle qui les distingue.
+          let noeud = derniere;
           for (let niveau = 0; niveau < 6 && noeud; niveau++) {
             for (const s of HEURISTIQUES.copier) {
               let trouves = [];
@@ -918,19 +965,24 @@ extension RelaisPage {
         // trompé chaque fois qu'on l'a essayé.
         //
         // Avec le bloc qui le porte quand il s'en trouve un sans ambiguïté
-        // (cf. `paireCopier`) ; sinon sans bloc, et `copierLaReponse`
-        // cherchera autour de la dernière réponse, comme pour les calibrages
-        // d'avant la paire. Swift éprouve l'un ou l'autre par ce même appel.
+        // (cf. `paireCopier`). Sinon sans bloc, et seulement avec un repère
+        // que `copierAutour` — la règle même de la dictée — ramène à ce
+        // bouton-là et à nul autre : un repère qui en désigne plusieurs
+        // laisserait la page choisir, et la preuve porterait sur son choix,
+        // pas sur le repère. Swift éprouve l'un ou l'autre par
+        // `copierLaReponse`, sans repli.
+        //
+        // `selReponse` : le repère de la réponse que la dictée consultera,
+        // pour partir de la même réponse qu'elle.
         //
         // Le filet d'abord, les niveaux ensuite : le `data-testid` du bouton
         // du tour, un cran plus haut, l'emporte sur un libellé « Copier le
         // code » posé dans la réponse même, qui copierait le seul bloc de
         // code — non vide, étranger au message envoyé, et donc pris pour une
         // preuve.
-        candidatsCopier() {
-          const reponses = [...document.querySelectorAll(REPONSES)].filter(visible);
-          if (!reponses.length) return { ok: false, raison: 'pas de réponse' };
-          const derniere = reponses[reponses.length - 1];
+        candidatsCopier(selReponse) {
+          const derniere = derniereReponse(selReponse);
+          if (!derniere) return { ok: false, raison: 'pas de réponse' };
           const liste = [];
           for (const s of HEURISTIQUES.copier) {
             let noeud = derniere;
@@ -942,10 +994,12 @@ extension RelaisPage {
               if (boutons.length) {
                 if (boutons.length === 1) {
                   const el = boutons[0];
+                  const seul = [...reperesPossibles(el), s]
+                    .find((c) => copierAutour(derniere, c) === el);
                   const paire = paireCopier(el)
-                    || { selecteur: repereUnique(el, noeud, 'bouton', s) || s, parent: '' };
-                  if (!liste.some((c) => c.selecteur === paire.selecteur
-                                         && c.parent === paire.parent)) liste.push(paire);
+                    || (seul ? { selecteur: seul, parent: '' } : null);
+                  if (paire && !liste.some((c) => c.selecteur === paire.selecteur
+                                                  && c.parent === paire.parent)) liste.push(paire);
                 }
                 // Le premier niveau qui en contient décide : plus haut, on
                 // entrerait dans les messages voisins.

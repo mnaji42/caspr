@@ -998,7 +998,28 @@ final class Relais: ObservableObject {
     /// Le parcours automatique, de la connexion au rapport. Rend vrai quand
     /// l'utilisateur choisit de finir à la main.
     private func menerLaCalibrationAutomatique(_ page: RelaisPage) async -> Bool {
-        guard await page.etatConnexion() == .connecte else {
+        // Trente secondes, comme chaque attente de la page dans ce parcours :
+        // choisir ChatGPT vient de la construire, et elle se charge encore.
+        // Et selon le filet, pas selon le calibrage qu'on vient peut-être
+        // remplacer parce qu'il est faux (cf. `connexionObservee`).
+        switch await page.connexionObservee(secondes: 30) {
+        case .connecte:
+            break
+        case .inconnu:
+            guard !Task.isCancelled else { return false }
+            // Ni connectée ni déconnectée : demander un mot de passe ferait
+            // chercher au mauvais endroit.
+            page.charger()
+            Self.alerter("La page ChatGPT ne répond pas", """
+                Elle ne s'est pas chargée en trente secondes : Caspr ne peut pas savoir \
+                si vous êtes connecté. Elle vient d'être rechargée, dans la fenêtre \
+                ouverte derrière ce message.
+
+                Vérifiez votre connexion à Internet. Une fois la conversation affichée, \
+                relancez « Calibrer automatiquement » dans Réglages › Voie.
+                """)
+            return false
+        case .deconnecte:
             guard !Task.isCancelled else { return false }
             Self.alerter("D'abord, se connecter à ChatGPT", """
                 La fenêtre ChatGPT est ouverte derrière ce message. Connectez-vous : \

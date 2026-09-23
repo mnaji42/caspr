@@ -121,10 +121,22 @@ pas. Les candidats viennent du filet du pont, `data-testid` d'abord ; chacun
 doit être **seul** à répondre à son repère, du bon genre — vérifier qu'un
 sélecteur retrouve l'élément qu'on a trouvé par lui ne vérifierait rien.
 
+« Copier » y compris quand aucun bloc ne le porte sans ambiguïté : son repère
+doit alors être seul autour de la dernière réponse, selon la règle même de la
+dictée (`copierAutour`), et l'essai se fait **sans le repli des libellés**.
+Le repli clique ce que les libellés désignent, quel que soit le repère : une
+copie obtenue par lui — celle d'un bloc de code, par exemple, non vide et
+étrangère au message envoyé — aurait « prouvé » un repère que la dictée
+n'aurait jamais suivi.
+
 Ce que l'automate s'interdit, et pourquoi :
 
 - **Se connecter.** C'est le compte de l'utilisateur : sans session, la
-  fenêtre s'ouvre et le parcours s'arrête.
+  fenêtre s'ouvre et le parcours s'arrête. « Sans session » veut dire que la
+  page l'a **dit** (un bouton de connexion, une page d'authentification), vu
+  par le filet et non par le calibrage peut-être faux, après l'avoir laissée
+  se charger. Une page qui ne dit rien en trente secondes « ne répond pas » :
+  elle est rechargée, et personne n'est envoyé chercher un mot de passe.
 - **Écrire avant la fin.** Le parcours manuel enregistre repère par repère,
   sous une main qui voit ce qu'elle clique. Un automate qui ferait de même et
   échouerait à mi-chemin remplacerait en silence la moitié d'un calibrage qui

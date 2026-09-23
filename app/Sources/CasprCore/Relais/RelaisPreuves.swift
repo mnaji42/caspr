@@ -31,8 +31,9 @@ public struct RelaisPreuves: Equatable {
 
     public private(set) var selecteurs: [RelaisCible: String] = [:]
     /// Le bloc qui porte le bouton « copier », vide quand aucun ne se laisse
-    /// désigner sans ambiguïté : la page retombe alors sur sa recherche autour
-    /// de la dernière réponse, et c'est ce chemin-là que la preuve a éprouvé.
+    /// désigner sans ambiguïté. Le repère est alors cherché autour de la
+    /// dernière réponse, où il doit être seul — et c'est ce chemin-là, sans le
+    /// repli des libellés, que la preuve a éprouvé.
     public private(set) var copierParent = ""
     /// Pourquoi un repère manque, dit à l'utilisateur tel quel.
     public private(set) var raisons: [RelaisCible: String] = [:]

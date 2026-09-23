@@ -554,6 +554,56 @@ final class RelaisPage: NSObject {
         return .deconnecte
     }
 
+    /// La session telle que la calibration automatique doit la juger :
+    /// `.deconnecte` seulement quand la page l'a **dit**.
+    ///
+    /// Deux différences avec `etatConnexion`, et chacune a coûté un faux
+    /// « D'abord, se connecter » :
+    ///
+    /// - **Les repères du filet, pas le calibrage.** Celui-ci est peut-être
+    ///   faux — c'est souvent pour cela qu'on recalibre —, et un calibrage qui
+    ///   ne trouve plus la zone de texte ni le micro faisait passer une session
+    ///   ouverte pour fermée : l'automate refusait alors de réparer justement
+    ///   ce qu'on lui demandait de réparer.
+    /// - **L'attente jusqu'à ce que la page se prononce.** Choisir ChatGPT
+    ///   construit la page et lance la calibration dans le même geste ;
+    ///   chatgpt.com, chargé à froid puis hydraté, dépasse souvent les cinq
+    ///   secondes d'`etatConnexion`, qui conclut alors « déconnecté » faute
+    ///   d'avoir vu la zone de texte. Ici, seul un signe de connexion
+    ///   (`authentification`) le fait conclure ; une page qui ne dit rien avant
+    ///   la borne est `.inconnu` — à recharger, pas à reconnecter.
+    func connexionObservee(secondes: Double) async -> Connexion {
+        let limite = Date.now.addingTimeInterval(secondes)
+        while Date.now < limite {
+            if Task.isCancelled { return .inconnu }
+            // Une zone de texte vue pendant la navigation est celle de la page
+            // qu'on quitte.
+            if !chargementEnCours {
+                do {
+                    let r = try await appeler(
+                        "return window.__relais.etat(micro, stop, composeur);",
+                        ["micro": "", "stop": "", "composeur": ""])
+                    if r["connecte"] as? Bool == true {
+                        surConnexion?(.connecte)
+                        return .connecte
+                    }
+                    if r["authentification"] as? Bool == true {
+                        surConnexion?(.deconnecte)
+                        return .deconnecte
+                    }
+                } catch Erreur.pontMuet {
+                    return .inconnu
+                } catch is CancellationError {
+                    return .inconnu
+                } catch {
+                    // Le pont n'est pas encore injecté : la page se charge.
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(400))
+        }
+        return .inconnu
+    }
+
     private func rafraichirEtiquette() async {
         etiquette?.stringValue = "vérification…"
         switch await etatConnexion() {

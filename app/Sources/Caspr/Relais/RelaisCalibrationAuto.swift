@@ -47,8 +47,9 @@ import CasprCore
 struct RelaisCalibrationAuto {
     let page: RelaisPage
     /// Le calibrage en place. Le parcours ne s'en sert que pour ce qu'il
-    /// n'éprouve pas — le repère de la réponse, que `copierLaReponse` consulte
-    /// encore — et ne le modifie jamais.
+    /// n'éprouve pas — le repère de la réponse, d'où la dictée partira pour
+    /// trouver « copier », et d'où la preuve part donc aussi — et ne le
+    /// modifie jamais.
     let ancien: RelaisSelecteurs
 
     struct Issue {
@@ -249,7 +250,8 @@ struct RelaisCalibrationAuto {
                                  + "deux minutes")
             return
         }
-        let r = try? await page.appeler("return window.__relais.candidatsCopier();")
+        let r = try? await page.appeler("return window.__relais.candidatsCopier(selReponse);",
+                                        ["selReponse": ancien.reponse])
         let liste = (r?["candidats"] as? [[String: Any]]) ?? []
         guard !liste.isEmpty else {
             issue.preuves.manque(.copier, "aucun bouton « copier » n'est seul sous la réponse")
@@ -260,7 +262,11 @@ struct RelaisCalibrationAuto {
             let sel = (candidat["selecteur"] as? String) ?? ""
             let parent = (candidat["parent"] as? String) ?? ""
             guard !sel.isEmpty else { continue }
-            let copie = await copierPuisRendre(parent: parent, selecteur: sel) ?? ""
+            guard let copie = await copierPuisRendre(parent: parent, selecteur: sel) else {
+                issue.preuves.manque(.copier, "au moment du clic, son repère ne désignait "
+                                     + "plus un bouton seul")
+                continue
+            }
             if !copie.isEmpty, !copie.contains(Self.empreinte) {
                 issue.preuves.prouve(.copier, sel, parent: parent)
                 return
@@ -331,7 +337,8 @@ struct RelaisCalibrationAuto {
 
     // MARK: - Le presse-papiers
 
-    /// Clique « copier » comme la dictée le fera, rend ce qui a été copié, et
+    /// Clique « copier » comme la dictée le fera, rend ce qui a été copié — une
+    /// chaîne vide si rien ne l'a été, `nil` si le repère n'a rien cliqué — et
     /// remet le presse-papiers tel qu'on l'a trouvé.
     ///
     /// L'attente de la copie ne cède pas à l'abandon : le clic est parti, et sa
@@ -342,8 +349,10 @@ struct RelaisCalibrationAuto {
         let presse = NSPasteboard.general
         let sauvegarde = PressePapiers(presse)
         let avant = presse.changeCount
+        // Sans repli : le repli clique ce que désignent les libellés, quel
+        // que soit le repère, et sa copie ne prouverait rien de celui-ci.
         let r = try? await page.appeler(
-            "return window.__relais.copierLaReponse(selParent, selCopier, selRepli);",
+            "return window.__relais.copierLaReponse(selParent, selCopier, selRepli, true);",
             ["selParent": parent, "selCopier": selecteur, "selRepli": ancien.reponse])
         guard r?["ok"] as? Bool == true else { return nil }
         let fin = Date.now.addingTimeInterval(5)
@@ -351,7 +360,7 @@ struct RelaisCalibrationAuto {
             // Une tâche à part, que l'annulation de celle-ci n'atteint pas.
             await Task { try? await Task.sleep(for: .milliseconds(100)) }.value
         }
-        guard presse.changeCount != avant else { return nil }
+        guard presse.changeCount != avant else { return "" }
         let copie = presse.string(forType: .string) ?? ""
         sauvegarde.rendre(presse)
         return copie

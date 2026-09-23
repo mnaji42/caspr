@@ -241,12 +241,16 @@ extension RelaisPage {
       // c'est l'unicité : qu'un seul élément, du bon genre, y réponde. Le
       // reste de la preuve est dans l'effet, que Swift observe.
       //
-      // `repli` : le sélecteur du filet qui a trouvé l'élément, retenu s'il
-      // est lui aussi une adresse et que l'élément n'en porte aucune à lui.
-      function repereUnique(el, portee, genre, repli) {
-        const candidats = reperesPossibles(el);
-        if (repli) candidats.push(repli);
-        for (const c of candidats) {
+      // Jamais le sélecteur du filet qui a trouvé l'élément : ceux qui sont
+      // des adresses (`data-testid`, `#prompt-textarea`), l'élément les porte
+      // et `reperesPossibles` les propose déjà ; les autres
+      // (`div[contenteditable]`, `textarea`, `aria-label*=`) sont des
+      // ressemblances. Seule sur l'accueil vide, une zone éditable
+      // quelconque passait la preuve — puis, la zone de saisie retirée
+      // pendant l'enregistrement, le repère rendait le canevas d'à côté au
+      // lieu de dire « absent ».
+      function repereUnique(el, portee, genre) {
+        for (const c of reperesPossibles(el)) {
           if (seulDans(c, portee, el, genre)) return c;
         }
         return '';
@@ -270,7 +274,7 @@ extension RelaisPage {
             const vus = blocs.filter((b) => b.getClientRects().length > 0);
             const liste = vus.length ? vus : blocs;
             if (liste[liste.length - 1] !== n) continue;
-            const selecteur = repereUnique(el, n, null, '');
+            const selecteur = repereUnique(el, n, null);
             if (selecteur) return { selecteur, parent: selParent };
           }
           n = n.parentElement;
@@ -948,7 +952,7 @@ extension RelaisPage {
             for (const el of els) {
               if (!visible(el) || !convient(genre, el)) continue;
               if (genre === 'bouton' && ouvreUnMenu(el)) continue;
-              const sel = repereUnique(el, document, genre, s);
+              const sel = repereUnique(el, document, genre);
               if (sel && !liste.includes(sel)) liste.push(sel);
             }
           }

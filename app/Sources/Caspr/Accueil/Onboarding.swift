@@ -22,6 +22,7 @@ import AppKit
 @MainActor
 final class OnboardingWindowController {
     private var window: NSWindow?
+    private var closeObserver: NSObjectProtocol?
 
     /// N'ouvre que si l'accueil n'a jamais été mené à terme.
     func showIfNeeded() {
@@ -37,7 +38,7 @@ final class OnboardingWindowController {
 
         // `weak var` capturé plus bas : la vue met à jour le titre de la
         // fenêtre qui la contient, ce que SwiftUI ne sait pas faire seul.
-        var host: NSWindow?
+        weak var host: NSWindow?
         let window = NSWindow.caspr(title: OnboardingStep.resumed.windowTitle(Preferences.shared.voie)) {
             OnboardingView(onFinish: { [weak self] in self?.close() },
                            onOpenSettings: { [weak self] in
@@ -49,6 +50,15 @@ final class OnboardingWindowController {
         }
         host = window
         self.window = window
+        // Le bouton rouge ne passe pas par `close()` : sans ça, le contrôleur
+        // gardait la fenêtre fermée, et sa vue continuait d'observer le
+        // relais. La fin d'une calibration lancée depuis les Réglages
+        // rouvrait alors un accueil qu'on avait fermé (cf. `comeBack`).
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.forget() }
+        }
 
         window.showCentered()
     }
@@ -59,6 +69,13 @@ final class OnboardingWindowController {
 
     private func close() {
         window?.close()
+        forget()
+    }
+
+    /// Lâche la fenêtre, et la vue qu'elle porte avec elle.
+    private func forget() {
+        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+        closeObserver = nil
         window = nil
     }
 

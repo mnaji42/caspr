@@ -50,6 +50,19 @@ final class RelaisPage: NSObject {
 
     static let accueil = URL(string: "https://chatgpt.com/")!
 
+    /// Le monde du pont : le DOM de la page, mais pas ses variables.
+    ///
+    /// `window.__relais` y est invisible et intouchable depuis chatgpt.com :
+    /// aucune trace d'automate que la page puisse relever, aucun script à
+    /// elle qui puisse l'écraser ou le faire passer pour installé. Depuis ce
+    /// monde, `click`, `execCommand('insertText')` et son événement `input`,
+    /// `localStorage` agissent sur la page comme depuis le sien (mesuré).
+    ///
+    /// Celui du relais de l'écho, qui y vit déjà. Revenir au monde de la
+    /// page, si ChatGPT cessait d'y répondre : `.page`, ici, et rien d'autre —
+    /// l'écho reste où il est.
+    static let monde: WKContentWorld = RelaisEcho.monde
+
     var webView: WKWebView!
     /// Les deux fenêtres, et pourquoi elles ne peuvent pas n'en faire qu'une.
     ///
@@ -185,7 +198,7 @@ final class RelaisPage: NSObject {
         config.userContentController.addUserScript(
             WKUserScript(source: RelaisScripts.pont,
                          injectionTime: .atDocumentEnd,
-                         forMainFrameOnly: true))
+                         forMainFrameOnly: true, in: Self.monde))
 
         webView = WKWebView(frame: Self.enVue, configuration: config)
         echo.relier(webView)

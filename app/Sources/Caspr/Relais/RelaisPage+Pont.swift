@@ -87,7 +87,7 @@ extension RelaisPage {
                     const r = window.__relais;
                     if (!r) return '{"__absent":true}';
                     return JSON.stringify(await r[f](...a));
-                    """, arguments: ["f": fonction, "a": args], in: nil, contentWorld: .page)
+                    """, arguments: ["f": fonction, "a": args], in: nil, contentWorld: Self.monde)
                 appel.rendre(.success(brut as? String))
             } catch {
                 appel.rendre(.failure(error))

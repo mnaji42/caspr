@@ -77,6 +77,14 @@ final class RelaisPage: NSObject {
     /// Les fenêtres de connexion ouvertes par la page (OAuth, conditions).
     /// Retenues pour ne pas être libérées pendant que l'utilisateur s'en sert.
     var annexes: [NSWindow] = []
+    /// La grande fenêtre avait le clavier quand la dictée l'a retirée pour
+    /// sa barre (cf. `afficherBarre`).
+    ///
+    /// Caspr reste alors devant sans elle, et si une autre de ses fenêtres
+    /// était ouverte derrière, c'est elle qui reçoit le clavier : sans ce
+    /// souvenir, on la croirait celle où l'on dicte, et le texte s'y
+    /// écrirait (cf. `Relais.rendreLeClavier`).
+    var fenetreCleRetiree = false
     /// Vrai entre l'ordre de chargement et la fin de la navigation.
     ///
     /// Sans ce drapeau, attendre « la zone de saisie » revenait à interroger la

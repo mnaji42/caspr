@@ -146,6 +146,7 @@ extension RelaisPage {
         barre.orderOut(nil)
         fenetre.setFrame(Self.enVue, display: true)
         fenetre.makeKeyAndOrderFront(nil)
+        fenetreCleRetiree = false
         NSApp.activate(ignoringOtherApps: true)
         // Et la vue web reçoit les touches.
         //
@@ -191,6 +192,7 @@ extension RelaisPage {
         // La grande fenêtre se retire : sans cela elle restait à l'écran,
         // vidée de sa vue web par `rendreLaVueALaBarre`, et l'on voyait un
         // rectangle gris là où l'on attendait sa disparition.
+        fenetreCleRetiree = fenetre.isKeyWindow
         fenetre.orderOut(nil)
         rendreLaVueALaBarre()
         // À la fin, une fois la barre posée : Échap lit sa place et sa
@@ -231,6 +233,12 @@ extension RelaisPage {
 
     /// La grande fenêtre est-elle sous les yeux de l'utilisateur ?
     var estVisible: Bool { fenetre.isVisible }
+
+    /// Cette fenêtre est-elle l'une des nôtres — la grande, la barre, ou une
+    /// fenêtre que la page a ouverte (une connexion, par exemple) ?
+    func possede(_ window: NSWindow) -> Bool {
+        window === fenetre || window === barre || annexes.contains { $0 === window }
+    }
 
     /// La barre est-elle sous les yeux — posée sur un écran, et opaque ?
     ///

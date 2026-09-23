@@ -661,13 +661,38 @@ final class Relais: ObservableObject {
     /// si c'est la fenêtre du relais — ce qui arrive après une discussion, ou
     /// si l'on bascule vers un module qui écrit en pleine dictée — le texte
     /// partirait dans ChatGPT. Se retirer est le seul geste qui rende la main.
+    ///
+    /// La décision porte sur le **premier plan**, pas sur la fenêtre : à
+    /// l'arrêt, la barre vient d'être rangée, et une grande fenêtre ouverte à
+    /// l'appui a été retirée dès que la dictée a pris un module qui écrit
+    /// (cf. `afficherBarre`). Juger sur `estVisible` ne voyait donc plus rien,
+    /// alors que Caspr restait devant, sans fenêtre : le texte s'y perdait.
     func rendreLeClavier() async {
-        guard page?.estVisible == true else { return }
-        page?.cacher()
+        guard premierPlanTenuParLeRelais else { return }
+        if page?.estVisible == true { page?.cacher() }
+        page?.fenetreCleRetiree = false
         NSApp.hide(nil)
-        // Le temps que le système redonne le premier plan à l'application
-        // précédente : insérer avant qu'elle l'ait repris viserait encore nous.
-        try? await Task.sleep(for: .milliseconds(180))
+        // Insérer avant que le système ait rendu le premier plan viserait
+        // encore Caspr : on observe qu'il l'a rendu, une seconde au plus.
+        let echeance = ContinuousClock.now + .seconds(1)
+        let nous = NSRunningApplication.current.processIdentifier
+        while ContinuousClock.now < echeance,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == nous {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    /// Caspr est-il devant du seul fait du relais ?
+    ///
+    /// Vrai quand la fenêtre clé est l'une des siennes, qu'il n'y en a plus,
+    /// ou que la dictée a retiré la grande fenêtre qui l'était — une autre
+    /// fenêtre de Caspr en a hérité sans qu'on y soit. Faux devant une autre
+    /// fenêtre de Caspr qu'on avait choisie : l'accueil a sa zone d'essai, les
+    /// réglages le texte d'un module, et c'est là qu'on dicte.
+    private var premierPlanTenuParLeRelais: Bool {
+        guard NSApp.isActive else { return false }
+        guard let cle = NSApp.keyWindow, page?.fenetreCleRetiree != true else { return true }
+        return page?.possede(cle) ?? false
     }
 
     /// Renvoie le texte à ChatGPT et rend ce qu'il répond, quand le module le
@@ -916,7 +941,6 @@ final class Relais: ObservableObject {
     /// l'arrêt n'ait cliqué — ChatGPT aurait continué d'écouter hors champ —
     /// puis lance une préparation que celle-ci remplacerait, arrêt compris.
     func interrompre(quitterLaDiscussion: Bool = false) {
-        let rendreLePremierPlan = quitterLaDiscussion && enDiscussion
         if quitterLaDiscussion { enDiscussion = false }
         lancerPreparation { [weak self] page in
             await page.annuler()
@@ -925,10 +949,17 @@ final class Relais: ObservableObject {
             // n'est plus à nous de la ranger.
             guard let self else { return }
             if occupation == .libre {
+                // La grande fenêtre a pu activer Caspr — une discussion, une
+                // reconnexion. La ranger sans rendre le premier plan le
+                // laissait devant sans fenêtre : les frappes suivantes s'y
+                // perdaient, et la dictée d'après écrivait chez lui. Jugé
+                // avant de ranger, tant que la fenêtre clé dit d'où l'on vient.
+                let rendreLePremierPlan = premierPlanTenuParLeRelais
                 page.cacher()
-                // Comme à la sortie d'une discussion : sa grande fenêtre a pu
-                // activer Caspr, et la dictée suivante écrirait chez lui.
-                if rendreLePremierPlan { NSApp.hide(nil) }
+                if rendreLePremierPlan {
+                    page.fenetreCleRetiree = false
+                    NSApp.hide(nil)
+                }
             }
             await preparer(page)
         }

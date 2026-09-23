@@ -117,10 +117,10 @@ extension RelaisPage {
                          _ guetteur: @escaping @MainActor () async throws -> Repere?) async throws -> Repere {
         guard let issue = try await auPlus(.seconds(180), guetteur) else {
             await abandonnerCalibration()
-            throw Erreur.calibrationSansClic(cible)
+            throw RelaisErreur.calibrationSansClic(cible)
         }
         guard let r = issue else { throw CancellationError() }
-        guard !r.selecteur.isEmpty else { throw Erreur.introuvable(cible) }
+        guard !r.selecteur.isEmpty else { throw RelaisErreur.introuvable(cible) }
         return r
     }
 }

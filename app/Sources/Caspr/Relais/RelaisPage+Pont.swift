@@ -60,7 +60,7 @@ extension RelaisPage {
     /// page rend du JSON, qu'on décode ici.
     ///
     /// Un pont absent d'une page chargée est un échec prouvé
-    /// (`Erreur.pontAbsent`) : le script ne s'y est pas installé, et rien ne
+    /// (`RelaisErreur.pontAbsent`) : le script ne s'y est pas installé, et rien ne
     /// l'y installera. Attendre, sans échéance, ce serait attendre toujours.
     private func appeler(_ fonction: RelaisScripts.Fonction, _ args: [Any]) async throws -> Data {
         // Une tâche déjà annulée ne touche plus à la page : le clic qu'elle
@@ -99,7 +99,7 @@ extension RelaisPage {
             let pageWeb = ["http", "https"].contains(vue.url?.scheme ?? "")
             guard !chargeait, !chargementEnCours, !vue.isLoading, pageWeb else { throw PontPasEncoreLa() }
             Log.error("relais : le pont est absent d'une page chargée (\(fonction))")
-            throw Erreur.pontAbsent
+            throw RelaisErreur.pontAbsent
         }
         return Data(json.utf8)
     }

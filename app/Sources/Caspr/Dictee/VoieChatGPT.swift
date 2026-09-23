@@ -142,7 +142,7 @@ final class VoieChatGPT {
         // avant l'écoute, il restait au-dessus du travail, sans rapport
         // visible avec le message d'échec. Sauf la fenêtre où l'on doit se
         // connecter, et celle d'une discussion déjà en cours.
-        if let courte = (error as? RelaisPage.Erreur)?.raisonCourte {
+        if let courte = (error as? RelaisErreur)?.raisonCourte {
             overlay.showFailure(courte)
         } else {
             overlay.hide()
@@ -152,7 +152,7 @@ final class VoieChatGPT {
 
     /// WebKit a tué la page pendant qu'on parlait ; rend le message d'échec.
     func pageInterrompue() -> String {
-        let erreur = RelaisPage.Erreur.pageInterrompue
+        let erreur = RelaisErreur.pageInterrompue
         Log.error("relais : la page est morte pendant l'écoute")
         relais.rendreLaMain()
         relais.masquerBarre()
@@ -348,7 +348,7 @@ final class VoieChatGPT {
             // proposer aucun. La barre le promettait pourtant, par la phrase
             // commune aux deux voies ; elle nomme maintenant la fenêtre.
             Log.error("échec de transcription : \(error.localizedDescription)")
-            let recuperable = (error as? RelaisPage.Erreur)?.laissePeutEtreLeTexte ?? true
+            let recuperable = (error as? RelaisErreur)?.laissePeutEtreLeTexte ?? true
             // Un refus de ChatGPT porte sa raison, un quota par exemple : la
             // barre la montre telle quelle. Et quand le brut a été lu, rien
             // n'est perdu : c'est le recours qu'on nomme d'abord, celui qui
@@ -358,7 +358,7 @@ final class VoieChatGPT {
                 : recuperable ? "Le texte est peut-être encore dans la fenêtre de ChatGPT."
                               : nil
             overlay.showFailure(
-                (error as? RelaisPage.Erreur)?.raisonCourte ?? "Transcription impossible",
+                (error as? RelaisErreur)?.raisonCourte ?? "Transcription impossible",
                 hint: recours)
             let dansLeMenu = "la transcription brute est dans le menu de Caspr"
             guard recuperable else {

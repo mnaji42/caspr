@@ -80,7 +80,7 @@ extension RelaisPage {
         // Délai de geste : le bouton micro existe dès que la page s'est dite
         // connectée ; huit secondes sans lui, et il est introuvable.
         clique = try await cliquerQuandDisponible(.micro, selecteurs.micro, pendant: 8)
-        guard clique else { throw Erreur.introuvable(.micro) }
+        guard clique else { throw RelaisErreur.introuvable(.micro) }
         echo.ecouter()
     }
 
@@ -95,19 +95,19 @@ extension RelaisPage {
     ///
     /// Rien n'est demandé pendant un chargement : une zone vue alors est celle
     /// de la page qu'on quitte. Une page chargée sans son pont, elle, a dit
-    /// tout ce qu'elle dira (`Erreur.pontAbsent`).
+    /// tout ce qu'elle dira (`RelaisErreur.pontAbsent`).
     private func attendreLaSession() async throws {
         while true {
             try Task.checkCancellation()
             var vu: RelaisInstantane?
             do { vu = chargementEnCours ? nil : try await instantane() }
-            catch Erreur.pontAbsent { throw Erreur.pontAbsent } catch {}
+            catch RelaisErreur.pontAbsent { throw RelaisErreur.pontAbsent } catch {}
             switch vu.flatMap(session) {
             case .connecte?:
                 return
             case .deconnecte?:
                 montrer()
-                throw Erreur.pasConnecte
+                throw RelaisErreur.pasConnecte
             default:
                 try await Task.sleep(for: .milliseconds(400))
             }
@@ -170,7 +170,7 @@ extension RelaisPage {
             defer { echo.desarmer() }
             arrete = try await cliquerQuandDisponible(.stop, selecteurs.stop, pendant: 15)
         }
-        guard arrete else { throw Erreur.introuvable(.stop) }
+        guard arrete else { throw RelaisErreur.introuvable(.stop) }
 
         // La zone revient, puis son texte cesse de bouger (cf.
         // `RelaisVeille.Stabilisation`). Avant l'envoi, seul un échec que la
@@ -190,7 +190,7 @@ extension RelaisPage {
             // Sauf si la page dit pourquoi : un refus — un quota atteint, par
             // exemple — rend lui aussi la zone vide, et « avez-vous parlé ? »
             // ferait chercher la panne au micro.
-            if let message = await alerteNouvelle() { throw Erreur.refusParChatGPT(message) }
+            if let message = await alerteNouvelle() { throw RelaisErreur.refusParChatGPT(message) }
             Log.info("relais : la zone est revenue vide — rien n'a été dicté")
             return ""
         }
@@ -223,8 +223,8 @@ extension RelaisPage {
             else { continue }
             if let valeur = try await juger(vu) { return valeur }
             guard alertes else { continue }
-            if let message = veille.refus(vu) { throw Erreur.refusParChatGPT(message) }
-            if sessionMontreeFermee(vu) { throw Erreur.pasConnecte }
+            if let message = veille.refus(vu) { throw RelaisErreur.refusParChatGPT(message) }
+            if sessionMontreeFermee(vu) { throw RelaisErreur.pasConnecte }
         }
     }
 
@@ -334,7 +334,7 @@ extension RelaisPage {
     private func encadrer(_ encadrement: (avant: String, apres: String)) async throws {
         guard try await encadrer(sel: selecteurs.composeur, avant: encadrement.avant,
                                  apres: encadrement.apres)
-        else { throw Erreur.introuvable(.composeur) }
+        else { throw RelaisErreur.introuvable(.composeur) }
         let empreinte = RelaisVeille.empreinte(encadrement.avant)
         guard !empreinte.isEmpty else { return }
         // Délai de geste : ce qu'on vient d'écrire se relit aussitôt, ou n'a
@@ -347,7 +347,7 @@ extension RelaisPage {
             if let texte = try? await lire(sel: selecteurs.composeur), texte.contains(empreinte) { return }
         }
         Log.error("relais : la consigne n'a pas tenu dans la zone de saisie")
-        throw Erreur.consigneNonPosee
+        throw RelaisErreur.consigneNonPosee
     }
 
     /// Clique l'envoi, en posant d'abord la marque : seule une alerte ou une
@@ -363,7 +363,7 @@ extension RelaisPage {
         // Délai de geste : le bouton d'envoi existe dès que la zone est
         // remplie ; dix secondes sans lui, et il est introuvable.
         guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, pendant: 10) else {
-            throw Erreur.introuvable(.envoi)
+            throw RelaisErreur.introuvable(.envoi)
         }
         try await verifierLeDepart(signe: signe)
     }
@@ -391,9 +391,9 @@ extension RelaisPage {
         }
         try Task.checkCancellation()
         // Une alerte apparue depuis la marque dit pourquoi, mieux que nous.
-        if let message = await alerteNouvelle() { throw Erreur.refusParChatGPT(message) }
+        if let message = await alerteNouvelle() { throw RelaisErreur.refusParChatGPT(message) }
         Log.error("relais : le clic d'envoi est resté sans effet — message toujours dans la zone")
-        throw Erreur.envoiSansEffet
+        throw RelaisErreur.envoiSansEffet
     }
 
     /// Attend que la page rechargée soit prête, zone de saisie comprise — au
@@ -460,7 +460,7 @@ extension RelaisPage {
     ///   prouver.
     @discardableResult
     func faireLireLaReponse(attente: RelaisAttente,
-                            dejaFinie: Bool = false) async -> Erreur? {
+                            dejaFinie: Bool = false) async -> RelaisErreur? {
         guard selecteurs.saitLire else { return nil }
         attente.entrer(.reponse)
         // Délai de geste : la réponse vient d'être copiée, finie ; il ne reste
@@ -618,7 +618,7 @@ extension RelaisPage {
             let texte = presse.string(forType: .string) ?? ""
             sauvegarde.rendre(presse)
             try Task.checkCancellation()
-            guard !texte.isEmpty else { throw Erreur.pasDeReponse }
+            guard !texte.isEmpty else { throw RelaisErreur.pasDeReponse }
             // Garde-fou : ce qu'on vient de copier ne doit pas être ce qu'on
             // vient d'envoyer. Le délimiteur de la consigne ne figure jamais
             // dans une réponse, et sa présence signe un bouton « copier » pris
@@ -627,12 +627,12 @@ extension RelaisPage {
             // qui s'écrivait dans l'éditeur.
             if !empreinteEnvoyee.isEmpty, texte.contains(empreinteEnvoyee) {
                 Log.error("relais : copie de la demande au lieu de la réponse")
-                throw Erreur.pasDeReponse
+                throw RelaisErreur.pasDeReponse
             }
             return texte
         }
         try Task.checkCancellation()
-        throw Erreur.pasDeReponse
+        throw RelaisErreur.pasDeReponse
     }
 
     /// Attend que la réponse apparaisse, puis cesse de grandir — sans fin.

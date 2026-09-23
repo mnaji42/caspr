@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import CasprCore
 
 extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
     /// Sans cette réponse, `getUserMedia` est refusé en silence dans une
@@ -124,7 +125,7 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
         // Un appel en suspens sur le processus mort peut ne jamais revenir,
         // et plus aucun délai ne le rattrape : rendu ici, l'attente qui le
         // porte reprend la main et lit la mort au tour suivant.
-        rendreLesAppelsEnSuspens(Erreur.pageInterrompue)
+        rendreLesAppelsEnSuspens(RelaisErreur.pageInterrompue)
         let recidive = derniereMort.map { Date.now.timeIntervalSince($0) < 300 } ?? false
         derniereMort = .now
         if recidive {

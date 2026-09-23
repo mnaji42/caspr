@@ -319,7 +319,7 @@ final class RelaisPage: NSObject {
 
     /// Lève `pageInterrompue` si la page que la dictée attend n'existe plus.
     func verifierLaPage() throws {
-        guard !morteDepuisLeDepart else { throw Erreur.pageInterrompue }
+        guard !morteDepuisLeDepart else { throw RelaisErreur.pageInterrompue }
     }
 
     /// La session que montre ce relevé (cf. `RelaisVeille.session`), dite à
@@ -345,7 +345,7 @@ final class RelaisPage: NSObject {
     /// Les appels en suspens sont rendus : sur une vue détruite, ils ne
     /// reviendraient jamais (mesuré), et l'attente qui les porte non plus.
     func detruire() {
-        rendreLesAppelsEnSuspens(Erreur.pageInterrompue)
+        rendreLesAppelsEnSuspens(RelaisErreur.pageInterrompue)
         // Le contrôleur retient son gestionnaire, et la page avec lui ; les
         // scripts retirés, la page vide qui suit ne les reçoit pas.
         echo.desarmer()

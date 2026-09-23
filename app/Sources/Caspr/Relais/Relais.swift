@@ -266,7 +266,7 @@ final class Relais: ObservableObject {
     /// d'elle, rien ne la reconstruit.
     private func pageActive() throws -> RelaisPage {
         if let page { return page }
-        guard pageVoulue else { throw RelaisPage.Erreur.relaisEteint }
+        guard pageVoulue else { throw RelaisErreur.relaisEteint }
         let neuve = RelaisPage()
         neuve.surFermeture = { [weak self] in self?.fenetreFermee() }
         neuve.surMort = { [weak self] in self?.surPageInterrompue?() }
@@ -850,7 +850,7 @@ final class Relais: ObservableObject {
                 if Task.isCancelled { throw CancellationError() }
                 Log.error("relais : \(module.identifiant) n'a pas pu envoyer "
                           + "(\(error.localizedDescription))")
-                avertissement = (error as? RelaisPage.Erreur)?.raisonCourte
+                avertissement = (error as? RelaisErreur)?.raisonCourte
                     ?? "\(module.nom) n'a pas pu envoyer"
                 return ""
             }
@@ -922,9 +922,9 @@ final class Relais: ObservableObject {
             // relance, et le même refus revient. Une session fermée aussi :
             // « n'a pas abouti » ne dit pas qu'il faut se reconnecter. Un
             // envoi sans effet non plus : le message attend dans la page.
-            switch error as? RelaisPage.Erreur {
+            switch error as? RelaisErreur {
             case .refusParChatGPT?, .pasConnecte?, .envoiSansEffet?:
-                avertissement = (error as? RelaisPage.Erreur)?.raisonCourte
+                avertissement = (error as? RelaisErreur)?.raisonCourte
             default:
                 avertissement = "\(module.nom) n'a pas abouti"
             }
@@ -1041,7 +1041,7 @@ final class Relais: ObservableObject {
     /// frappes suivantes partaient dans ChatGPT au lieu de l'éditeur.
     func rangerApresUnDemarrageManque(_ erreur: Error) {
         guard let page else { return }
-        if case .pasConnecte? = erreur as? RelaisPage.Erreur { return }
+        if case .pasConnecte? = erreur as? RelaisErreur { return }
         if enDiscussion, page.estVisible { return }
         ranger(page)
     }

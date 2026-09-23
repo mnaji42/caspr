@@ -69,6 +69,12 @@ struct AppleEngineCard: View, ValidatingComponent {
             // quelqu'un avec une phrase qu'on ne sait pas vraie.
             switch SpeechAssets.shared.state(of: language) {
             case .missing, .failed:
+                // Lus pour que qui affiche ce blocage — le pied de l'accueil —
+                // soit prévenu quand ils changent : accorder la Dictée en
+                // attendant le modèle (cf. `legacyFallback`) le lève sans que
+                // rien d'autre ait bougé.
+                _ = PermissionsMonitor.shared.speechGranted
+                _ = PermissionsMonitor.shared.dictationDisabled
                 return .missingLanguageModels([language])
             case .ready, .unknown, .checking, .installing, .unsupported:
                 return nil
@@ -150,6 +156,49 @@ struct AppleEngineCard: View, ValidatingComponent {
             models
         case .apple:
             models
+            legacyFallback
+        }
+    }
+
+    /// La Dictée, offerte quand le modèle de la langue principale ne vient
+    /// pas.
+    ///
+    /// ## Le cercle qu'elle ouvre
+    ///
+    /// La Dictée n'est retenue que si elle peut écrire sans rien demander —
+    /// droit de reconnaissance vocale accordé (cf. `EngineSafetyManager`) —,
+    /// et ce droit ne se demandait que sous la Dictée retenue. Sur un Mac neuf
+    /// dont le modèle ne se télécharge pas — hors ligne, actifs bloqués par une
+    /// gestion MDM, la machine virtuelle de macOS 26 —, Apple Intelligence
+    /// restait donc élue, le modèle manquait pour toujours, l'accueil gardait
+    /// « Continuer » grisé, et rien ne menait à la Dictée qui, elle, aurait
+    /// écrit. Le sélecteur de version, parti, en était la seule sortie.
+    ///
+    /// Ce n'est pas un choix de version qui revient : accorder le droit rend
+    /// la Dictée prête, et le choix automatique bascule tout seul. Le modèle
+    /// arrivé, Apple Intelligence reprend la main de la même façon.
+    ///
+    /// Seulement quand le modèle **manque** ou a échoué : pendant qu'il se
+    /// télécharge ou qu'on vérifie, rien ne dit qu'il ne viendra pas.
+    @ViewBuilder
+    private var legacyFallback: some View {
+        // Le droit et l'interrupteur sont lus au moniteur, observé, et non
+        // seulement par le choix automatique, qui ne l'est pas : c'est ce qui
+        // redessine la carte — sur la Dictée — à l'instant où on les accorde.
+        if !(monitor.speechGranted && !monitor.dictationDisabled),
+           EngineChoice.apple.isAvailable(for: prefs.primaryLanguage),
+           EngineChoice.appleLegacy.isAvailable(for: prefs.primaryLanguage) {
+            switch assets.state(of: prefs.primaryLanguage) {
+            case .missing, .failed:
+                Note("Pas de réseau, ou un téléchargement bloqué ? En attendant "
+                     + "le modèle, la **Dictée** de macOS peut écrire : moins "
+                     + "fidèle, elle perd des mots. Caspr repasse à Apple "
+                     + "Intelligence dès que le modèle est là.")
+                SystemDictationRow()
+                SpeechAccessRow(optional: true)
+            case .unknown, .checking, .installing, .ready, .unsupported:
+                EmptyView()
+            }
         }
     }
 

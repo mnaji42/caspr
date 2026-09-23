@@ -22,6 +22,10 @@ struct SpeechAccessRow: View {
     /// Explique à quoi sert le droit. Vrai à l'accueil ; faux dans les
     /// Réglages, où l'on vient réparer, pas lire un exposé.
     var explains = false
+    /// Proposée, pas exigée : sous le modèle d'Apple Intelligence qui ne vient
+    /// pas, où la Dictée n'est qu'une issue (cf. `AppleEngineCard`). Dire
+    /// « requis » là ferait croire qu'on ne peut rien sans elle.
+    var optional = false
 
     @State private var monitor = PermissionsMonitor.shared
 
@@ -43,7 +47,8 @@ struct SpeechAccessRow: View {
                                           lineWidth: 1.5)
                             .frame(width: 18, height: 18)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Reconnaissance Vocale Apple (Requis)")
+                            Text(optional ? "Reconnaissance Vocale Apple"
+                                          : "Reconnaissance Vocale Apple (Requis)")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.white)
                             Text("Exigée par macOS pour permettre à Apple "

@@ -463,7 +463,7 @@ final class Relais: ObservableObject {
         if page.rechargementRetenu { page.charger() }
         if page.chargementEnCours, await page.attendreComposeurPret(secondes: 30) { return }
         guard !Task.isCancelled else { return }
-        let conversation = await page.tientUneConversation()
+        let conversation = await page.auRepos()?.conversation
         guard !Task.isCancelled else { return }
         // En discussion, le fil ouvert est la page prête — tant qu'elle
         // répond. Figée, le fil est perdu de toute façon, et la garder sous
@@ -485,7 +485,7 @@ final class Relais: ObservableObject {
             // par une page devenue muette entre-temps, il la laissait figée
             // devant l'appui suivant, sans reconstruction.
             guard await !page.viderComposeur(), !Task.isCancelled,
-                  await page.tientUneConversation() == nil, !Task.isCancelled else { return }
+                  await page.auRepos() == nil, !Task.isCancelled else { return }
             await reconstruireLaPage()
         case nil:
             guard !Task.isCancelled else { return }
@@ -1572,7 +1572,7 @@ final class Relais: ObservableObject {
         let sel = RelaisSelecteurs.charger()
         Task {
             let connexion = await page.connexion(secondes: 1)
-            let ecoute = await page.estEnEnregistrement()
+            let ecoute = await page.auRepos()?.enregistrement == true
             let micro = page.microOuvert
             func ligne(_ nom: String, _ valeur: String) -> String {
                 valeur.isEmpty ? "\(nom) : (non calibré — heuristique)" : "\(nom) : \(valeur)"

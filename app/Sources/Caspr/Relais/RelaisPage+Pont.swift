@@ -210,7 +210,12 @@ extension RelaisPage {
 
     /// Pose la marque : ce qu'un relevé comptera ensuite comme nouveau —
     /// échecs affichés et réponses de ChatGPT — est ce qui apparaît après.
-    func marquer() async throws { let _: Rendu = try await pont(.marquer) }
+    /// Effacée d'abord : une marque manquée ne laisse pas en place celle de
+    /// la dictée d'avant, qui ferait passer sa réponse pour la nouvelle.
+    func marquer() async throws {
+        marque = nil
+        marque = try await pont(.marquer)
+    }
 
     /// Ce que la page dit d'elle-même, en un aller-retour — par les repères du
     /// calibrage, sauf ceux qu'on donne (vides : le filet).
@@ -218,8 +223,9 @@ extension RelaisPage {
                     reperes: RelaisSelecteurs? = nil) async throws -> RelaisInstantane {
         // Les repères sous leurs noms de toujours (`micro`, `copierParent`…).
         let r = try JSONSerialization.jsonObject(with: JSONEncoder().encode(reperes ?? selecteurs))
+        let m = try marque.map { try JSONSerialization.jsonObject(with: JSONEncoder().encode($0)) }
         return try await pont(.instantane, r, ["texte": demande.contains(.texte),
                                               "reponse": demande.contains(.reponse),
-                                              "alertes": demande.contains(.alertes)])
+                                              "alertes": demande.contains(.alertes)], m ?? NSNull())
     }
 }

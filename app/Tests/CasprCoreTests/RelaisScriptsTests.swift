@@ -189,6 +189,38 @@ struct RelaisScriptsTests {
         #expect(ctx.exception == nil)
     }
 
+    /// Sans marque — pas encore posée, ou manquée —, on ne sait pas ce qui
+    /// est nouveau : une réponse d'avant prise pour la nouvelle serait lue à
+    /// haute voix sans rien dire.
+    @Test("Sans marque, un relevé tait la réponse et l'échec")
+    func sansMarque() {
+        let ctx = Self.pontSurFauxDocument()
+        let demande = "{}, { reponse: true, alertes: true }"
+        #expect(ctx.evaluateScript("(r => !('reponse' in r) && !('echec' in r))(window.__relais.instantane(\(demande), null))")!.toBool())
+        #expect(ctx.evaluateScript("(r => 'reponse' in r && 'echec' in r)(window.__relais.instantane(\(demande), window.__relais.marquer()))")!.toBool())
+        #expect(ctx.exception == nil)
+    }
+
+    /// La transcription revient dans la zone de saisie avant d'être un
+    /// message : « tu peux réessayer ? », dicté, y passait pour un refus.
+    @Test("Un échec écrit ne se cherche ni dans un message, ni dans la zone de saisie")
+    func echecHorsDeLaZone() {
+        let ctx = JSContext()!
+        ctx.evaluateScript("""
+            var window = this, document = {}, location = { hostname: 'chatgpt.com' };
+            var NodeFilter = { FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3 };
+            var el = (tagName, message, isContentEditable) =>
+              ({ tagName, isContentEditable, matches: () => message });
+            """)
+        ctx.evaluateScript(RelaisScripts.pont)
+        let tri = { (el: String) in ctx.evaluateScript("window.__relais.pur.tri(new Set())(\(el))")!.toInt32() }
+        #expect(tri("el('P', false, false)") == 1)
+        for el in ["el('P', true, false)", "el('DIV', false, true)", "el('P', false, true)",
+                   "el('TEXTAREA', false, false)", "el('INPUT', false, false)"] {
+            #expect(tri(el) == 2, "\(el)")
+        }
+    }
+
     /// Caspr clique la page pour la piloter : un de ses clics retenu par une
     /// calibration en cours y apprendrait le mauvais bouton.
     @Test("La calibration ne retient qu'un clic de la main, et renonce sur demande")

@@ -440,7 +440,17 @@ public enum RelaisScripts {
       // autour du message, où elle pose ses propres avis d'échec. Un échec
       // écrit ailleurs n'est pas deviné : l'attente continue, et la touche de
       // dictée en sort.
+      //
+      // Ni la zone de saisie, pour la même raison : la transcription y revient
+      // avant d'être un message. « Je n'ai pas compris, tu peux réessayer ? »,
+      // dicté, y était lu comme un refus de ChatGPT, et la dictée échouait
+      // sur les propres mots de l'utilisateur.
       const MESSAGE = '[data-message-author-role]';
+      const tri = (porteurs) => (el) =>
+        el.matches(MESSAGE) || el.isContentEditable || champ(el)
+          ? NodeFilter.FILTER_REJECT
+          : !porteurs.has(el) && /^(DIV|SPAN|P)$/.test(el.tagName) ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_SKIP;
       const echecsEcrits = () => {
         const textes = [];
         for (const zone of [tous('article').pop(), tous('main form').pop()]) {
@@ -449,10 +459,7 @@ public enum RelaisScripts {
           for (const m of tous(MESSAGE, zone)) {
             for (let n = m.parentElement; n && n !== zone; n = n.parentElement) porteurs.add(n);
           }
-          const parcours = document.createTreeWalker(zone, NodeFilter.SHOW_ELEMENT, (el) =>
-            el.matches(MESSAGE) ? NodeFilter.FILTER_REJECT
-            : !porteurs.has(el) && /^(DIV|SPAN|P)$/.test(el.tagName) ? NodeFilter.FILTER_ACCEPT
-            : NodeFilter.FILTER_SKIP);
+          const parcours = document.createTreeWalker(zone, NodeFilter.SHOW_ELEMENT, tri(porteurs));
           for (let el = parcours.nextNode(); el; el = parcours.nextNode()) {
             if (!estEchec(el.textContent)) continue;
             const t = (el.innerText || '').trim();
@@ -462,19 +469,14 @@ public enum RelaisScripts {
         return textes;
       };
 
-      // Ce que la page montrait avant qu'on lui demande quelque chose (cf.
-      // `marquer`) : ses échecs affichés, et le nombre de réponses de
-      // ChatGPT. Gardé ici, dans le monde du pont, que la page ne voit pas.
-      let marque = { echecs: new Set(), reponses: 0 };
-
-      // Le premier échec apparu depuis la marque. Un échec **reconnu** — un
-      // motif — compte toujours. Une alerte nouvelle qu'aucun motif ne
-      // connaît — un plafond atteint à l'instant, formulé dans n'importe
-      // quelle langue — est rendue aussi, et c'est Swift qui juge si elle
-      // compte (cf. `RelaisVeille.refus`). Une bannière déjà là à la marque
-      // reste muette.
-      const echecNouveau = () => {
-        const nouveau = (t) => !marque.echecs.has(t);
+      // Le premier échec apparu depuis la marque (cf. `marquer`). Un échec
+      // **reconnu** — un motif — compte toujours. Une alerte nouvelle
+      // qu'aucun motif ne connaît — un plafond atteint à l'instant, formulé
+      // dans n'importe quelle langue — est rendue aussi, et c'est Swift qui
+      // juge si elle compte (cf. `RelaisVeille.refus`). Une bannière déjà là
+      // à la marque reste muette.
+      const echecNouveau = (marque) => {
+        const deja = new Set(marque.echecs || []), nouveau = (t) => !deja.has(t);
         const alertes = alertesVisibles().filter(nouveau);
         const reconnu = alertes.find(estEchec) || echecsEcrits().find(nouveau);
         if (reconnu) return { texte: reconnu, reconnue: true };
@@ -490,8 +492,8 @@ public enum RelaisScripts {
       // mêmes libellés — « stop », « arrêt » —, et le prendre pour une
       // génération faisait croire que ChatGPT répondait pendant qu'on lui
       // parlait.
-      const GENERATION = ['[data-testid="stop-button"]', 'button[aria-label*="stop" i]',
-        'button[aria-label*="arrêt" i]', 'button[aria-label*="arret" i]', 'button[aria-label*="termin" i]'];
+      // Les libellés de l'arrêt, sans son `data-testid` de dictée.
+      const GENERATION = ['[data-testid="stop-button"]', ...HEURISTIQUES.stop.slice(1)];
       const generationEnCours = (zone, arretDictee) => {
         const formulaire = (zone && zone.closest('form')) || tous('main form').pop() || document;
         return GENERATION.some((s) => tous(s, formulaire).some((el) => el !== arretDictee
@@ -764,18 +766,22 @@ public enum RelaisScripts {
           return { ok: true, texte: net(derniere.innerText) };
         },
 
-        // Pose la marque : ce que la page montre avant qu'on lui demande
-        // quelque chose — ses échecs affichés, et combien de réponses de
-        // ChatGPT elle porte. Avant le clic du micro, puis avant l'envoi.
+        // La marque : ce que la page montre avant qu'on lui demande quelque
+        // chose — ses échecs affichés, et combien de réponses de ChatGPT elle
+        // porte. Avant le clic du micro, puis avant l'envoi.
         //
         // Une bannière déjà là n'est pas une réponse à notre demande — celle
         // d'un quota « bientôt atteint » reste affichée des jours. Et dans une
         // discussion, le fil porte déjà une réponse, finie et immobile, qui
         // passerait sinon pour celle qu'on attend.
+        //
+        // Rendue à Swift, qui la repasse à chaque `instantane`, et non gardée
+        // ici : le pont renaît vierge à chaque document. Un « Recharger »
+        // pendant l'attente l'effaçait, et la réponse d'avant, relue comme
+        // nouvelle, était lue à haute voix à la place de celle qu'on
+        // attendait.
         marquer() {
-          marque = { echecs: new Set([...alertesVisibles(), ...echecsEcrits()]),
-                     reponses: tous(REPONSES).length };
-          return { ok: true };
+          return { echecs: [...alertesVisibles(), ...echecsEcrits()], reponses: tous(REPONSES).length };
         },
 
         // Ce que la page dit d'elle-même, en **un** aller-retour : chaque
@@ -787,13 +793,16 @@ public enum RelaisScripts {
         // (`demande.texte`, `.reponse`, `.alertes`) : le texte de la zone, où
         // en est la réponse depuis la marque, et le premier échec apparu
         // depuis elle. `reperes` : les repères à suivre, vides pour le filet.
+        // `marque` : ce que rendait `marquer` ; sans elle, ni la réponse ni
+        // l'échec ne sont relevés — on ne sait pas ce qui est nouveau, et une
+        // réponse d'avant prise pour la nouvelle serait rendue sans rien dire.
         //
         // Le point qui avait été manqué : pendant la dictée, ChatGPT retire la
         // zone de saisie du DOM et la remplace par la barre d'onde. Se fier à
         // sa seule présence faisait conclure « déconnecté » exactement pendant
         // qu'on dictait : le micro et l'arrêt comptent aussi (cf.
         // `RelaisVeille.session`).
-        instantane(reperes, demande) {
+        instantane(reperes, demande, marque) {
           const r = reperes || {}, d = demande || {};
           // Par le repère appris, et non par « une zone éditable
           // quelconque » : une conversation qui contient un document produit
@@ -811,7 +820,7 @@ public enum RelaisScripts {
             enregistrement: !composeur && !!arret,
           };
           if (d.texte) etat.texte = zone ? texteDe(zone) : null;
-          if (d.reponse) {
+          if (d.reponse && marque) {
             const reponses = tous(REPONSES);
             const nouvelles = Math.max(0, reponses.length - marque.reponses);
             const derniere = nouvelles ? reponses[reponses.length - 1] : null;
@@ -828,13 +837,13 @@ public enum RelaisScripts {
                 && !!(derniere.compareDocumentPosition(copier) & Node.DOCUMENT_POSITION_FOLLOWING),
             };
           }
-          if (d.alertes) etat.echec = echecNouveau();
+          if (d.alertes && marque) etat.echec = echecNouveau(marque);
           return etat;
         },
 
         // Les règles qui ne regardent pas la page, pour que les tests les
         // atteignent sans elle.
-        pur: { idEngendre, estConversation, estAuthentification, estEchec, estInvite },
+        pur: { idEngendre, estConversation, estAuthentification, estEchec, estInvite, tri },
 
         // Réduire la page à sa seule pastille d'enregistrement.
         //

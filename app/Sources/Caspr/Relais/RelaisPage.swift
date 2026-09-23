@@ -130,6 +130,9 @@ final class RelaisPage: NSObject {
     /// L'appui a demandé de ne plus attendre la lecture à haute voix (cf.
     /// `Relais.cesserDAttendreLaLecture`). Remis à zéro à chaque dictée.
     var lectureInterrompue = false
+    /// La marque de la dictée en cours (cf. `marquer`) ; `nil` tant qu'elle
+    /// n'est pas posée, et chaque relevé tait alors réponse et échec.
+    var marque: RelaisMarque?
     var selecteurs = RelaisSelecteurs.charger()
     /// Les appels au pont qui attendent leur réponse, pour que `detruire` les
     /// rende : sur une vue détruite, aucun ne reviendrait jamais.

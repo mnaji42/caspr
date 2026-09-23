@@ -36,4 +36,16 @@ struct RelaisInstantaneTests {
         #expect(vu.conversation && vu.micro && vu.stop && vu.enregistrement)
         #expect(vu.reponse == .init(nouvelles: 1, enCours: true, longueur: 42))
     }
+
+    /// Une marque incomplète compterait pour nouveau ce qui ne l'est pas :
+    /// mieux vaut n'en avoir aucune, et que le relevé taise réponse et échec.
+    @Test("La marque se relit telle que `marquer` la rend, et seulement entière")
+    func marque() throws {
+        let m = try JSONDecoder().decode(RelaisMarque.self,
+                                         from: Data(#"{"reponses":3,"echecs":["Limite bientôt atteinte"]}"#.utf8))
+        #expect(m == RelaisMarque(reponses: 3, echecs: ["Limite bientôt atteinte"]))
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(RelaisMarque.self, from: Data(#"{"echecs":[]}"#.utf8))
+        }
+    }
 }

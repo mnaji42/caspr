@@ -17,6 +17,24 @@ public struct RelaisDemande: OptionSet, Sendable {
     public static let alertes = RelaisDemande(rawValue: 4)
 }
 
+/// Ce que la page montrait avant qu'on lui demande quelque chose (`marquer`
+/// du pont) : ses échecs affichés, et combien de réponses de ChatGPT.
+///
+/// Gardée par Caspr et repassée à chaque relevé, et non par le pont, qui
+/// renaît vierge à chaque document : un « Recharger » pendant l'attente
+/// l'effaçait, et la réponse d'avant passait pour la nouvelle. Décodée
+/// strictement, à l'inverse du relevé : une marque incomplète compterait
+/// pour nouveau ce qui ne l'est pas ; mieux vaut n'en avoir aucune.
+public struct RelaisMarque: Codable, Equatable, Sendable {
+    public var reponses: Int
+    public var echecs: [String]
+
+    public init(reponses: Int, echecs: [String]) {
+        self.reponses = reponses
+        self.echecs = echecs
+    }
+}
+
 /// Ce que la page dit d'elle-même en un seul aller-retour (`instantane` du
 /// pont), relevé par rapport à la marque (`marquer`).
 ///
@@ -37,9 +55,10 @@ public struct RelaisInstantane: Equatable, Sendable {
     public var enregistrement = false
     /// Le texte de la zone ; `nil` quand elle est introuvable, ou pas demandé.
     public var texte: String?
+    /// `nil` quand elle n'a pas été demandée, ou sans marque.
     public var reponse: Reponse?
     /// Le premier échec apparu depuis la marque ; `nil` aussi quand les
-    /// alertes n'ont pas été demandées.
+    /// alertes n'ont pas été demandées, ou sans marque.
     public var echec: Echec?
 
     public struct Reponse: Equatable, Sendable {

@@ -19,33 +19,21 @@ import CasprCore
 // Au repos, un silence peut se constater : c'est `sonder`, qui ne sert
 // jamais ici qu'à préparer ou arrêter la page.
 extension RelaisPage {
-    /// La page est-elle en train d'écouter ? Au repos : l'arrêt après un
-    /// abandon, le diagnostic.
+    /// Ce que la page dit d'elle-même, au repos : l'arrêt après un abandon,
+    /// la préparation de la dictée suivante, le diagnostic.
     ///
-    /// C'est la page qui fait foi, pas un drapeau tenu de notre côté. Un
-    /// drapeau local se désynchronise à la première erreur — et il l'a fait :
-    /// après un échec, l'application se croyait au repos pendant que ChatGPT
-    /// enregistrait toujours, si bien que le geste suivant relançait une
-    /// dictée par-dessus au lieu de l'arrêter.
-    func estEnEnregistrement() async -> Bool {
-        await etatAuRepos()?.enregistrement == true
-    }
-
-    /// La page porte-t-elle une conversation ?
-    ///
-    /// Posée à la page, et non déduite du module qui vient de tourner : une
-    /// réorganisation qui échoue à mi-chemin a tout de même envoyé son message,
-    /// et c'est la page qui le sait.
+    /// C'est la page qui fait foi, pas un drapeau tenu de notre côté. Qu'elle
+    /// écoute : un drapeau local se désynchronisait à la première erreur, et
+    /// le geste suivant relançait une dictée par-dessus au lieu de l'arrêter.
+    /// Qu'elle porte une conversation : une réorganisation qui échoue à
+    /// mi-chemin a tout de même envoyé son message, et c'est la page qui le
+    /// sait.
     ///
     /// `nil` quand elle ne répond pas, quelle qu'en soit la raison — page
     /// muette, pont absent : ni oui ni non, et la seule préparation qui vaille
     /// alors est de la reconstruire. Une page en cours de chargement n'est pas
     /// interrogée (cf. `Relais.preparer`).
-    func tientUneConversation() async -> Bool? {
-        await etatAuRepos()?.conversation
-    }
-
-    private func etatAuRepos() async -> RelaisInstantane? {
+    func auRepos() async -> RelaisInstantane? {
         await sonder { try await self.instantane() }
     }
 
@@ -369,7 +357,7 @@ extension RelaisPage {
     /// de la consigne ; vide, la zone entière.
     private func cliquerLEnvoi(empreinte: String) async throws {
         try? await marquer()
-        let marque = empreinte.isEmpty
+        let signe = empreinte.isEmpty
             ? (try? await lire(sel: selecteurs.composeur)) ?? ""
             : empreinte
         // Délai de geste : le bouton d'envoi existe dès que la zone est
@@ -377,7 +365,7 @@ extension RelaisPage {
         guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, pendant: 10) else {
             throw Erreur.introuvable(.envoi)
         }
-        try await verifierLeDepart(marque: marque)
+        try await verifierLeDepart(signe: signe)
     }
 
     /// Le message a-t-il quitté la zone, ou ChatGPT répond-il déjà ?
@@ -389,9 +377,9 @@ extension RelaisPage {
     /// c'est ici qu'il se prouve.
     ///
     /// Délai de geste : ChatGPT vide la zone à l'instant du clic, sans attendre
-    /// le réseau ; dix secondes sans que la marque la quitte ni qu'une réponse
+    /// le réseau ; dix secondes sans que `signe` la quitte ni qu'une réponse
     /// commence, et le clic n'a rien envoyé. Une zone absente ne prouve rien.
-    private func verifierLeDepart(marque: String) async throws {
+    private func verifierLeDepart(signe: String) async throws {
         let limite = Date.now.addingTimeInterval(10)
         while Date.now < limite {
             try Task.checkCancellation()
@@ -399,7 +387,7 @@ extension RelaisPage {
             try? await Task.sleep(for: .milliseconds(250))
             guard let vu = try? await instantane([.texte, .reponse]) else { continue }
             if let r = vu.reponse, r.nouvelles > 0 || r.enCours { return }
-            if let zone = vu.texte, !marque.isEmpty, !zone.contains(marque) { return }
+            if let zone = vu.texte, !signe.isEmpty, !zone.contains(signe) { return }
         }
         try Task.checkCancellation()
         // Une alerte apparue depuis la marque dit pourquoi, mieux que nous.
@@ -693,7 +681,7 @@ extension RelaisPage {
         let fin = Date.now.addingTimeInterval(ecouteQuiDemarre ? 3 : 0)
         var ecoute = false
         while true {
-            let vu = await etatAuRepos()
+            let vu = await auRepos()
             guard vu != nil || microOuvert else { return }
             ecoute = vu?.enregistrement == true || microOuvert
             if ecoute || Date.now >= fin || Task.isCancelled { break }

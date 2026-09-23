@@ -282,11 +282,12 @@ final class VoieChatGPT {
             overlay.hide()
             // Le brut va à l'historique à côté du texte remanié, quand ils
             // diffèrent (cf. `TranscriptionHistory.Entry.brut`).
+            // Réussie, elle oublie le brut gardé plus haut, même si l'appui a
+            // repris le cycle pendant l'insertion (cf. `Livraison.ecrire`).
             try await livraison.livrer(texte, dictee, brut: brut)
             // Abandonné pendant l'insertion : le texte est écrit, et c'est
             // tout ce qui reste de ce cycle. L'état appartient au suivant.
             guard estEnCours() else { return .sansSuite }
-            livraison.oublierLeRecours()
             Log.info("transcrit en \(Log.ms(depuis: debut)) ms, \(texte.count) caractères")
             // La transformation a échoué et c'est le brut qui vient d'être
             // inséré : le dire, là où l'on regarde. Sans quoi un texte non

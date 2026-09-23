@@ -179,7 +179,6 @@ final class VoieApple {
             }
             overlay.hide()
             try await livraison.livrer(text, dictee)
-            livraison.oublierLeRecours()
             Log.info("transcrit en \(Log.ms(depuis: debut)) ms, \(text.count) caractères")
             return nil
         } catch {

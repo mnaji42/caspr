@@ -28,7 +28,7 @@ final class Livraison {
     // MARK: - Insérer
 
     /// Écrit le texte d'une dictée à sa destination, là où l'on parlait, puis
-    /// l'archive.
+    /// l'archive et oublie le recours (cf. `ecrire`).
     ///
     /// `brut` : la transcription de ChatGPT, quand un module l'a reprise —
     /// l'historique la garde à côté du texte inséré (cf.
@@ -73,6 +73,15 @@ final class Livraison {
         Log.info("insertion vers \(devant)")
         try await deliver(text, to: target)
         history.add(text, brut: brut)
+        // Le texte est écrit : l'audio, l'aperçu ou le brut gardés pour le
+        // reprendre n'ont plus d'objet. Oublié ici, et non par chaque
+        // appelant après coup : la voie ChatGPT le faisait après avoir vérifié
+        // que son cycle était encore en cours, et un appui pendant l'insertion
+        // — l'attente du collage avale l'abandon — laissait au menu le brut
+        // d'un texte déjà écrit, qu'un clic insérait une seconde fois. Le
+        // cycle d'après ne peut pas avoir gardé le sien entre-temps : il lui
+        // faut écouter, puis être transcrit.
+        oublierLeRecours()
     }
 
     /// Achemine le texte vers une destination.
@@ -310,7 +319,6 @@ final class Livraison {
         }
         try await ecrire(text, vers: Preferences.shared.effectiveTarget,
                          depuis: Self.applicationDevant())
-        oublierLeRecours()
     }
 
     /// Libère l'audio et l'aperçu conservés : une insertion a réussi, ou

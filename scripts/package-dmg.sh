@@ -51,7 +51,7 @@ rm -f "$DMG"
 echo "▸ création du .dmg"
 # Le nom du volume porte la version : c'est ce que l'utilisateur voit dans le
 # Finder quand l'image est montée, et le seul endroit où il peut vérifier ce
-# qu'il installe avant de le glisser dans /Applications.
+# qu'il installe avant de le lancer.
 hdiutil create -volname "$APP_NAME $VERSION" -srcfolder "$STAGE" \
     -ov -format UDZO "$DMG" >/dev/null
 

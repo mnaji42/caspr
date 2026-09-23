@@ -197,7 +197,7 @@ caspr/
 ├── scripts/
 │   ├── dev-cert.sh      local signing certificate, so TCC grants persist
 │   ├── install.sh       build → sign → /Applications/Caspr.app
-│   ├── package-dmg.sh   .dmg with the Applications shortcut
+│   ├── package-dmg.sh   .dmg containing the app alone
 │   └── reset-state.sh   back to a first launch, to test the welcome window
 └── website/         the landing page
 ```
@@ -222,8 +222,11 @@ caspr/
 
 1. Download **[Caspr.dmg](https://github.com/mnaji42/caspr/releases/latest/download/Caspr.dmg)**
    from the latest release.
-2. Open it and drag Caspr to Applications.
-3. Launch it. **macOS will refuse the first time** — see just below.
+2. Open it and double-click Caspr. **macOS will refuse the first time** — see
+   just below.
+3. Once allowed, Caspr offers to install itself in Applications: click
+   **Installer et ouvrir**. It copies itself there, ejects the disk image and
+   reopens from Applications.
 4. A welcome window walks through the choice of path, your languages, the
    microphone and Accessibility, and a first dictation. Choosing ChatGPT opens
    its sign-in page, then calibrates on its own.
@@ -272,7 +275,9 @@ Settings › Général › Version offers two ways to learn about a new version:
 Either way the request is a GET on GitHub's public API, sending nothing but an
 IP address. When a new version exists, Caspr shows its release notes and can
 download and install it, after checking that it carries the same signing
-certificate; otherwise, download the new DMG and drag it over the old app.
+certificate; otherwise, download the new DMG and, in the Finder, copy Caspr
+from it into Applications over the old app — launching it from the disk image
+would only offer to open the copy already installed.
 
 #### Coming from 0.14 or earlier
 

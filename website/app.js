@@ -112,10 +112,10 @@
     },
     {
       image: '02-dmg-ouvert-doubleclick.png',
-      title: t('Glissez Caspr dans Applications', 'Drag Caspr into Applications'),
+      title: t('Double-cliquez sur Caspr', 'Double-click Caspr'),
       text: t(
-        'La fenêtre du disque s\'ouvre. Faites glisser l\'icône de Caspr sur le dossier Applications, puis lancez l\'application.',
-        'The disk window opens. Drag the Caspr icon onto the Applications folder, then launch the app.'
+        'La fenêtre du disque s\'ouvre avec une seule icône. Double-cliquez sur Caspr.',
+        'The disk window opens with a single icon. Double-click Caspr.'
       )
     },
     {
@@ -152,10 +152,10 @@
     },
     {
       image: '07-Popup-souvre-installer-dans-application.png',
-      title: t('Confirmez l\'ouverture', 'Confirm opening'),
+      title: t('Installez Caspr', 'Install Caspr'),
       text: t(
-        'Une dernière fenêtre demande confirmation. Acceptez : cette autorisation ne sera plus redemandée pour cette version.',
-        'A final dialog asks for confirmation. Accept — this permission is not asked again for this version.'
+        'Caspr propose de s\'installer dans Applications. Cliquez sur <strong>Installer et ouvrir</strong> : il s\'y copie, éjecte l\'image et rouvre la bonne copie.',
+        'Caspr offers to install itself in Applications. Click <strong>Installer et ouvrir</strong>: it copies itself there, ejects the disk image and reopens the right copy.'
       )
     },
     {

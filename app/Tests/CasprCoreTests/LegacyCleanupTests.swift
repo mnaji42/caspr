@@ -16,10 +16,7 @@ struct LegacyCleanupTests {
     /// Un domaine de réglages jetable, pour ne jamais toucher ceux de la
     /// machine qui fait tourner les tests.
     private static func withDefaults(_ body: (UserDefaults) -> Void) {
-        let suite = "caspr.tests.migration.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-        body(defaults)
+        body(ReglagesEnMemoire())
     }
 
     /// Les réglages qu'aucune migration n'a le droit d'effacer — règle 10 du

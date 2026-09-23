@@ -11,10 +11,7 @@ import Testing
 struct VoieDeDicteeTests {
 
     private static func withDefaults(_ body: (UserDefaults) -> Void) {
-        let suite = "caspr.tests.voie.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-        body(defaults)
+        body(ReglagesEnMemoire())
     }
 
     /// Les valeurs brutes sont écrites sur le disque : en renommer une relit

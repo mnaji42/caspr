@@ -119,8 +119,16 @@ final class Livraison {
     /// l'accessibilité, que l'insertion exige déjà : `kAXFrontmostAttribute`
     /// est l'attribut que le système lui-même expose pour mettre une
     /// application devant, et il ne dépend pas de qui la demande.
+    ///
+    /// ## Abandonnable
+    ///
+    /// La touche de dictée abandonne une dictée ChatGPT jusqu'ici (cf.
+    /// `DictationController.abandonnerLeCycleRelais`). L'attente ne la voyait
+    /// pas : elle tournait à vide jusqu'à la seconde, puis mettait devant, par
+    /// l'accessibilité, une application où plus rien ne serait écrit. Elle
+    /// rend donc la main dès l'abandon, et `ecrire` le constate aussitôt.
     private func ramener(_ application: NSRunningApplication?) async {
-        guard let application, !application.isTerminated else { return }
+        guard let application, !application.isTerminated, !Task.isCancelled else { return }
         let workspace = NSWorkspace.shared
         func devant() -> Bool {
             workspace.frontmostApplication?.processIdentifier == application.processIdentifier
@@ -137,6 +145,7 @@ final class Livraison {
         let relance = ContinuousClock.now + .milliseconds(200)
         var parAccessibilite = false
         while ContinuousClock.now < echeance {
+            guard !Task.isCancelled else { return }
             if devant() {
                 Log.info("insertion : retour à \(nom), où l'on parlait"
                          + (parAccessibilite ? " (par l'accessibilité)" : ""))
@@ -152,7 +161,7 @@ final class Livraison {
                               + "l'accessibilité (\(resultat.rawValue))")
                 }
             }
-            try? await Task.sleep(for: .milliseconds(20))
+            do { try await Task.sleep(for: .milliseconds(20)) } catch { return }
         }
         Log.error("insertion : \(nom) n'a pas repris le premier plan en 1 s — "
                   + "texte inséré devant")

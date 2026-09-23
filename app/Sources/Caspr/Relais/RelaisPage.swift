@@ -266,68 +266,32 @@ final class RelaisPage: NSObject {
     // MARK: - État de la session
 
     /// Connecté ou non, vu depuis la page — **au repos** : l'étiquette de la
-    /// fenêtre, la calibration manuelle, le diagnostic. La dictée attend la
-    /// session à sa façon, sans borne (cf. `demarrer`).
+    /// fenêtre, la calibration, le diagnostic. La dictée attend la session à
+    /// sa façon, sans borne (cf. `demarrer`).
     ///
-    /// Le critère est la présence de la zone de saisie : elle n'existe que dans
-    /// l'application, jamais sur les écrans de connexion. Plus fiable qu'un
-    /// cookie, dont le nom est un détail d'implémentation d'OpenAI.
+    /// `.deconnecte` seulement quand la page l'a **dit** : un écran ou une
+    /// invite de connexion (cf. `RelaisVeille.session`). Une page qui ne dit
+    /// rien avant la borne est `.inconnu` — à recharger, pas à reconnecter.
+    /// Conclure « déconnecté » faute d'avoir vu la zone de texte a coûté
+    /// plusieurs faux « D'abord, se connecter » : chatgpt.com, chargé à froid
+    /// puis hydraté, dépasse souvent cinq secondes, et un calibrage faux — on
+    /// recalibre souvent pour cela — ne trouve plus la zone du tout.
     ///
-    /// On réinterroge pendant quelques secondes parce que ChatGPT est une
-    /// application monopage : au retour de `didFinish`, le composeur n'est pas
-    /// encore monté, et un relevé unique conclurait « déconnecté » à tort.
-    ///
-    /// `.inconnu` quand la page ne répond pas du tout : ce n'est pas une
-    /// session fermée, et le dire ferait chercher un mot de passe là où il
-    /// faut recharger.
-    func etatConnexion(patience: Int = 12) async -> Connexion {
-        var silences = 0
-        for essai in 0..<max(patience, 1) {
-            if Task.isCancelled { return .inconnu }
-            if let vu = await sonder({ try await self.instantane() }) {
-                if let connexion = session(vu) { return connexion }
-            } else if !chargementEnCours {
-                // Une page qui se charge exécute son bundle, à froid au
-                // premier lancement : un appel qui s'y perd n'est pas une page
-                // figée. Deux silences hors chargement en sont une.
-                silences += 1
-                if silences > 1 { return .inconnu }
-            }
-            if essai < patience - 1 { try? await Task.sleep(for: .milliseconds(400)) }
-        }
-        return .deconnecte
-    }
-
-    /// La session telle que la calibration automatique doit la juger :
-    /// `.deconnecte` seulement quand la page l'a **dit**.
-    ///
-    /// Deux différences avec `etatConnexion`, et chacune a coûté un faux
-    /// « D'abord, se connecter » :
-    ///
-    /// - **Les repères du filet, pas le calibrage.** Celui-ci est peut-être
-    ///   faux — c'est souvent pour cela qu'on recalibre —, et un calibrage qui
-    ///   ne trouve plus la zone de texte ni le micro faisait passer une session
-    ///   ouverte pour fermée : l'automate refusait alors de réparer justement
-    ///   ce qu'on lui demandait de réparer.
-    /// - **L'attente jusqu'à ce que la page se prononce.** Choisir ChatGPT
-    ///   construit la page et lance la calibration dans le même geste ;
-    ///   chatgpt.com, chargé à froid puis hydraté, dépasse souvent les cinq
-    ///   secondes d'`etatConnexion`, qui conclut alors « déconnecté » faute
-    ///   d'avoir vu la zone de texte. Ici, seul un signe de connexion
-    ///   (`authentification`) le fait conclure ; une page qui ne dit rien avant
-    ///   la borne est `.inconnu` — à recharger, pas à reconnecter.
-    func connexionObservee(secondes: Double) async -> Connexion {
+    /// On réinterroge jusqu'à la borne parce que ChatGPT est une application
+    /// monopage : au retour de `didFinish`, le composeur n'est pas encore
+    /// monté. `reperes` : le calibrage par défaut ; vides, le filet — celui
+    /// que suit la calibration, qui remplace peut-être un calibrage faux.
+    func connexion(secondes: Double = 5, reperes: RelaisSelecteurs? = nil) async -> Connexion {
         let limite = Date.now.addingTimeInterval(secondes)
-        while Date.now < limite {
-            if Task.isCancelled { return .inconnu }
+        while !Task.isCancelled {
             // Une zone de texte vue pendant la navigation est celle de la page
-            // qu'on quitte. Un silence, lui, ne conclut rien : la borne s'en
-            // charge.
+            // qu'on quitte. Un silence ne conclut rien : la borne s'en charge.
             if !chargementEnCours,
-               let vu = await sonder({ try await self.instantane(reperes: RelaisSelecteurs()) }),
+               let vu = await sonder({ try await self.instantane(reperes: reperes) }),
                let connexion = session(vu) {
                 return connexion
             }
+            guard Date.now < limite else { break }
             try? await Task.sleep(for: .milliseconds(400))
         }
         return .inconnu
@@ -335,7 +299,7 @@ final class RelaisPage: NSObject {
 
     func rafraichirEtiquette() async {
         etiquette?.stringValue = "vérification…"
-        switch await etatConnexion() {
+        switch await connexion() {
         case .connecte:
             etiquette?.stringValue = selecteurs.estCalibre
                 ? "Connecté et calibré — la touche de dictée écrit par ChatGPT."
@@ -343,7 +307,7 @@ final class RelaisPage: NSObject {
         case .deconnecte:
             etiquette?.stringValue = "Pas encore connecté."
         case .inconnu:
-            etiquette?.stringValue = "La page ne répond pas — rechargez-la."
+            etiquette?.stringValue = "La page ne dit pas si vous êtes connecté — rechargez-la."
         }
     }
 

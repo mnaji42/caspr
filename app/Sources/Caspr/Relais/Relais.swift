@@ -293,7 +293,7 @@ final class Relais: ObservableObject {
     /// page : ce que la voie ChatGPT exige pour dicter.
     ///
     /// Calibré implique connecté une fois — la calibration ne commence pas
-    /// sans session (cf. `attendreConnexion`). Reste la session perdue
+    /// sans session (cf. `obtenirLaSession`). Reste la session perdue
     /// depuis : elle compte dès que la page l'a montrée.
     var saitDicter: Bool { estCalibre && sessionVue != .deconnecte }
 
@@ -1189,46 +1189,7 @@ final class Relais: ObservableObject {
     /// Le parcours automatique, de la connexion au rapport. Rend vrai quand
     /// l'utilisateur choisit de finir à la main.
     private func menerLaCalibrationAutomatique(_ page: RelaisPage) async -> Bool {
-        // Trente secondes, comme chaque attente de la page dans ce parcours :
-        // choisir ChatGPT vient de la construire, et elle se charge encore.
-        // Et selon le filet, pas selon le calibrage qu'on vient peut-être
-        // remplacer parce qu'il est faux (cf. `connexionObservee`).
-        switch await page.connexionObservee(secondes: 30) {
-        case .connecte:
-            break
-        case .inconnu:
-            guard !Task.isCancelled else { return false }
-            // Ni connectée ni déconnectée : demander un mot de passe ferait
-            // chercher au mauvais endroit.
-            page.charger()
-            Self.alerter("La page ChatGPT ne répond pas", """
-                Elle ne s'est pas chargée en trente secondes : Caspr ne peut pas savoir \
-                si vous êtes connecté. Elle vient d'être rechargée, dans la fenêtre \
-                ouverte derrière ce message.
-
-                Vérifiez votre connexion à Internet. Une fois la conversation affichée, \
-                relancez « Calibrer automatiquement » \(Self.ouRelancer).
-                """)
-            return false
-        case .deconnecte:
-            guard !Task.isCancelled else { return false }
-            Self.alerter("D'abord, se connecter à ChatGPT", """
-                La fenêtre ChatGPT est ouverte derrière ce message. Connectez-vous : \
-                c'est votre compte, et Caspr ne se connecte jamais à votre place.
-
-                À savoir : « Continuer avec Google » ne fonctionne pas ici. Google refuse \
-                volontairement ses connexions dans une fenêtre embarquée. Une adresse \
-                e-mail et un mot de passe fonctionnent.
-
-                La calibration reprendra d'elle-même si la conversation s'affiche \
-                dans les dix minutes. Fermer la fenêtre l'arrête.
-                """)
-            // Attendre la connexion plutôt que s'arrêter : c'est le parcours
-            // de qui choisit ChatGPT pour la première fois, à l'accueil comme
-            // dans les réglages, et le renvoyer chercher un bouton une fois
-            // connecté lui faisait croire le travail fini.
-            guard await attendreLaSession(page) else { return false }
-        }
+        guard await obtenirLaSession(page, relance: "« Calibrer automatiquement »") else { return false }
         guard !Task.isCancelled, Self.demander("Calibrer automatiquement", """
             Caspr va apprendre seul les boutons de la page, en les essayant sous vos \
             yeux, dans une conversation neuve :
@@ -1306,19 +1267,59 @@ final class Relais: ObservableObject {
         return false
     }
 
-    /// Attend qu'on se connecte, jugé comme le parcours automatique juge la
-    /// session : par le filet, pas par un calibrage peut-être faux (cf.
-    /// `connexionObservee`).
+    /// La session qu'exigent les deux calibrations, en l'expliquant si elle
+    /// manque ; vrai quand elle est ouverte. `relance` : le bouton qui la
+    /// relance, dit dans les alertes.
     ///
-    /// Dix minutes, comme le parcours manuel (`attendreConnexion`) : le temps
-    /// de retrouver un mot de passe, ou de créer un compte. Fermer la fenêtre
-    /// annule la calibration, et l'attente avec elle.
-    private func attendreLaSession(_ page: RelaisPage) async -> Bool {
+    /// Trente secondes : choisir ChatGPT vient souvent de construire la page,
+    /// qui se charge encore. Et selon le filet, pas selon le calibrage qu'on
+    /// vient peut-être remplacer parce qu'il est faux — il faisait passer une
+    /// session ouverte pour fermée, et la calibration refusait de réparer
+    /// justement ce qu'on lui demandait de réparer (cf. `RelaisPage.connexion`).
+    private func obtenirLaSession(_ page: RelaisPage, relance: String) async -> Bool {
+        switch await page.connexion(secondes: 30, reperes: RelaisSelecteurs()) {
+        case .connecte:
+            return true
+        case .inconnu:
+            guard !Task.isCancelled else { return false }
+            // Ni connectée ni déconnectée : demander un mot de passe ferait
+            // chercher au mauvais endroit.
+            page.charger()
+            Self.alerter("La page ChatGPT ne répond pas", """
+                Elle ne s'est pas chargée en trente secondes : Caspr ne peut pas savoir \
+                si vous êtes connecté. Elle vient d'être rechargée, dans la fenêtre \
+                ouverte derrière ce message.
+
+                Vérifiez votre connexion à Internet. Une fois la conversation affichée, \
+                relancez \(relance) \(Self.ouRelancer).
+                """)
+            return false
+        case .deconnecte:
+            guard !Task.isCancelled else { return false }
+        }
+        Self.alerter("D'abord, se connecter à ChatGPT", """
+            La fenêtre ChatGPT est ouverte derrière ce message. Créez un compte ou \
+            connectez-vous : c'est votre compte, et Caspr ne se connecte jamais à \
+            votre place.
+
+            À savoir : « Continuer avec Google » ne fonctionne pas ici. Google refuse \
+            volontairement ses connexions dans une fenêtre embarquée. Une adresse \
+            e-mail et un mot de passe fonctionnent.
+
+            La calibration reprendra d'elle-même si la conversation s'affiche \
+            dans les dix minutes. Fermer la fenêtre l'arrête.
+            """)
+        // Attendre la connexion plutôt que s'arrêter : c'est le parcours de
+        // qui choisit ChatGPT pour la première fois, à l'accueil comme dans
+        // les réglages, et le renvoyer chercher un bouton une fois connecté
+        // lui faisait croire le travail fini. Dix minutes : le temps de
+        // retrouver un mot de passe, ou de créer un compte. Fermer la fenêtre
+        // annule la calibration, et l'attente avec elle.
         let limite = Date.now.addingTimeInterval(600)
         while Date.now < limite {
             try? await Task.sleep(for: .seconds(1))
             guard voieChatGPT, !Task.isCancelled else { return false }
-            if await page.connexionObservee(secondes: 2) == .connecte { return true }
+            if await page.connexion(secondes: 2, reperes: RelaisSelecteurs()) == .connecte { return true }
         }
         // L'alerte a promis une reprise : s'arrêter sans le dire laissait
         // attendre, connecté, une suite qui ne viendrait plus. La fenêtre part
@@ -1326,8 +1327,7 @@ final class Relais: ObservableObject {
         // l'accueil, qui revient à la fin d'une calibration, la recouvrait.
         Self.alerter("Toujours pas connecté", """
             Caspr a attendu dix minutes sans voir de conversation ChatGPT, et a \
-            arrêté d'attendre. Une fois connecté, relancez « Calibrer \
-            automatiquement » \(Self.ouRelancer).
+            arrêté d'attendre. Une fois connecté, relancez \(relance) \(Self.ouRelancer).
             """)
         page.cacher()
         return false
@@ -1422,7 +1422,7 @@ final class Relais: ObservableObject {
                 termine?()
             }
 
-            guard await attendreConnexion(page) else { return }
+            guard await obtenirLaSession(page, relance: "la calibration") else { return }
 
             // Une conversation neuve pour calibrer.
             //
@@ -1527,39 +1527,6 @@ final class Relais: ObservableObject {
         }
     }
 
-    /// Attend la connexion, en l'expliquant si elle manque.
-    private func attendreConnexion(_ page: RelaisPage) async -> Bool {
-        if await page.etatConnexion() == .connecte { return true }
-        Self.alerter("D'abord, se connecter à ChatGPT", """
-            La fenêtre ChatGPT est ouverte derrière ce message. Créez un compte ou \
-            connectez-vous : c'est votre session, Caspr ne fait que l'héberger.
-
-            À savoir : « Continuer avec Google » ne fonctionne pas ici. Google refuse \
-            volontairement ses connexions dans une fenêtre embarquée, quelle que soit \
-            l'application. Une adresse e-mail et un mot de passe fonctionnent — un \
-            compte dédié convient très bien.
-
-            La suite démarrera toute seule si la conversation s'affiche dans les \
-            dix minutes.
-            """)
-        // Dix minutes d'horloge, et non six cents tours : un tour dont l'appel
-        // attend son délai en dure six.
-        let limite = Date.now.addingTimeInterval(600)
-        while Date.now < limite {
-            try? await Task.sleep(for: .seconds(1))
-            guard voieChatGPT, !Task.isCancelled else { return false }
-            if await page.etatConnexion(patience: 1) == .connecte { return true }
-        }
-        // Même promesse, même fin que `attendreLaSession`.
-        Self.alerter("Toujours pas connecté", """
-            Caspr a attendu dix minutes sans voir de conversation ChatGPT, et a \
-            arrêté d'attendre. Une fois connecté, relancez la calibration \
-            \(Self.ouRelancer).
-            """)
-        page.cacher()
-        return false
-    }
-
     private func calibrerUn(_ page: RelaisPage, _ cible: RelaisCible) async -> Bool {
         do { _ = try await page.calibrer(cible); return true }
         catch is CancellationError { return false }
@@ -1604,7 +1571,7 @@ final class Relais: ObservableObject {
         guard let page = try? pageActive() else { return }
         let sel = RelaisSelecteurs.charger()
         Task {
-            let connexion = await page.etatConnexion(patience: 2)
+            let connexion = await page.connexion(secondes: 1)
             let ecoute = await page.estEnEnregistrement()
             let micro = page.microOuvert
             func ligne(_ nom: String, _ valeur: String) -> String {
@@ -1612,7 +1579,7 @@ final class Relais: ObservableObject {
             }
             Self.alerter("Diagnostic du relais", """
                 Session : \(connexion == .connecte ? "connectée"
-                            : connexion == .inconnu ? "la page ne répond pas" : "pas connectée")
+                            : connexion == .inconnu ? "la page ne le dit pas" : "pas connectée")
                 Page : \(ecoute ? "en train d'écouter" : "au repos")
                 Micro tenu par la page : \(micro ? "oui" : "non")
 

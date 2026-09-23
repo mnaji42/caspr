@@ -71,6 +71,8 @@ final class DictationController {
     private let recorder = AudioRecorder()
     private let injector = TextInjector()
     private let overlay = RecordingOverlay()
+    /// La queue commune aux deux voies : insertion, historique, recours.
+    private let livraison: Livraison
     private var escapeMonitor: HotkeyMonitor?
 
     /// Aperçu en direct, quand le système sait le faire et que l'utilisateur
@@ -81,27 +83,7 @@ final class DictationController {
     /// qui reste quand la passe finale échoue (cf. `pendingPreview`).
     private var previewText = ""
 
-    let history = TranscriptionHistory()
-
-    /// Audio d'une dictée dont la transcription a échoué. Conservé en mémoire
-    /// vive uniquement, et libéré dès qu'une insertion réussit ou que
-    /// l'utilisateur y renonce.
-    private var pendingAudio: [Float]?
-
-    /// Ce que l'aperçu en direct avait déjà écrit, quand la passe finale a
-    /// échoué.
-    ///
-    /// Le moteur de macOS a transcrit pendant qu'on parlait. Si la passe finale
-    /// échoue, ce texte existe, il est bon — moins soigné que la passe finale,
-    /// qui a toute la phrase sous les yeux — et il était jeté. On proposait
-    /// donc de « réessayer » comme seule issue, y compris quand la cause de
-    /// l'échec ne s'arrangera pas d'un second essai : un modèle absent
-    /// manquera encore.
-    ///
-    /// Figé ici plutôt que lu dans `previewText` au moment de l'insertion : ce
-    /// dernier est remis à zéro au début de la dictée suivante, et l'on peut
-    /// très bien reparler avant de décider quoi faire de la précédente.
-    private var pendingPreview: String?
+    var history: TranscriptionHistory { livraison.history }
 
     /// La version de macOS qui écrit, choisie à l'instant sur ce que la
     /// machine sait faire dans la langue (cf. `EngineSafetyManager`).
@@ -130,6 +112,7 @@ final class DictationController {
         // et sa disponibilité réelle se demande à `EngineChoice.isAvailable`
         // plutôt qu'à une version de macOS.
         self.legacyEngine = LegacySpeechEngine()
+        self.livraison = Livraison(injector: injector, overlay: overlay)
         overlay.levelProvider = { [weak self] in self?.recorder.level ?? 0 }
         overlay.onCancel = { [weak self] in self?.cancel() }
         // RELAIS — la page peut mourir pendant qu'on parle.
@@ -340,7 +323,7 @@ final class DictationController {
             }
         }
         voieDuCycle = voie
-        applicationVisee = Self.applicationDevant()
+        applicationVisee = Livraison.applicationDevant()
         state = .starting
         let demarrage = Task { await startRecording(voie: voie) }
         switch voie {
@@ -781,16 +764,14 @@ final class DictationController {
                 Log.error("le moteur a rendu un texte vide "
                           + "(\(writerChoice.rawValue), "
                           + "\(Int(result.latency.wallMs)) ms)")
-                overlay.showFailure("Rien n'a été entendu",
-                                    hint: Self.rescueHint(preview: previewText))
+                livraison.montrerEchec("Rien n'a été entendu", apercu: previewText)
                 // L'audio est conservé, contrairement à avant. Un moteur mal
                 // configuré rend le vide aussi sûrement qu'un micro coupé, et
                 // dans ce cas jeter la dictée oblige à tout redire — ce que
                 // cette application s'interdit partout ailleurs.
                 switch voie {
                 case .apple:
-                    pendingAudio = samples
-                    pendingPreview = previewText
+                    livraison.conserver(audio: samples, apercu: previewText)
                 case .chatgpt:
                     // Rien à conserver : il n'y a pas d'audio de notre côté,
                     // et « Réessayer » rejouerait le vide.
@@ -813,11 +794,6 @@ final class DictationController {
                 state = .failed(raison)
                 return
             }
-            // L'application au premier plan au moment d'insérer. L'insertion
-            // par accessibilité vise l'élément focalisé de cette
-            // application-là : si c'est Caspr, le texte part dans une de nos
-            // propres fenêtres et disparaît sans qu'aucune erreur ne soit
-            // levée. C'était indiagnosticable de l'extérieur.
             switch voie {
             case .apple:
                 overlay.hide()
@@ -830,24 +806,11 @@ final class DictationController {
                 // partirait.
                 await Relais.partage.rendreLeClavier()
             }
-            // Et là où l'on parlait, si l'on en est parti entre-temps.
-            switch target {
-            case .caret: await ramener(visee)
-            case .file: break
-            }
-            // RELAIS — la touche de dictée abandonne jusqu'ici, et
-            // l'insertion ne vérifie rien : un texte arrivé au moment de
-            // l'abandon s'écrivait quand même.
-            try Task.checkCancellation()
-            let devant = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
-            Log.info("insertion vers \(devant)")
-            try await deliver(text)
-            history.add(text)
+            try await livraison.livrer(text, vers: target, depuis: visee)
             // Abandonné pendant l'insertion : le texte est écrit, et c'est
             // tout ce qui reste de ce cycle. L'état appartient au suivant.
             guard numero == cycle else { return }
-            pendingAudio = nil
-            pendingPreview = nil
+            livraison.oublierLeRecours()
             Log.info("transcrit en \(Int(result.latency.wallMs)) ms, \(text.count) caractères")
             // La transformation a échoué et c'est le brut qui vient d'être
             // inséré : le dire, là où l'on regarde. Sans quoi un texte non
@@ -882,8 +845,7 @@ final class DictationController {
             let raison: String
             switch voie {
             case .apple:
-                pendingAudio = samples
-                pendingPreview = previewText
+                livraison.conserver(audio: samples, apercu: previewText)
                 let minutes = Double(samples.count) / AudioRecorder.targetSampleRate / 60
                 Log.error("échec de transcription : \(error.localizedDescription) — "
                           + "\(String(format: "%.1f", minutes)) min conservées")
@@ -898,12 +860,7 @@ final class DictationController {
                       + "dans la fenêtre du relais."
                     : error.localizedDescription
             }
-            // Dit là où l'utilisateur regarde. La barre des menus recevait déjà
-            // le détail, mais on ne consulte pas un menu qu'on n'a pas de
-            // raison d'ouvrir : sans ça, un échec se lit comme « je m'y suis
-            // mal pris ».
-            overlay.showFailure(Self.shortReason(for: error),
-                                hint: Self.rescueHint(preview: previewText))
+            livraison.montrerEchec(error, apercu: previewText)
             state = .failed(raison)
             // La barre de ChatGPT reste, et s'agrandit : quand la lecture
             // échoue, le texte est encore dans la page, et c'est le seul moyen
@@ -918,104 +875,10 @@ final class DictationController {
         }
     }
 
-    /// La raison, en une ligne qui tient dans la barre.
-    ///
-    /// Le message complet part dans le menu ; celui-ci doit se lire d'un coup
-    /// d'œil, pendant les cinq secondes où la barre reste affichée.
-    private static func shortReason(for error: Error) -> String {
-        // RELAIS — un refus de ChatGPT porte sa raison, un quota par exemple :
-        // la barre la montre au lieu d'un « Réessayer » qui n'existe pas ici.
-        if let courte = (error as? RelaisPage.Erreur)?.raisonCourte { return courte }
-        return "Transcription impossible — « Réessayer » dans le menu"
-    }
-
-    /// Achemine le texte vers la destination courante.
-    ///
-    /// Sur cible verrouillée, l'insertion au curseur est délibérément évitée :
-    /// l'intérêt du verrou est justement de pouvoir continuer à travailler
-    /// ailleurs sans que la dictée vienne s'écrire dans le code en cours.
-    private func deliver(_ text: String) async throws {
-        switch target {
-        case .caret:
-            try await injector.inject(text)
-        case .file(let url):
-            try TargetWriter.append(text, to: url)
-            NSLog("caspr: ajouté à %@", url.lastPathComponent)
-        }
-    }
-
-    /// L'application au premier plan, sauf si c'est Caspr.
-    private static func applicationDevant() -> NSRunningApplication? {
-        guard let devant = NSWorkspace.shared.frontmostApplication,
-              devant.processIdentifier != NSRunningApplication.current.processIdentifier
-        else { return nil }
-        return devant
-    }
-
-    /// Ramène au premier plan l'application où l'on parlait, si l'on en est
-    /// parti et qu'elle tourne encore.
-    ///
-    /// Le système ne garantit ni que l'activation ait lieu, ni quand : on
-    /// **observe** donc qu'elle soit devant, une seconde au plus, avant
-    /// d'écrire. Passé ce délai, ou si elle a été quittée, le texte part là où
-    /// l'on se trouve — c'était le comportement d'avant, et l'historique le
-    /// garde de toute façon.
-    ///
-    /// ## Deux façons de demander, parce que la première peut être ignorée
-    ///
-    /// Depuis macOS 14, l'activation est **coopérative** : c'est l'application
-    /// au premier plan qui cède sa place, et une demande venue d'une
-    /// application qui ne l'a pas peut être ignorée. Or c'est le cas visé :
-    /// pendant l'attente de ChatGPT, on est passé dans une autre application,
-    /// et Caspr — que `rendreLeClavier` vient de cacher — n'a rien à céder.
-    /// La demande polie reste la première, et suffit quand Caspr est devant
-    /// (la fenêtre du relais, après une discussion). Sinon, on passe par
-    /// l'accessibilité, que l'insertion exige déjà : `kAXFrontmostAttribute`
-    /// est l'attribut que le système lui-même expose pour mettre une
-    /// application devant, et il ne dépend pas de qui la demande.
-    private func ramener(_ application: NSRunningApplication?) async {
-        guard let application, !application.isTerminated else { return }
-        let workspace = NSWorkspace.shared
-        func devant() -> Bool {
-            workspace.frontmostApplication?.processIdentifier == application.processIdentifier
-        }
-        guard !devant() else { return }
-        let nom = application.bundleIdentifier ?? application.localizedName ?? "?"
-        if NSApp.isActive { NSApp.yieldActivation(to: application) }
-        application.activate(options: [])
-
-        let echeance = ContinuousClock.now + .seconds(1)
-        // Un cinquième de la seconde pour la demande polie : au-delà, elle a
-        // été ignorée, et l'on insiste par l'accessibilité — sur la même
-        // échéance, pas sur une nouvelle.
-        let relance = ContinuousClock.now + .milliseconds(200)
-        var parAccessibilite = false
-        while ContinuousClock.now < echeance {
-            if devant() {
-                Log.info("insertion : retour à \(nom), où l'on parlait"
-                         + (parAccessibilite ? " (par l'accessibilité)" : ""))
-                return
-            }
-            if !parAccessibilite, ContinuousClock.now >= relance {
-                parAccessibilite = true
-                let resultat = AXUIElementSetAttributeValue(
-                    AXUIElementCreateApplication(application.processIdentifier),
-                    kAXFrontmostAttribute as CFString, kCFBooleanTrue)
-                if resultat != .success {
-                    Log.error("insertion : \(nom) refuse le premier plan par "
-                              + "l'accessibilité (\(resultat.rawValue))")
-                }
-            }
-            try? await Task.sleep(for: .milliseconds(20))
-        }
-        Log.error("insertion : \(nom) n'a pas repris le premier plan en 1 s — "
-                  + "texte inséré devant")
-    }
-
     /// Insère un texte déjà transcrit — réinsertion depuis l'historique.
     func insert(_ text: String) async {
         do {
-            try await deliver(text)
+            try await livraison.deliver(text, to: target)
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -1117,24 +980,6 @@ final class DictationController {
         preview = nil
     }
 
-    /// La phrase qui dit que rien n'est perdu, sous le message d'échec.
-    ///
-    /// La barre s'efface au bout de cinq secondes, et c'est voulu : la laisser
-    /// ouverte sur un échec encombrerait l'écran, d'autant que le cas le plus
-    /// fréquent n'en est pas un — on a déclenché sans parler. Mais elle est le
-    /// seul endroit où l'on regarde à ce moment-là, et disparaître sans rien
-    /// dire laisse croire que la dictée est perdue.
-    ///
-    /// Elle nomme donc les deux issues quand les deux existent, et la seule
-    /// quand il n'y en a qu'une : sans aperçu — parce qu'il est coupé, ou
-    /// parce qu'on n'a effectivement rien dit — proposer d'insérer un texte
-    /// vide serait une fausse promesse de plus.
-    private static func rescueHint(preview: String) -> String {
-        preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Rien n'est perdu : « Réessayer » dans le menu de Caspr."
-            : "Rien n'est perdu : insérer l'aperçu ou réessayer, dans le menu de Caspr."
-    }
-
     /// Au repos : ni démarrage, ni écoute, ni transcription en cours.
     ///
     /// Les trois recours du menu sur l'audio conservé n'ont de sens qu'ici.
@@ -1151,7 +996,7 @@ final class DictationController {
 
     /// Relance la transcription de l'audio conservé après un échec.
     func retryLast() {
-        guard let pendingAudio, isAtRest else { return }
+        guard let pendingAudio = livraison.pendingAudio, isAtRest else { return }
         // Posé tout de suite, et non par la tâche : entre les deux, un appui
         // aurait trouvé l'état au repos et ouvert un cycle par-dessus.
         state = .processing
@@ -1160,7 +1005,7 @@ final class DictationController {
         voieDuCycle = .apple
         // Le menu de Caspr ne prend pas le premier plan : l'application devant
         // est celle où l'on veut le texte, comme à l'appui.
-        applicationVisee = Self.applicationDevant()
+        applicationVisee = Livraison.applicationDevant()
         Task { await transcribeAndInject(pendingAudio, voie: .apple) }
     }
 
@@ -1179,7 +1024,7 @@ final class DictationController {
         guard let text = pendingPreviewText, isAtRest else { return }
         Task {
             do {
-                try await deliver(text)
+                try await livraison.deliver(text, to: target)
             } catch {
                 // L'insertion elle-même a échoué — plus de curseur, fichier
                 // devenu illisible. On garde tout : c'est un autre problème
@@ -1188,8 +1033,7 @@ final class DictationController {
                 return
             }
             history.add(text)
-            pendingAudio = nil
-            pendingPreview = nil
+            livraison.oublierLeRecours()
             // Une dictée a pu commencer pendant l'insertion : son état n'est
             // pas le nôtre.
             if isAtRest { state = .idle }
@@ -1199,24 +1043,13 @@ final class DictationController {
     /// Libère l'audio conservé. Appelé quand l'utilisateur renonce.
     func discardPending() {
         guard isAtRest else { return }
-        pendingAudio = nil
-        pendingPreview = nil
+        livraison.oublierLeRecours()
         state = .idle
     }
 
-    var hasPendingAudio: Bool { pendingAudio != nil }
-
-    /// L'aperçu conservé, s'il porte quelque chose d'insérable.
-    var pendingPreviewText: String? {
-        guard let text = pendingPreview?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty
-        else { return nil }
-        return text
-    }
-
-    var pendingDuration: TimeInterval {
-        Double(pendingAudio?.count ?? 0) / AudioRecorder.targetSampleRate
-    }
+    var hasPendingAudio: Bool { livraison.hasPendingAudio }
+    var pendingPreviewText: String? { livraison.pendingPreviewText }
+    var pendingDuration: TimeInterval { livraison.pendingDuration }
 
     // MARK: - Échap pendant l'enregistrement
 

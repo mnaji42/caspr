@@ -273,6 +273,14 @@ public enum LegacyCleanup {
                      "dossier de Sofler"),
             Location(home.appending(path: "Library/Caches/sofler"), "cache de Sofler"),
             Location(home.appending(path: "Library/Logs/Sofler"), "journaux de Sofler"),
+            // Le domaine de réglages de Sofler. Le renommage le laissait
+            // exprès, pour pouvoir revenir en arrière à la main ; depuis que
+            // la reprise de ses réglages a été retirée, rien ne le relit plus.
+            // Un Mac passé directement d'une version Sofler (avant la 0.9.0) à
+            // celle-ci repart donc de réglages neufs, et retrouve l'ancien
+            // fichier dans la corbeille.
+            Location(home.appending(path: "Library/Preferences/fr.lyriastudio.sofler.plist"),
+                     "réglages de Sofler"),
         ]
     }
 

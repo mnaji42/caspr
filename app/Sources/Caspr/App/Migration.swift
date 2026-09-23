@@ -32,7 +32,6 @@ import CasprCore
 @MainActor
 enum Migration {
     private static let bundleIdentifier = "fr.lyriastudio.caspr"
-    private static let previousBundleIdentifier = "fr.lyriastudio.sofler"
 
     /// À appeler au lancement, **avant la première lecture de
     /// `Preferences.shared`**.
@@ -51,13 +50,10 @@ enum Migration {
         disarmAgents(home: home)
         migrateSettings(home: home)
 
-        // Décidé ici, sur l'acteur principal, parce que c'est une lecture de
-        // réglages ; le geste, lui, part avec le reste.
-        let soflerPreferences = retirableSoflerPreferences(home: home)
         // Des gigaoctets à déplacer, sur un disque qui peut être lent : rien de
         // tout ça ne mérite de retarder l'apparition de l'icône.
         Task.detached(priority: .utility) {
-            sweep(home: home, soflerPreferences: soflerPreferences)
+            sweep(home: home)
         }
     }
 
@@ -131,23 +127,9 @@ enum Migration {
         return trash(LegacyCleanup.Location(file, "ancien lexique"), home: home)
     }
 
-    /// Le domaine de réglages de Sofler, si plus rien n'en a besoin.
-    ///
-    /// Le renommage le laissait exprès, pour pouvoir revenir en arrière à la
-    /// main. Il ne part qu'une fois que Caspr a ses propres réglages : c'est
-    /// qu'ils ont été repris, ou qu'on s'en est passé.
-    private static func retirableSoflerPreferences(home: URL) -> URL? {
-        let defaults = UserDefaults.standard
-        guard let current = defaults.persistentDomain(forName: bundleIdentifier),
-              !current.isEmpty else { return nil }
-        let file = home.appending(
-            path: "Library/Preferences/\(previousBundleIdentifier).plist")
-        return FileManager.default.fileExists(atPath: file.path) ? file : nil
-    }
-
     // MARK: - Les fichiers
 
-    nonisolated private static func sweep(home: URL, soflerPreferences: URL?) {
+    nonisolated private static func sweep(home: URL) {
         let descriptor = LegacyCleanup.engineDescriptor(home: home)
         let project = (try? Data(contentsOf: descriptor))
             .flatMap(LegacyCleanup.engineProject(descriptor:))
@@ -179,10 +161,6 @@ enum Migration {
         for location in LegacyCleanup.modelLocations(home: home)
             + LegacyCleanup.otherLocations(home: home) {
             trash(location, home: home)
-        }
-        if let soflerPreferences {
-            trash(LegacyCleanup.Location(soflerPreferences, "réglages de Sofler"),
-                  home: home)
         }
 
         // Le dossier de support, une fois ses occupants partis. Sans lui, une

@@ -1,21 +1,15 @@
-# ChatGPT Web Preview — mode d'emploi du retrait
+# Le relais — la voie ChatGPT
 
 Le relais fait dicter par le transcripteur de ChatGPT, dans une page web que
-Caspr héberge. C'est une fonctionnalité **personnelle**, qui pilote un service
-tiers par son interface web. Elle n'a pas sa place dans un produit vendu, et
-elle a été écrite pour être retirée sans rien démonter.
+Caspr héberge et pilote. C'est **l'une des deux voies** du produit, à rang égal
+avec macOS : du code de premier rang, qui ne se retire pas. La voie macOS
+écrit hors ligne, sans compte ; la voie ChatGPT fait passer la voix par le
+compte ChatGPT de l'utilisateur, dans la page embarquée, et Caspr n'a aucun
+serveur.
 
-## Retirer
-
-```
-rm -rf app/Sources/Caspr/Relais app/RELAIS.md relais
-grep -rn "RELAIS —" app/Sources/Caspr
-```
-
-Le `grep` liste les points d'accroche restants — trois fichiers, une vingtaine
-de lignes. Chacun est soit un bloc entier à supprimer, soit une condition dont
-il faut garder la branche `else`. Puis `swift build` : ce qui aurait été oublié
-ne compile plus.
+Ce document garde ce qui a été appris à la dure en pilotant un service tiers
+par son interface web. Les règles qui suivent ne se redécouvrent qu'en
+cassant quelque chose chez quelqu'un.
 
 ## Les composants
 
@@ -28,6 +22,12 @@ structure des sélecteurs, modules livrés), rangés dans
 |---|---|
 | `Relais.swift` | La façade et le cycle de vie. Contient aussi `RelaisEngine`, l'adaptateur vers `SpeechEngine`. |
 | `RelaisPage.swift` | La `WKWebView`, ses **deux** fenêtres, le micro, les popups de connexion. |
+| `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
+| `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
+| `RelaisAttente.swift` | L'échéance **unique** d'une dictée, fixée à l'arrêt de l'écoute sur la durée parlée, et la phase en cours que la barre affiche. Toutes les attentes après l'arrêt la consomment ; aucune n'a plus son propre budget. |
+| `RelaisCard.swift` | La bascule entre les deux voies, dans Réglages › Moteur IA, et ce que le relais a appris. |
+| `RelaisModuleCard.swift` | Le réglage d'un module : ses actions, sa sortie, son affichage. |
+| `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
 
 ### Ce qu'on montre pendant la dictée
 
@@ -57,35 +57,31 @@ dans l'autre rôle : cliquer une telle fenêtre n'active pas l'application, et �
 part vers celle qui l'est. La vue web passe de l'une à l'autre ; elle vit dans
 la barre par défaut, rangée hors champ — jamais retirée de l'écran, le système
 suspendant une fenêtre qu'il croit cachée.
-| `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
-| `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
-| `RelaisAttente.swift` | L'échéance **unique** d'une dictée, fixée à l'arrêt de l'écoute sur la durée parlée, et la phase en cours que la barre affiche. Toutes les attentes après l'arrêt la consomment ; aucune n'a plus son propre budget. |
-| `RelaisCard.swift` | La bascule dans Réglages › Moteur IA. |
-| `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
 
-### Les modes
+### Les modules
 
-Ce qui les sépare n'est pas la quantité de traitement, mais **le rôle que joue
-la parole**.
+Ce que Caspr fait d'une dictée est un **module** : des actions (envoyer,
+récupérer la réponse, la faire lire à haute voix), une sortie (le curseur, les
+notes, ou nulle part) et un affichage. Ceux que l'application livre ne sont
+que des modules pré-remplis :
 
-| Mode | Ta voix est… | Envoyé à ChatGPT |
+| Module | Ta voix est… | Sortie |
 |---|---|---|
-| **Brut** | le texte lui-même | rien |
-| **Réorganiser** | la matière à remettre en ordre | oui |
-| **Rédiger** | la commande d'un texte à produire | pas encore construit |
+| **Brut** | le texte lui-même | au curseur ou en note, rien n'est envoyé |
+| **Réorganiser** | la matière à remettre en ordre | au curseur ou en note, après la réponse de ChatGPT |
+| **Discuter** | une question | nulle part : la page reste ouverte et prend le clavier |
 
-Les trois sont des façons d'**écrire** : ce qui sort est toujours le texte
-qu'on voulait, jamais une réponse de conversation. Le screenshot n'est pas un
-quatrième mode mais une option de « Rédiger », qui apparaîtra sur une pastille
-à part quand ce mode existera.
+Un module déclare les **capacités** dont il a besoin, et une capacité ne se
+choisit pas : elle s'acquiert, par calibration ou par autorisation système. La
+barre ne propose que les modules dont les capacités sont acquises.
 
 La consigne se **dit**, elle ne se configure pas : « traduis ça en anglais » ne
 tient pas dans un réglage. Caspr n'ajoute qu'un emballage, dont le seul rôle
 est d'obtenir un résultat utilisable sans « Bien sûr ! Voici… » devant.
 
-Chaque passe ouvre une **conversation neuve**, par rechargement de la page de
-départ. Sans cela, la note précédente oriente la suivante — et le contexte
-finirait par déborder. Cette page de départ est réglable : pointée sur un
+Chaque passe qui écrit ouvre une **conversation neuve**, par rechargement de
+la page de départ ; « Discuter » seul garde son fil. Sans cela, la note
+précédente oriente la suivante — et le contexte finirait par déborder. Cette page de départ est réglable : pointée sur un
 projet ChatGPT dédié, elle y range toutes les conversations créées par Caspr,
 à l'écart des vraies. C'est une URL et non un sélecteur, donc rien qui casse au
 prochain remaniement de la page.
@@ -93,11 +89,14 @@ prochain remaniement de la page.
 Une transformation qui échoue rend la **transcription brute**. Une dictée de
 dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
 
-## Les points d'accroche
+## Où le relais touche le reste de l'application
+
+Plus des accroches à défaire un jour : les endroits où la voie ChatGPT se
+distingue de la voie macOS, et pourquoi.
 
 - **`TranscriptionSettings.swift`** — une ligne.
-  `RelaisCard { AppleEngineCard() }` enveloppe la carte de
-  macOS, dont elle décide l'affichage : les deux s'excluent à l'écran comme en
+  `RelaisCard { AppleEngineCard() }` enveloppe la carte de macOS, dont elle
+  décide l'affichage : les deux voies s'excluent à l'écran comme en
   fonctionnement.
 - **`CasprApp.swift`** — la page est chargée au lancement quand la voie est
   ChatGPT, pour que la première dictée ne paie pas l'ouverture de chatgpt.com.
@@ -111,15 +110,21 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
   décidait en silence d'une session ouverte sur un service tiers.
 - **`RecordingOverlay.swift`** — la pastille des modules (`moduleLabels`,
   `onSelectModule`) : le choix se fait au moment de parler, pas dans un écran
-  de réglages. L'attente, elle,
-  s'affiche avec sa phase et son chrono dès dix secondes, et la sortie par la
-  touche de dictée (`showProcessing(_:progress:)`).
-- **`DictationController.swift`** — l'essentiel : un drapeau posé au début du
-  cycle, une branche qui n'ouvre pas le micro, une autre qui choisit
-  `RelaisEngine` plutôt que le moteur configuré, et deux exclusions
-  (gestionnaire de repli, réglages de barre sans objet).
+  de réglages. L'attente, elle, s'affiche avec sa phase et son chrono dès dix
+  secondes, et la sortie par la touche de dictée
+  (`showProcessing(_:progress:)`).
+- **`DictationController.swift`** — l'essentiel : la voie figée à l'appui
+  (`voieDuCycle`), une branche qui n'ouvre pas le micro, une autre qui choisit
+  `RelaisEngine` plutôt que la version de macOS, et les différences de la
+  queue commune — pas d'audio à conserver, la page à rendre et à préparer, la
+  barre de ChatGPT à ranger. Et le retour à l'application où l'on parlait,
+  capturée à l'appui : il vaut pour les deux voies, mais c'est ici qu'il
+  compte, parce que trente secondes à trois minutes séparent la parole de
+  l'insertion.
+- **`SetupRecoveryGuard.swift`** — le socle minimal de la voie ChatGPT : le
+  raccourci, et une page connectée et calibrée. Rien sur macOS.
 
-## Quatre règles à ne jamais oublier
+## Cinq règles à ne jamais oublier
 
 Un repère appris **doit** dire de quel genre il est — zone de saisie, bouton —
 et ce genre sert trois fois : pour retrouver l'élément, pour juger le repère au
@@ -176,9 +181,11 @@ session ChatGPT ne sont construites que sur cette voie, et détruites quand on
 choisit macOS — à la fin de la dictée ChatGPT en cours s'il y en a une, qui va
 au bout sur la page qu'elle a prise.
 
-**Le relais se conforme à `SpeechEngine`.** `transcribeAndInject` ne sait pas
-qu'il existe : l'insertion, l'historique, la barre, les échecs et le bouton
-« Réessayer » fonctionnent sans une ligne écrite pour lui.
+**Le relais se conforme à `SpeechEngine`.** L'insertion, l'historique, la
+barre et les échecs sont ceux de la voie macOS. Les différences tiennent dans
+une poignée de branches de `transcribeAndInject`, et ce sont des
+différences réelles : aucun audio de notre côté, donc pas de « Réessayer » ;
+une page à rendre et à préparer à la fin de chaque dictée.
 
 ## Pourquoi une exclusion, et pas un moteur de plus
 
@@ -187,18 +194,16 @@ de l'enregistrement : **0,072 avant tout usage du relais, 0,000 sur toutes les
 dictées suivantes** dès qu'une page ChatGPT existe. La touche principale
 répondait alors « rien n'a été entendu », sans que rien ne désigne le coupable.
 
-D'où l'interrupteur plutôt qu'une entrée dans la liste des moteurs : proposer
-les deux côte à côte laisserait croire qu'on passe de l'un à l'autre d'une
-dictée sur l'autre. On ne peut pas.
+D'où deux voies plutôt qu'une entrée de plus dans une liste de moteurs : les
+proposer côte à côte laisserait croire qu'ils peuvent écouter ensemble. On ne
+peut pas. La voie est un type à deux cas, `VoieDeDictee`, et un `switch` sans
+`default` oblige à poser la question partout où elle se pose.
 
 L'exclusion a une contrepartie heureuse : tant que la voie est ChatGPT, Caspr
 ne touche jamais au micro, donc la page peut rester ouverte entre deux dictées
 et le raccourci reste instantané.
 
 ## Ce qu'il ne fait délibérément pas
-
-**Aucun apprentissage du repli.** `EngineSafetyManager` ne doit se souvenir que
-de moteurs que l'utilisateur a réellement choisis.
 
 **Aucun aperçu en direct.** Il faudrait un second flux micro — celui-là même
 qui casse tout. La barre le dit au lieu d'afficher une attente sans fin.

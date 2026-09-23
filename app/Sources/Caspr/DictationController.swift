@@ -49,10 +49,10 @@ final class DictationController {
 
     /// Destination du texte : curseur actif, ou fichier de notes.
     ///
-    /// Elle n'est lue qu'à la livraison (cf. `deliver`), jamais au démarrage :
-    /// basculer en pleine phrase redirige donc la dictée en cours, dans les
-    /// deux sens. C'est le comportement attendu — on se rend compte en parlant
-    /// que ça ne doit pas aller là.
+    /// Figée à l'arrêt de l'écoute (cf. `DicteeEnCours`), jamais au
+    /// démarrage : basculer en pleine phrase redirige donc la dictée en cours,
+    /// dans les deux sens. C'est le comportement attendu — on se rend compte
+    /// en parlant que ça ne doit pas aller là.
     ///
     /// **Lue** dans les préférences, jamais recopiée — la même règle que le
     /// langue juste au-dessus, et pour la même raison.
@@ -228,9 +228,8 @@ final class DictationController {
     /// lesquelles on a toutes les raisons d'aller travailler ailleurs — et la
     /// dictée s'écrivait alors dans la fenêtre où l'on était passé.
     private var applicationVisee: NSRunningApplication?
-    // RELAIS — début de la dictée, faute d'enregistrement pour en déduire la
-    // durée. Elle sert à dimensionner l'attente de la transcription.
-    private var relaisDebut = Date()
+    /// La dictée qui se transcrit, figée à l'arrêt de l'écoute ; `nil` avant.
+    private var dictee: DicteeEnCours?
     // RELAIS — le cycle en cours, retenu pour qu'Échap puisse l'interrompre.
     // L'attente d'une transcription ChatGPT dure des minutes : sans prise
     // dessus, la barre restait sur « Transcription… » sans autre issue que de
@@ -404,9 +403,13 @@ final class DictationController {
         relaisTache?.cancel()
         relaisTache = nil
         voieDuCycle = nil
+        // Pendant l'écoute, rien n'est encore figé : c'est le module du
+        // moment qui dit où la dictée devait aller.
+        let nEcritNullePart = dictee?.nEcritNullePart
+            ?? (RelaisCatalogue.courant.sortieParDefaut == .aucune)
+        dictee = nil
         Relais.partage.rendreLaMain()
-        Relais.partage.interrompre(
-            quitterLaDiscussion: Relais.partage.sortieCourante != .aucune)
+        Relais.partage.interrompre(quitterLaDiscussion: !nEcritNullePart)
         overlay.hide()
         Feedback.cancelled()
         state = .idle
@@ -470,7 +473,6 @@ final class DictationController {
             // il faudrait un second flux micro, celui-là même qui casse tout.
             switch voie {
             case .chatgpt:
-                relaisDebut = Date()
                 // La barre s'ouvre avant l'écoute : on voit ChatGPT démarrer,
                 // et la page, enfin à l'écran, cesse d'être différée par le
                 // système.
@@ -566,6 +568,19 @@ final class DictationController {
         // plus d'écoute à arrêter, et la poursuivre prendrait le chemin
         // ordinaire — la voie du cycle vient d'être oubliée.
         guard state == .recording, let voie = voieDuCycle else { return }
+        /// Ce qui est dit à l'arrêt : module et destination du moment.
+        func figer(duree: TimeInterval) -> DicteeEnCours {
+            let module: RelaisModule? = switch voie {
+            case .apple: nil
+            case .chatgpt: RelaisCatalogue.courant
+            }
+            let figee = DicteeEnCours(cycle: cycle, voie: voie, module: module,
+                                      destination: target,
+                                      applicationVisee: applicationVisee,
+                                      duree: duree)
+            dictee = figee
+            return figee
+        }
         switch voie {
         case .apple:
             break
@@ -594,9 +609,11 @@ final class DictationController {
             // sortie — encore faut-il le dire.
             overlay.showProcessing(RelaisAttente.Phase.transcription.libelle,
                                    progress: { Relais.partage.avancement })
-            Log.info("fin de dictée relais : "
-                     + "\(String(format: "%.1f", Date().timeIntervalSince(relaisDebut))) s")
-            await transcribeAndInject([], voie: voie)
+            // Le temps d'écoute de la page, et non depuis l'appui : ce qui
+            // précède — attendre qu'elle soit prête — n'a rien à transcrire.
+            let figee = figer(duree: Relais.partage.secondesEcoulees)
+            Log.info("fin de dictée relais : \(String(format: "%.1f", figee.duree)) s")
+            await transcribeAndInject([], figee)
             return
         }
         let samples = recorder.stop()
@@ -627,7 +644,7 @@ final class DictationController {
             return
         }
 
-        await transcribeAndInject(samples, voie: voie)
+        await transcribeAndInject(samples, figer(duree: seconds))
     }
 
     /// Transcrit puis insère, en gardant l'audio tant que ce n'est pas réussi.
@@ -636,14 +653,12 @@ final class DictationController {
     /// était arrêté ou a échoué obligerait à tout redire — c'est le pire échec
     /// possible pour cette application. L'audio n'est donc libéré qu'après une
     /// insertion réussie, et `retryLast()` permet de relancer sans reparler.
-    private func transcribeAndInject(_ samples: [Float], voie: VoieDeDictee) async {
+    private func transcribeAndInject(_ samples: [Float], _ dictee: DicteeEnCours) async {
+        let voie = dictee.voie
         // Le cycle que cette transcription sert. S'il a été abandonné quand
         // elle reprend la main, elle n'a plus rien à faire : l'abandon a déjà
         // tout défait, et un autre cycle a peut-être commencé.
-        let numero = cycle
-        // Lue une fois : c'est l'application de l'appui qui compte, pas celle
-        // d'un appui qui viendrait pendant la transcription.
-        let visee = applicationVisee
+        let numero = dictee.cycle
         state = .processing
         // Le relais se conforme au protocole des moteurs, donc tout ce qui suit
         // (insertion, historique, échecs, barre) marche sans le savoir — à la
@@ -659,6 +674,7 @@ final class DictationController {
         // condamne la page jusqu'au redémarrage.
         func acheverLeCycle() {
             voieDuCycle = nil
+            self.dictee = nil
             switch voie {
             case .apple:
                 // Le micro est déjà rendu, à l'arrêt du magnétophone.
@@ -684,7 +700,7 @@ final class DictationController {
                 //
                 // Ici plutôt qu'au fil des chemins de sortie : réussite, texte
                 // vide, échec et annulation passent tous par là.
-                if Relais.partage.sortieCourante != .aucune {
+                if !dictee.nEcritNullePart {
                     quitterLaDiscussion()
                 }
                 // La barre de ChatGPT se range à la fin de la dictée, quelle
@@ -708,7 +724,8 @@ final class DictationController {
         }
         let moteur: any SpeechEngine = switch voie {
         case .apple: writer
-        case .chatgpt: RelaisEngine()
+        case .chatgpt: RelaisEngine(module: dictee.module ?? RelaisCatalogue.courant,
+                                    secondesDictees: dictee.duree)
         }
         do {
             let result = try await moteur.transcribe(
@@ -725,7 +742,7 @@ final class DictationController {
             case .apple:
                 break
             case .chatgpt:
-                if Relais.partage.sortieCourante == .aucune {
+                if dictee.nEcritNullePart {
                     // Abandonnée avant l'envoi, la dictée n'ouvre pas de
                     // discussion : l'annulation a déjà rendu la main. Après
                     // l'envoi, l'appui n'a fait que cesser d'attendre, et le
@@ -746,7 +763,8 @@ final class DictationController {
                         overlay.hide()
                         state = .idle
                     }
-                    entrerEnDiscussion()
+                    Relais.partage.entrerEnDiscussion(
+                        dictee.module ?? RelaisCatalogue.courant)
                     return
                 }
             }
@@ -806,7 +824,8 @@ final class DictationController {
                 // partirait.
                 await Relais.partage.rendreLeClavier()
             }
-            try await livraison.livrer(text, vers: target, depuis: visee)
+            try await livraison.livrer(text, vers: dictee.destination,
+                                       depuis: dictee.applicationVisee)
             // Abandonné pendant l'insertion : le texte est écrit, et c'est
             // tout ce qui reste de ce cycle. L'état appartient au suivant.
             guard numero == cycle else { return }
@@ -1004,9 +1023,14 @@ final class DictationController {
         // quelle que soit la voie retenue depuis.
         voieDuCycle = .apple
         // Le menu de Caspr ne prend pas le premier plan : l'application devant
-        // est celle où l'on veut le texte, comme à l'appui.
-        applicationVisee = Livraison.applicationDevant()
-        Task { await transcribeAndInject(pendingAudio, voie: .apple) }
+        // est celle où l'on veut le texte, comme à l'appui. Et la destination
+        // du moment : réessayer est une nouvelle livraison.
+        let figee = DicteeEnCours(cycle: cycle, voie: .apple, module: nil,
+                                  destination: target,
+                                  applicationVisee: Livraison.applicationDevant(),
+                                  duree: livraison.pendingDuration)
+        dictee = figee
+        Task { await transcribeAndInject(pendingAudio, figee) }
     }
 
     /// Insère ce que l'aperçu en direct avait écrit, faute de mieux.
@@ -1052,20 +1076,6 @@ final class DictationController {
     var pendingDuration: TimeInterval { livraison.pendingDuration }
 
     // MARK: - Échap pendant l'enregistrement
-
-    /// Échap n'est capté que le temps de l'enregistrement : le monopoliser en
-    /// permanence casserait son usage normal dans toutes les autres apps.
-    // RELAIS — une discussion est ouverte : la page reste, Échap la referme.
-    //
-    // C'est un état à part, et il fallait le nommer : Caspr est au repos — la
-    // touche de dictée relance une dictée dans le même fil — mais une fenêtre
-    // attend qu'on en sorte. Sans cet état, rien n'écoutait Échap une fois le
-    // cycle terminé.
-    //
-    // Échap n'est pas pris ici : il suit la fenêtre (cf. `ajusterEchap`).
-    private func entrerEnDiscussion() {
-        Relais.partage.entrerEnDiscussion()
-    }
 
     private func quitterLaDiscussion() {
         Relais.partage.terminerDiscussion()

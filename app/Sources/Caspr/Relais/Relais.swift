@@ -235,11 +235,6 @@ final class Relais: ObservableObject {
     /// depuis : elle compte dès que la page l'a montrée.
     var saitDicter: Bool { estCalibre && sessionVue != .deconnecte }
 
-    /// Où doit atterrir ce que le module courant produit.
-    ///
-    /// Lue au moment de livrer, comme le module lui-même : changer d'avis en
-    /// pleine phrase doit valoir pour la destination aussi.
-    var sortieCourante: RelaisSortie { RelaisCatalogue.courant.sortieParDefaut }
     /// Les deux sélecteurs supplémentaires de l'aller-retour sont-ils connus ?
     var saitDialoguer: Bool { RelaisSelecteurs.charger().saitDialoguer }
     /// Vrai quand la réponse est récupérée par le bouton de ChatGPT.
@@ -612,7 +607,11 @@ final class Relais: ObservableObject {
     ///
     /// « Une discussion est ouverte » veut dire une chose et une seule : une
     /// fenêtre attend qu'on en sorte, et la touche de dictée y poursuit le fil.
-    func entrerEnDiscussion() {
+    /// Échap n'est pas pris ici : il suit la fenêtre (cf. `discussionAffichee`).
+    ///
+    /// `module` est celui de la dictée qui s'achève, figé à l'arrêt de
+    /// l'écoute, et non celui qu'on relirait maintenant.
+    func entrerEnDiscussion(_ module: RelaisModule) {
         // Choisir macOS pendant la dictée condamne la page à sa fin : un fil
         // ouvert dessus n'aurait nulle part où continuer.
         guard voieChatGPT else { return }
@@ -621,7 +620,7 @@ final class Relais: ObservableObject {
         // dire rien, ici comme pendant la dictée : on discute à la voix, la
         // réponse est lue à haute voix, et c'est le menu de Caspr qui met fin
         // au fil — Échap n'est pris que devant une fenêtre.
-        guard RelaisCatalogue.courant.affichageEffectif == .page else { return }
+        guard module.affichageEffectif == .page else { return }
         try? pageActive().montrer()
     }
 
@@ -1096,6 +1095,9 @@ final class Relais: ObservableObject {
 /// de plus.
 @MainActor
 struct RelaisEngine: SpeechEngine {
+    let module: RelaisModule
+    let secondesDictees: Double
+
     var displayName: String { "ChatGPT (relais)" }
 
     func isReady() async -> Bool { Relais.partage.estCalibre }
@@ -1104,7 +1106,7 @@ struct RelaisEngine: SpeechEngine {
         let debut = Date()
         // Les échantillons sont vides par construction : Caspr n'enregistre
         // pas pendant une dictée relais. La durée vient de l'horloge.
-        let secondes = Relais.partage.secondesEcoulees
+        let secondes = secondesDictees
         let texte: String
         // La page reste ouverte d'une dictée à l'autre. Elle était détruite à
         // chaque cycle tant que Caspr enregistrait en parallèle — il fallait
@@ -1114,7 +1116,7 @@ struct RelaisEngine: SpeechEngine {
         texte = try await Relais.partage.arreterEtLire(secondesDictees: secondes)
         // La seconde passe, quand le module la demande. Elle rend le brut si
         // elle échoue : rien de ce qui a été dit ne se perd.
-        let rendu = try await Relais.partage.transformer(texte, module: RelaisCatalogue.courant)
+        let rendu = try await Relais.partage.transformer(texte, module: module)
         let ms = Date().timeIntervalSince(debut) * 1000
         return TranscriptionResult(
             text: rendu,

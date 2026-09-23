@@ -26,8 +26,10 @@ extension RelaisPage {
     /// réorganisation qui échoue à mi-chemin a tout de même envoyé son message,
     /// et c'est la page qui le sait.
     ///
-    /// `nil` quand la page ne répond pas : ni oui ni non, et la seule
-    /// préparation qui vaille alors est de la recharger.
+    /// `nil` quand l'appel échoue, quelle qu'en soit la raison — page figée,
+    /// pont absent, processus mort : ni oui ni non, et la seule préparation
+    /// qui vaille alors est de la recharger. Une page en cours de chargement
+    /// n'est pas interrogée (cf. `Relais.preparer`).
     func tientUneConversation() async -> Bool? {
         guard let r = try? await appeler("return window.__relais.etat(micro, stop, composeur);",
                                          ["micro": selecteurs.micro, "stop": selecteurs.stop,
@@ -38,8 +40,6 @@ extension RelaisPage {
 
     /// Clique le micro. La page commence à écouter.
     func demarrer() async throws {
-        // La page que cette dictée va attendre est celle d'aujourd'hui.
-        mortsAuDepart = morts
         lectureInterrompue = false
         // Vingt secondes, et non huit dixièmes : au tout premier appui d'une
         // session, la page peut encore être en train de se charger. Conclure
@@ -54,6 +54,11 @@ extension RelaisPage {
             montrer()
             throw Erreur.pasConnecte
         }
+        // La page que cette dictée va attendre est celle qui vient de se dire
+        // connectée. Relevé avant l'attente, une mort survenue pendant celle-ci
+        // — déjà réparée par le rechargement — faisait annoncer « dictée
+        // perdue » à qui n'avait encore rien dit.
+        mortsAuDepart = morts
         // Vider la zone **avant** d'écouter. Une dictée dont la lecture a
         // échoué laisse son texte dans la page — délibérément, pour qu'il reste
         // récupérable à la main. Mais ChatGPT ajoute la dictée suivante à la

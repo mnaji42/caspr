@@ -103,6 +103,12 @@ final class RelaisPage: NSObject {
     /// lui dit que la page qu'elle attend n'existe plus.
     var morts = 0
     var mortsAuDepart = 0
+    /// La dernière mort, pour ne pas recharger en boucle une page qui meurt à
+    /// répétition (cf. `webViewWebContentProcessDidTerminate`).
+    var derniereMort: Date?
+    /// La page est morte et n'a pas été rechargée : le prochain appel au pont
+    /// la recharge.
+    var rechargementRetenu = false
     /// L'appui a demandé de ne plus attendre la lecture à haute voix (cf.
     /// `Relais.cesserDAttendreLaLecture`). Remis à zéro à chaque dictée.
     var lectureInterrompue = false
@@ -233,6 +239,7 @@ final class RelaisPage: NSObject {
     }
 
     func charger() {
+        rechargementRetenu = false
         chargementEnCours = true
         webView.load(URLRequest(url: Self.depart))
     }
@@ -256,6 +263,7 @@ final class RelaisPage: NSObject {
     /// session fermée, et le dire ferait chercher un mot de passe là où il
     /// faut recharger.
     func etatConnexion(patience: Int = 12) async -> Connexion {
+        var silences = 0
         for essai in 0..<max(patience, 1) {
             do {
                 let r = try await appeler(
@@ -271,7 +279,13 @@ final class RelaisPage: NSObject {
                     return .deconnecte
                 }
             } catch Erreur.pontMuet {
-                return .inconnu
+                // Une page qui se charge exécute son bundle, à froid au premier
+                // lancement : un appel qui s'y perd n'est pas une page figée.
+                // Conclure au premier la rechargeait en plein chargement, et le
+                // premier appui échouait. Un second silence, ou un silence hors
+                // chargement, en est une.
+                silences += 1
+                if !chargementEnCours || silences > 1 { return .inconnu }
             } catch is CancellationError {
                 return .inconnu
             } catch {
@@ -382,6 +396,10 @@ final class RelaisPage: NSObject {
         // Une tâche déjà annulée ne touche plus à la page : le clic qu'elle
         // demandait n'est plus voulu par personne.
         try Task.checkCancellation()
+        // Une page morte qu'on a renoncé à recharger revit dès qu'on s'en
+        // sert : l'appel tombe sur la page qui arrive, et chaque attente sait
+        // déjà patienter devant un chargement.
+        if rechargementRetenu { charger() }
         let vue: WKWebView = webView
         let attente = AttenteDuPont()
         return try await withTaskCancellationHandler {

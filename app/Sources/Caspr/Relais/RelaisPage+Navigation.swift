@@ -108,14 +108,30 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
     /// l'application. La page est rechargée sur-le-champ ; une dictée qui
     /// attend sa transcription l'apprend au tour suivant de son attente, et
     /// une dictée qui écoute l'apprend par `surMort`.
+    ///
+    /// Sauf quand elle meurt encore dans les cinq minutes. Une cause qui se
+    /// répète — une pression mémoire qui dure, une page qui fait tomber
+    /// WebKit — rechargeait alors chatgpt.com en boucle, hors champ, des
+    /// semaines durant. La page reste morte, et le premier usage la recharge
+    /// (cf. `appeler`) : la dictée suivante n'y perd rien.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard webView === self.webView else {
             Log.error("relais : le processus d'une fenêtre de connexion s'est arrêté")
             return
         }
-        Log.error("relais : WebKit a arrêté le processus de la page — rechargement")
         morts += 1
-        charger()
+        let recidive = derniereMort.map { Date.now.timeIntervalSince($0) < 300 } ?? false
+        derniereMort = .now
+        if recidive {
+            Log.error("relais : WebKit a encore arrêté le processus de la page — "
+                      + "rechargement au prochain usage")
+            // Aucune page n'arrive : les attentes ne doivent pas en guetter une.
+            chargementEnCours = false
+            rechargementRetenu = true
+        } else {
+            Log.error("relais : WebKit a arrêté le processus de la page — rechargement")
+            charger()
+        }
         surMort?()
     }
 }

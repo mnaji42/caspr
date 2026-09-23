@@ -441,6 +441,16 @@ final class Relais: ObservableObject {
     /// dictée abandonnée le fasse aussi (cf. `interrompre`).
     private func preparer(_ page: RelaisPage) async {
         guard !Task.isCancelled else { return }
+        // Une page en cours de chargement est déjà la page de départ neuve —
+        // `charger()` ne mène que là : il n'y a qu'à l'attendre. L'interroger
+        // tombait sur un pont pas encore injecté, pris pour une page figée, et
+        // la rechargeait par-dessus — après la mort du processus, typiquement.
+        // Un chargement resté en route au-delà de l'attente, lui, passe par la
+        // question ordinaire. Une page morte qu'on a laissée morte se recharge
+        // ici plutôt que dans cette question, qui la verrait ne pas répondre.
+        if page.rechargementRetenu { page.charger() }
+        if page.chargementEnCours, await page.attendreComposeurPret(secondes: 30) { return }
+        guard !Task.isCancelled else { return }
         let conversation = await page.tientUneConversation()
         guard !Task.isCancelled else { return }
         // En discussion, le fil ouvert est la page prête — tant qu'elle

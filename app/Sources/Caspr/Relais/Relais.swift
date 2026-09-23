@@ -1138,7 +1138,16 @@ final class Relais: ObservableObject {
             calibration = nil
             calibrationAutomatique = false
             occupation = .libre
-            if aLaMain { calibrerTout(termine) } else { termine?() }
+            guard !aLaMain else { calibrerTout(termine); return }
+            // La fin d'une calibration prépare la dictée suivante, comme celle
+            // d'une dictée : le parcours a oublié discussion et préparation
+            // dès son lancement, et plusieurs de ses sorties — l'annonce
+            // refusée, une page qui ne répond pas, une connexion jamais venue
+            // — ne rechargent pas la page. La dictée suivante partait alors
+            // dans l'ancien fil, qu'on ne croyait plus ouvert. Après un
+            // rechargement, la préparation se borne à l'attendre.
+            preparerLaProchaine()
+            termine?()
         }
     }
 

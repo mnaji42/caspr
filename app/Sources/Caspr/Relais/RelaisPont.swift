@@ -611,6 +611,17 @@ extension RelaisPage {
           return { ok: true, voie: 'repere' };
         },
 
+        // Le message est-il parti ? `cliquer` ne le dit pas : un bouton
+        // désactivé, ou un clic avalé par l'éditeur, rend ok quand même. Ce
+        // que la zone porte encore — `null` quand elle est absente, ce qui ne
+        // prouve rien —, et si ChatGPT répond déjà.
+        depart(selecteur, avant) {
+          const zone = this.lire(selecteur);
+          return { ok: true, zone: zone.ok ? zone.texte : null,
+                   repond: document.querySelectorAll(REPONSES).length > avant
+                           || generationEnCours() };
+        },
+
         // Où en est la réponse attendue ?
         //
         // Sans aucun repère appris, pour les modules qui n'ont rien à

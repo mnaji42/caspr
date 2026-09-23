@@ -920,9 +920,10 @@ final class Relais: ObservableObject {
             // attendait un texte remanié, et rien ne distinguait l'un de
             // l'autre. Un quota atteint surtout doit se lire — sans quoi on
             // relance, et le même refus revient. Une session fermée aussi :
-            // « n'a pas abouti » ne dit pas qu'il faut se reconnecter.
+            // « n'a pas abouti » ne dit pas qu'il faut se reconnecter. Un
+            // envoi sans effet non plus : le message attend dans la page.
             switch error as? RelaisPage.Erreur {
-            case .refusParChatGPT?, .pasConnecte?:
+            case .refusParChatGPT?, .pasConnecte?, .envoiSansEffet?:
                 avertissement = (error as? RelaisPage.Erreur)?.raisonCourte
             default:
                 avertissement = "\(module.nom) n'a pas abouti"

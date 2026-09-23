@@ -282,12 +282,13 @@ quand un appel JavaScript ne revient jamais —, et la barre dit laquelle dès
 dix secondes. Restent des **délais de geste**, qui prouvent l'effet d'un
 geste de Caspr et non la lenteur de ChatGPT : le bouton micro qui existe dès
 que la page s'est dite connectée, l'arrêt pendant l'écoute, la consigne qui
-se relit dans la zone, le bouton d'envoi, la copie qui atterrit après le
-clic, « Lire à haute voix » sous une réponse finie. Chacun le dit dans un
-commentaire « délai de geste : … ». Dans le doute, pas de délai. Au repos,
-en revanche, un silence se constate (`sonder`) : une page muette y est
-reconstruite — une vue neuve, la session intacte —, parce qu'un rechargement
-ne débloque pas un fil JavaScript figé.
+se relit dans la zone, le bouton d'envoi, le message qui quitte la zone
+après son clic — un clic sans effet est un échec dit, pas une attente sans
+fin —, la copie qui atterrit après le clic, « Lire à haute voix » sous une
+réponse finie. Chacun le dit dans un commentaire « délai de geste : … ».
+Dans le doute, pas de délai. Au repos, en revanche, un silence se constate
+(`sonder`) : une page muette y est reconstruite — une vue neuve, la session
+intacte —, parce qu'un rechargement ne débloque pas un fil JavaScript figé.
 
 ## Les règles tenues
 

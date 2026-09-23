@@ -441,15 +441,21 @@ final class RelaisPage: NSObject {
         return ((r?["alertes"] as? [String]) ?? [], (r?["reponses"] as? Int) ?? 0)
     }
 
+    /// Rend sur-le-champ chaque appel au pont resté en suspens : l'attente
+    /// qui le porte reprend la main et juge elle-même la suite.
+    func rendreLesAppelsEnSuspens(_ erreur: Error) {
+        let suspendus = enSuspens
+        enSuspens.removeAll()
+        for appel in suspendus { appel.rendre(.failure(erreur)) }
+    }
+
     /// Ferme tout : la vue, ses fenêtres annexes, et le processus de contenu
     /// qui va avec. C'est lui qui garde le micro de la machine.
     ///
     /// Les appels en suspens sont rendus : sur une vue détruite, ils ne
     /// reviendraient jamais (mesuré), et l'attente qui les porte non plus.
     func detruire() {
-        let suspendus = enSuspens
-        enSuspens.removeAll()
-        for appel in suspendus { appel.rendre(.failure(Erreur.pageInterrompue)) }
+        rendreLesAppelsEnSuspens(Erreur.pageInterrompue)
         for annexe in annexes { annexe.close() }
         annexes.removeAll()
         webView.stopLoading()

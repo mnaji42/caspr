@@ -7,6 +7,9 @@ extension RelaisPage {
         case pasConnecte
         case pasDeReponse
         case consigneNonPosee
+        /// Le clic d'envoi a « réussi », mais le message est resté dans la
+        /// zone et ChatGPT ne répond pas : rien n'est parti.
+        case envoiSansEffet
         case refusParChatGPT(String)
         /// WebKit a fermé la page pendant la dictée ; elle a été rechargée.
         case pageInterrompue
@@ -30,6 +33,7 @@ extension RelaisPage {
             // Montrée pendant une attente, la page d'authentification est un
             // échec prouvé : ChatGPT ne rendra rien à une session fermée.
             case .pasConnecte: return "ChatGPT : session déconnectée"
+            case .envoiSansEffet: return "ChatGPT n'a pas reçu le message"
             case .pageInterrompue: return "La page ChatGPT s'est fermée — dictée perdue"
             case .relaisEteint: return "ChatGPT n'est plus la voie de dictée"
             default: return nil
@@ -58,6 +62,9 @@ extension RelaisPage {
                 "ChatGPT n'a pas répondu. La transcription brute est dans l'historique."
             case .consigneNonPosee:
                 "La consigne de reformulation n'a pas pu être ajoutée au texte."
+            case .envoiSansEffet:
+                "Le clic sur « Envoyer » est resté sans effet : le message est "
+                + "toujours dans la zone de saisie de ChatGPT."
             case .refusParChatGPT(let message):
                 "ChatGPT a affiché une erreur : « \(message) »"
             case .pageInterrompue:

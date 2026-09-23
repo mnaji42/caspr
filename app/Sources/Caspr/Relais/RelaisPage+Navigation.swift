@@ -120,6 +120,10 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
             return
         }
         morts += 1
+        // Un appel en suspens sur le processus mort peut ne jamais revenir,
+        // et plus aucun délai ne le rattrape : rendu ici, l'attente qui le
+        // porte reprend la main et lit la mort au tour suivant.
+        rendreLesAppelsEnSuspens(Erreur.pageInterrompue)
         let recidive = derniereMort.map { Date.now.timeIntervalSince($0) < 300 } ?? false
         derniereMort = .now
         if recidive {

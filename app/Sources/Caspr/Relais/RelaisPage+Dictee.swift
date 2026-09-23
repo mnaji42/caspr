@@ -327,7 +327,7 @@ extension RelaisPage {
         if !encadrement.avant.isEmpty || !encadrement.apres.isEmpty {
             try await encadrer(encadrement)
         }
-        try await cliquerLEnvoi()
+        try await cliquerLEnvoi(empreinte: empreinte(encadrement.avant))
     }
 
     /// Encadre la transcription déjà présente, l'envoie, et rend la réponse.
@@ -349,7 +349,7 @@ extension RelaisPage {
                              attente: RelaisAttente) async throws -> String {
         attente.entrer(.envoi)
         try await encadrer(encadrement)
-        try await cliquerLEnvoi()
+        try await cliquerLEnvoi(empreinte: empreinte(encadrement.avant))
         attente.entrer(.reponse)
         // Le bouton de ChatGPT quand on sait où il est, la lecture du DOM
         // sinon — pour ne pas casser une configuration antérieure.
@@ -398,14 +398,56 @@ extension RelaisPage {
     }
 
     /// Clique l'envoi, en relevant d'abord ce que la page affiche : seule une
-    /// alerte ou une réponse apparue depuis compte.
-    private func cliquerLEnvoi() async throws {
+    /// alerte ou une réponse apparue depuis compte. Puis vérifie que le
+    /// message est parti.
+    ///
+    /// `empreinte` : ce qui, dans la zone, signe le message — le délimiteur
+    /// de la consigne ; vide, la zone entière.
+    private func cliquerLEnvoi(empreinte: String) async throws {
         (alertesAvant, reponsesAvantEnvoi) = await relever()
+        let marque = empreinte.isEmpty
+            ? (try? await appeler("return window.__relais.lire(sel);",
+                                  ["sel": selecteurs.composeur]))?["texte"] as? String ?? ""
+            : empreinte
         // Délai de geste : le bouton d'envoi existe dès que la zone est
         // remplie ; dix secondes sans lui, et il est introuvable.
         guard try await cliquerQuandDisponible(.envoi, selecteurs.envoi, pendant: 10) else {
             throw Erreur.introuvable(.envoi)
         }
+        try await verifierLeDepart(marque: marque)
+    }
+
+    /// Le message a-t-il quitté la zone, ou ChatGPT répond-il déjà ?
+    ///
+    /// Un clic sans effet — bouton désactivé, clic avalé par l'éditeur — rend
+    /// ok quand même, et l'attente de la réponse qui suit n'a pas de fin :
+    /// elle aurait attendu, la barre sur « ChatGPT répond… », une réponse à un
+    /// message jamais parti. L'échéance qui rattrapait ce cas n'existe plus ;
+    /// c'est ici qu'il se prouve.
+    ///
+    /// Délai de geste : ChatGPT vide la zone à l'instant du clic, sans attendre
+    /// le réseau ; dix secondes sans que la marque la quitte ni qu'une réponse
+    /// commence, et le clic n'a rien envoyé. Une zone absente ne prouve rien.
+    private func verifierLeDepart(marque: String) async throws {
+        let limite = Date.now.addingTimeInterval(10)
+        while Date.now < limite {
+            try Task.checkCancellation()
+            try verifierLaPage()
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let r = try? await appeler("return window.__relais.depart(sel, avant);",
+                                             ["sel": selecteurs.composeur,
+                                              "avant": reponsesAvantEnvoi])
+            else { continue }
+            if r["repond"] as? Bool == true { return }
+            if let zone = r["zone"] as? String, !marque.isEmpty, !zone.contains(marque) { return }
+        }
+        try Task.checkCancellation()
+        // Une alerte apparue depuis le relevé dit pourquoi, mieux que nous.
+        if let message = await erreurAffichee(nouvelles: true) {
+            throw Erreur.refusParChatGPT(message)
+        }
+        Log.error("relais : le clic d'envoi est resté sans effet — message toujours dans la zone")
+        throw Erreur.envoiSansEffet
     }
 
     /// La dernière ligne non vide de la consigne — le délimiteur.
@@ -447,8 +489,7 @@ extension RelaisPage {
     /// qui ne répond plus.
     func cesserDAttendreLaLecture() {
         lectureInterrompue = true
-        let suspendus = enSuspens
-        for appel in suspendus { appel.rendre(.failure(CancellationError())) }
+        rendreLesAppelsEnSuspens(CancellationError())
     }
 
     /// Attend que la réponse soit terminée, puis la fait lire à haute voix.

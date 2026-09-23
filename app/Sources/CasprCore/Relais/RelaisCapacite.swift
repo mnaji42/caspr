@@ -2,8 +2,8 @@ import Foundation
 
 /// Ce que Caspr a appris à faire de la page ChatGPT.
 ///
-/// Une capacité n'est jamais choisie : elle est **acquise**, par calibration ou
-/// par autorisation système. Ce que l'on choisit, ce sont des actions et une
+/// Une capacité n'est jamais choisie : elle est **acquise**, en montrant à
+/// Caspr un élément de la page. Ce que l'on choisit, ce sont des actions et une
 /// sortie — et chacune déclare les capacités dont elle a besoin. La liste des
 /// capacités manquantes d'un module s'en déduit, au lieu d'être écrite à la
 /// main quelque part.
@@ -26,8 +26,6 @@ public enum RelaisCapacite: String, CaseIterable, Codable {
     case recuperer
     /// Faire lire la réponse à haute voix.
     case direAHauteVoix
-    /// Joindre une capture de l'écran au message.
-    case capturerEcran
 
     public var libelle: String {
         switch self {
@@ -35,7 +33,6 @@ public enum RelaisCapacite: String, CaseIterable, Codable {
         case .envoyer: "Envoyer"
         case .recuperer: "Récupérer la réponse"
         case .direAHauteVoix: "Faire lire à haute voix"
-        case .capturerEcran: "Joindre l'écran"
         }
     }
 
@@ -50,8 +47,6 @@ public enum RelaisCapacite: String, CaseIterable, Codable {
             "Montrer le bouton « copier » sous une réponse."
         case .direAHauteVoix:
             "Montrer le bouton « Lire à haute voix » sous une réponse."
-        case .capturerEcran:
-            "Autoriser l'enregistrement de l'écran dans les Réglages Système."
         }
     }
 
@@ -63,11 +58,7 @@ public enum RelaisCapacite: String, CaseIterable, Codable {
         // la page sait encore lire par lui (cf. `attendreReponse`), et exiger
         // le bouton copier retirait ses modules à qui avait calibré avant lui.
         case .recuperer: s.saitCopier || !s.reponse.isEmpty
-        // Les deux dernières ne sont pas encore construites. Rendre `false`
-        // n'est pas un oubli : c'est ce qui empêche un module qui les
-        // réclamerait d'apparaître sur la barre avant qu'elles existent.
         case .direAHauteVoix: s.saitLire
-        case .capturerEcran: false
         }
     }
 }
@@ -87,8 +78,6 @@ public enum RelaisCapacite: String, CaseIterable, Codable {
 /// ne voudrait cocher, et dont la plupart des combinaisons n'auraient aucun
 /// sens. On en veut peu, et qu'elles disent quelque chose.
 public enum RelaisAction: String, CaseIterable, Codable {
-    /// Joindre une capture de l'écran, avant d'envoyer.
-    case joindreEcran
     /// Encadrer la transcription, l'envoyer, et attendre la réponse.
     ///
     /// L'encadrement en fait partie plutôt que d'être une action à lui seul :
@@ -102,7 +91,6 @@ public enum RelaisAction: String, CaseIterable, Codable {
 
     public var libelle: String {
         switch self {
-        case .joindreEcran: "Joindre l'écran"
         case .demanderUneReponse: "Envoyer à ChatGPT"
         case .direLaReponse: "Faire lire la réponse"
         }
@@ -110,7 +98,6 @@ public enum RelaisAction: String, CaseIterable, Codable {
 
     public var capacitesRequises: [RelaisCapacite] {
         switch self {
-        case .joindreEcran: [.capturerEcran]
         case .demanderUneReponse: [.envoyer]
         case .direLaReponse: [.direAHauteVoix]
         }

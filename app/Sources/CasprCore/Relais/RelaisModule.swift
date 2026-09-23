@@ -119,13 +119,6 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
     public var sorties: [RelaisSortie]
     public var sortieParDefaut: RelaisSortie
 
-    /// La capture d'écran est-elle jointe par défaut ?
-    ///
-    /// Éteinte, toujours, et c'est un choix d'ergonomie : cliquer pour ajouter
-    /// une capture se comprend, cliquer pour en éviter une s'oublie. Un module
-    /// dont c'est l'usage courant peut la rallumer.
-    public var ecranParDefaut: Bool
-
     /// Ce qu'on montre de la page pendant l'écoute.
     public var affichage: RelaisAffichage
 
@@ -164,7 +157,6 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
         actions = try c.decodeIfPresent([RelaisAction].self, forKey: .actions) ?? []
         sorties = try c.decodeIfPresent([RelaisSortie].self, forKey: .sorties) ?? [.curseur, .note]
         sortieParDefaut = try c.decodeIfPresent(RelaisSortie.self, forKey: .sortieParDefaut) ?? .curseur
-        ecranParDefaut = try c.decodeIfPresent(Bool.self, forKey: .ecranParDefaut) ?? false
         affichage = try c.decodeIfPresent(RelaisAffichage.self, forKey: .affichage) ?? .barre
     }
 
@@ -175,7 +167,6 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
          actions: [RelaisAction] = [],
          sorties: [RelaisSortie] = [.curseur, .note],
          sortieParDefaut: RelaisSortie = .curseur,
-         ecranParDefaut: Bool = false,
          affichage: RelaisAffichage = .barre) {
         self.identifiant = identifiant
         self.nom = nom
@@ -188,7 +179,6 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
         self.actions = actions
         self.sorties = sorties
         self.sortieParDefaut = sortieParDefaut
-        self.ecranParDefaut = ecranParDefaut
         self.affichage = affichage
     }
 
@@ -210,7 +200,6 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
         fusion.avant = enregistre.avant
         fusion.apres = enregistre.apres
         fusion.affichage = enregistre.affichage
-        fusion.ecranParDefaut = enregistre.ecranParDefaut
         fusion.sortieParDefaut = enregistre.sortieParDefaut
         fusion.ditLaReponse = enregistre.ditLaReponse
         return fusion

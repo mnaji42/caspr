@@ -120,7 +120,6 @@ struct RelaisModuleTests {
         #expect(m.actions.isEmpty)
         #expect(m.sorties == [.curseur, .note])
         #expect(m.sortieParDefaut == .curseur)
-        #expect(!m.ecranParDefaut)
         #expect(m.affichage == .barre)
         #expect(throws: DecodingError.self) { try relire("{}") }
     }
@@ -148,9 +147,9 @@ struct RelaisModuleTests {
             identifiant: "perso", nom: "Traduire",
             avant: "Traduis en anglais :\n", apres: "",
             consigne: .facultative, lectureProposee: true, ditLaReponse: true,
-            actions: [.joindreEcran, .demanderUneReponse],
+            actions: [.demanderUneReponse],
             sorties: [.curseur, .note, .aucune], sortieParDefaut: .note,
-            ecranParDefaut: true, affichage: .rien)
+            affichage: .rien)
         return [RelaisCatalogue.brut, RelaisCatalogue.reorganiser,
                 RelaisCatalogue.discuter, perso]
     }
@@ -171,8 +170,25 @@ struct RelaisModuleTests {
         #expect(Set(objet.keys) == [
             "identifiant", "nom", "integre", "avant", "apres", "consigne",
             "lectureProposee", "ditLaReponse", "actions", "sorties",
-            "sortieParDefaut", "ecranParDefaut", "affichage",
+            "sortieParDefaut", "affichage",
         ])
+    }
+
+    /// `ecranParDefaut` a été écrit dans chaque module enregistré tant que
+    /// « Joindre l'écran », jamais construite, existait. La clé y reste : elle
+    /// doit être ignorée, et non faire perdre le module et sa consigne.
+    @Test("Un module enregistré avec l'ancienne clé de capture se relit")
+    func oldScreenCaptureKeyIsIgnored() throws {
+        let data = Data(#"""
+            [{"identifiant":"reorganiser","nom":"Réorganiser","integre":true,
+              "avant":"Ma consigne","apres":"","consigne":"essentielle",
+              "actions":["demanderUneReponse"],"sorties":["curseur","note"],
+              "sortieParDefaut":"note","ecranParDefaut":true,"affichage":"page"}]
+            """#.utf8)
+        let lus = RelaisModule.liste(depuis: data)
+        #expect(lus.count == 1)
+        #expect(lus.first?.avant == "Ma consigne")
+        #expect(lus.first?.sortieParDefaut == .note)
     }
 
     /// Une liste où **un seul** module est illisible : une action à son

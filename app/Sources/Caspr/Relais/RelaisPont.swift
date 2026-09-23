@@ -396,25 +396,31 @@ extension RelaisPage {
       // Les échecs écrits hors de toute alerte, pour les pages qui n'en posent
       // pas.
       //
-      // Cherchés là où ils peuvent être seulement : le dernier message de la
+      // Cherchés là où ils peuvent être seulement : le dernier tour de la
       // conversation, et le formulaire de la zone de saisie. Parcourir tous
       // les `div, span, p` du document, c'était lire `innerText` sur des
       // milliers d'éléments — chaque lecture force la page à recalculer sa
       // disposition — plusieurs fois par seconde, sur une conversation qu'on
       // attendait justement de voir avancer.
+      //
+      // Dans ce tour, jamais le texte d'un message — ni ce qui le contient.
+      // La réponse de ChatGPT peut dire « on peut réessayer », la dictée
+      // envoyée « try again » : lus comme des échecs, ils faisaient jeter
+      // une réponse juste, ou conclure au refus avant même que ChatGPT ait
+      // répondu. Reste ce que la page dessine autour du message, où elle pose
+      // ses propres avis d'échec. Un échec écrit ailleurs n'est pas deviné :
+      // l'échéance le rattrape.
+      const MESSAGE = '[data-message-author-role]';
       const echecsEcrits = () => {
         const zones = [];
         const tours = document.querySelectorAll('article');
         if (tours.length) zones.push(tours[tours.length - 1]);
-        else {
-          const messages = document.querySelectorAll('[data-message-author-role]');
-          if (messages.length) zones.push(messages[messages.length - 1]);
-        }
         const formulaires = document.querySelectorAll('main form');
         if (formulaires.length) zones.push(formulaires[formulaires.length - 1]);
         const textes = [];
         for (const zone of zones) {
           for (const el of zone.querySelectorAll('div, span, p')) {
+            if (el.closest(MESSAGE) || el.querySelector(MESSAGE)) continue;
             const t = (el.innerText || '').trim();
             if (t && t.length < 120 && MOTIFS_ECHEC.test(t)
                 && el.getClientRects().length > 0) textes.push(t);
@@ -820,6 +826,12 @@ extension RelaisPage {
           // est connecté peut fort bien contenir « signup » plus loin.
           const nommeConnexion = (el) =>
             /^(log-?in|sign-?up)\b/i.test(el.getAttribute('data-testid') || '');
+          // Le libellé, sur les boutons seulement. Un lien de la colonne
+          // latérale porte le titre d'une conversation, écrit par elle
+          // (« Connexion SSH au serveur », « Login page design ») : lu comme
+          // une invite, il déclarait déconnectée une session ouverte, à chaque
+          // appui, tant que ce titre restait à l'écran. Un lien vers la
+          // connexion se reconnaît déjà à son adresse.
           const invite = /^(se connecter|connexion|log ?in|sign ?up|s'inscrire|inscription)/i;
           let deconnecte = false;
           for (const el of document.querySelectorAll('button, a')) {
@@ -830,7 +842,10 @@ extension RelaisPage {
             if (el.closest('article, [data-message-author-role]')) continue;
             if ((el.tagName === 'A' && el.hasAttribute('href') && versConnexion(el))
                 || nommeConnexion(el)
-                || invite.test((el.innerText || '').trim())) { deconnecte = true; break; }
+                || (el.tagName === 'BUTTON' && invite.test((el.innerText || '').trim()))) {
+              deconnecte = true;
+              break;
+            }
           }
 
           return {

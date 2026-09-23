@@ -99,9 +99,20 @@ final class Relais: ObservableObject {
     /// macOS n'enregistrerait que du silence. Rappuyer, c'est dire qu'on en a
     /// fini avec ce texte, comme sur la voie ChatGPT (cf.
     /// `attendreLaPreparation`).
+    ///
+    /// Sa fenêtre a pris le clavier et activé Caspr (cf. `ouvrirFenetre`) ;
+    /// rappuyer sans avoir cliqué ailleurs est un chemin prévu. La détruire
+    /// sans rendre le premier plan laissait Caspr devant sans fenêtre, et la
+    /// voie macOS, qui ne rend pas le clavier avant d'écrire, insérait la
+    /// dictée chez lui. Jugé avant de détruire, tant que la fenêtre clé dit
+    /// d'où l'on vient ; l'appelant relit ensuite l'application devant, qui
+    /// est celle où l'on veut le texte.
     func libererLaPageGardee() async {
         guard occupation == .libre, !pageVoulue else { return }
+        let rendreLePremierPlan = premierPlanTenuParLeRelais
         await libererPage()
+        guard rendreLePremierPlan else { return }
+        await seRetirer()
     }
 
     /// Le magnétophone est arrêté, quelle qu'en soit l'issue : la page que la
@@ -716,6 +727,11 @@ final class Relais: ObservableObject {
         guard premierPlanTenuParLeRelais else { return }
         if page?.estVisible == true { page?.cacher() }
         page?.fenetreCleRetiree = false
+        await seRetirer()
+    }
+
+    /// Cache Caspr, et attend que le système ait rendu le premier plan.
+    private func seRetirer() async {
         NSApp.hide(nil)
         // Insérer avant que le système ait rendu le premier plan viserait
         // encore Caspr : on observe qu'il l'a rendu, une seconde au plus.

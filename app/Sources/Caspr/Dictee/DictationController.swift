@@ -353,6 +353,15 @@ final class DictationController {
             switch voie {
             case .apple:
                 try await macOS.demarrer()
+                // Une page gardée pour qu'on y récupère un texte tenait
+                // Caspr devant à l'appui : l'application visée a été lue nil.
+                // Sa destruction vient de rendre le premier plan (cf.
+                // `Relais.libererLaPageGardee`), et celle qui revient devant
+                // est celle où l'on travaillait. Nil encore, c'est la zone
+                // d'essai de l'accueil, qui garde Caspr devant.
+                if applicationVisee == nil {
+                    applicationVisee = Livraison.applicationDevant()
+                }
             case .chatgpt:
                 try await chatgpt.demarrer()
             }

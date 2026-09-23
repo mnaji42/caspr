@@ -967,10 +967,12 @@ final class Relais: ObservableObject {
     /// par `terminerDiscussion` : il range la page tout de suite, avant que
     /// l'arrêt n'ait cliqué — ChatGPT aurait continué d'écouter hors champ —
     /// puis lance une préparation que celle-ci remplacerait, arrêt compris.
-    func interrompre(quitterLaDiscussion: Bool = false) {
+    ///
+    /// `ecouteQuiDemarre` : cf. `interrompreLeDemarrage`.
+    func interrompre(quitterLaDiscussion: Bool = false, ecouteQuiDemarre: Bool = false) {
         if quitterLaDiscussion { enDiscussion = false }
         lancerPreparation { [weak self] page in
-            await page.annuler()
+            await page.annuler(ecouteQuiDemarre: ecouteQuiDemarre)
             await page.rendreLeMicro()
             // Une dictée a pu commencer entre-temps et afficher sa barre : ce
             // n'est plus à nous de la ranger.
@@ -978,6 +980,24 @@ final class Relais: ObservableObject {
             if occupation == .libre { ranger(page) }
             await preparer(page)
         }
+    }
+
+    /// L'appui a été abandonné avant que la page n'écoute.
+    ///
+    /// Encore dans l'attente de la préparation, rien n'a été cliqué, et il
+    /// n'y a rien à arrêter. Passer par `interrompre` abandonnait pourtant le
+    /// rechargement en cours pour en recommencer un : jusqu'à quarante
+    /// secondes de plus au prochain appui, et autant à chaque renoncement. On
+    /// range seulement ce que l'appui a ouvert ; la préparation continue.
+    ///
+    /// Plus tard, le clic du micro a pu partir : l'arrêt attend alors que la
+    /// page écoute (cf. `RelaisPage.annuler`).
+    func interrompreLeDemarrage() {
+        guard preparation == nil else {
+            if let page { ranger(page) }
+            return
+        }
+        interrompre(ecouteQuiDemarre: true)
     }
 
     /// Apprendre les boutons de la page sans les faire montrer : Caspr les

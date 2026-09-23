@@ -118,9 +118,11 @@ final class VoieChatGPT {
     }
 
     /// La touche a interrompu l'attente de la page. Elle a pu se mettre à
-    /// écouter entre-temps : on l'arrête, comme Échap le fait pendant l'écoute.
+    /// écouter entre-temps : on l'arrête, comme Échap le fait pendant l'écoute
+    /// — sauf si elle n'a pas encore été touchée (cf.
+    /// `Relais.interrompreLeDemarrage`).
     func demarrageInterrompu() {
-        relais.interrompre()
+        relais.interrompreLeDemarrage()
     }
 
     /// Le démarrage a échoué sur la page.

@@ -692,9 +692,25 @@ extension RelaisPage {
     }
 
     /// Annule une dictée en cours sans rien récupérer.
-    func annuler() async {
-        _ = try? await appeler("return window.__relais.cliquer('stop', sel);",
-                               ["sel": selecteurs.stop])
+    ///
+    /// `ecouteQuiDemarre` : l'appui vient d'être abandonné, peut-être juste
+    /// après le clic du micro. La page ne se met alors à écouter qu'une fois
+    /// le micro accordé, quelques centaines de millisecondes plus tard :
+    /// cliquer l'arrêt sur-le-champ ne trouvait rien, et ChatGPT se mettait
+    /// ensuite à écouter hors champ, le micro de la machine avec lui. On
+    /// observe donc qu'elle écoute, trois secondes au plus, avant d'arrêter.
+    func annuler(ecouteQuiDemarre: Bool = false) async {
+        let fin = Date.now.addingTimeInterval(ecouteQuiDemarre ? 3 : 0)
+        var ecoute = await estEnEnregistrement() || microOuvert
+        while !ecoute, Date.now < fin, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(200))
+            ecoute = await estEnEnregistrement() || microOuvert
+        }
+        // Un seul essai quand rien n'écoute, comme avant ; quelques secondes
+        // quand la page écoute, le temps que l'arrêt paraisse.
+        _ = try? await cliquerQuandDisponible(
+            .stop, selecteurs.stop, jusqua: .now.addingTimeInterval(ecoute ? 5 : 0))
+        // L'arrêt a pu déposer une transcription dans la zone.
         _ = try? await appeler("return window.__relais.vider(sel);",
                                ["sel": selecteurs.composeur])
     }

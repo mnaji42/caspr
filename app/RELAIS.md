@@ -251,6 +251,12 @@ toujours prête : le fil ouvert quand on discute, une conversation neuve quand u
 message est parti, une zone de saisie vidée sinon. Rien ne se décide à l'appui —
 ni fil neuf, ni nettoyage — donc changer de module en pleine phrase n'a aucun
 état à rattraper, et l'on ne paie jamais un rechargement pendant qu'on parle.
+Une seule exception : un échec qui laisse la transcription dans la fenêtre
+remet la préparation à plus tard (`preparationDifferee`), pour ne pas
+détruire sous les yeux le texte à récupérer. Elle se fait à la fermeture de
+cette fenêtre (`fenetreFermee`) ou, si l'on rappuie sans l'avoir fermée, à
+l'appui (`attendreLaPreparation`) : la barre l'annonce par « ChatGPT se
+prépare… », et la touche de dictée interrompt l'attente.
 
 Tout champ ajouté à `RelaisSelecteurs` **doit** être décodé avec
 `decodeIfPresent`. Le décodage synthétisé par Swift échoue sur une clé absente

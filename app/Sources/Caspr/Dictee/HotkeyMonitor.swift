@@ -1,4 +1,3 @@
-import AppKit
 import Carbon.HIToolbox
 
 /// Raccourci global, actif même quand Caspr n'est pas au premier plan.

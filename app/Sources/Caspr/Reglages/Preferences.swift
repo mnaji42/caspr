@@ -256,41 +256,11 @@ final class Preferences {
         }
     }
 
-    /// Les langues déclarées, en plus de la principale — dans leur ordre.
-    var secondaryLanguages: [String] {
-        selectedLanguages.filter { $0 != primaryLanguage }
-    }
-
     /// Le catalogue restreint à ce que l'utilisateur a retenu, dans son ordre.
     var activeLanguages: [Language] { selectedLanguages.map(Language.named) }
 
     /// La langue principale, comme objet.
     var primary: Language { Language.named(primaryLanguage) }
-
-    /// Nom historique de la langue principale.
-    ///
-    /// Conservé parce que tout ce qui transcrit le lit — moteurs, aperçu — et
-    /// que ces appels ne gagneraient rien à être réécrits : « la
-    /// langue » y désigne bien la langue courante. Il rend une locale complète
-    /// (`fr-FR`) et non un code court (`fr`) : `SpeechTranscriber` et
-    /// `SFSpeechRecognizer` ont leurs modèles par région.
-    var language: String {
-        get { primaryLanguage }
-        set {
-            // Une langue qu'on n'a pas déclarée devient déclarée, et
-            // principale : c'est le sens de l'ancien réglage à choix unique,
-            // et le seul qui ne surprenne pas l'appelant.
-            if selectedLanguages.contains(newValue) {
-                primaryLanguage = newValue
-            } else {
-                // Ajoutée **à la fin**, comme le fait `toggleLanguage` dans le
-                // prototype : la liste garde l'ordre de déclaration. C'est le
-                // choix de la principale qui la rend principale, pas sa place.
-                selectedLanguages.append(newValue)
-                primaryLanguage = newValue
-            }
-        }
-    }
 
     /// La version de mise à jour qu'on a explicitement refusée.
     ///

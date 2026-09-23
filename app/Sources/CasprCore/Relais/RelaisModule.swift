@@ -35,9 +35,6 @@ public enum RelaisSortie: String, CaseIterable, Codable {
     /// côté d'une sortie qui l'implique déjà, c'est deux réglages qui peuvent
     /// se contredire.
     public var demandeLaReponse: Bool { self != .aucune }
-
-    /// La page se referme-t-elle après ?
-    public var refermeLaPage: Bool { self != .aucune }
 }
 
 /// Ce que Caspr fait d'une dictée, du micro jusqu'à la sortie.
@@ -249,7 +246,6 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
     }
 
     public var demandeUnAllerRetour: Bool { actions.contains(.demanderUneReponse) }
-    public var ecranPossible: Bool { actions.contains(.joindreEcran) }
 
     /// Tout ce qu'il faut avoir appris pour que ce module tourne.
     ///

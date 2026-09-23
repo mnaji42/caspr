@@ -66,15 +66,6 @@ final class SpeechAssets {
 
     func state(of language: String) -> State { states[language] ?? .unknown }
 
-    /// Rien ne bloque : la langue est prête, ou le système ne la propose pas
-    /// et rien ne la rendra disponible.
-    func isSettled(_ language: String) -> Bool {
-        switch state(of: language) {
-        case .ready, .unsupported: true
-        default: false
-        }
-    }
-
     // MARK: - Vérifier
 
     /// Interroge le système sur ces langues, en tâche de fond.
@@ -243,12 +234,6 @@ final class SpeechAssets {
         do { try await LivePreview.reserve(locale) } catch {
             Log.error("assets: réservation de \(locale.identifier) — \(error)")
         }
-    }
-
-    /// Vérifie, puis télécharge si besoin. Ce que fait l'accueil.
-    func ensure(_ language: String) async {
-        await check(language)
-        if case .missing = state(of: language) { await install(language) }
     }
 
     /// La locale d'Apple Intelligence correspondant à cette langue, **si elle

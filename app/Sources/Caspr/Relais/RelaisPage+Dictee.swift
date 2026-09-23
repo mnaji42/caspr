@@ -1,5 +1,4 @@
 import AppKit
-import WebKit
 import CasprCore
 
 // Ce que la page fait pendant une dictée : écouter, rendre la transcription,

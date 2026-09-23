@@ -94,11 +94,6 @@ final class AudioRecorder: @unchecked Sendable {
         }
     }
 
-    /// Ouvre le panneau de macOS où ce mode se change.
-    static func showMicrophoneModes() {
-        AVCaptureDevice.showSystemUserInterface(.microphoneModes)
-    }
-
     static var microphoneAccess: MicrophoneAccess {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized: .granted

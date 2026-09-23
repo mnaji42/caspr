@@ -1,5 +1,4 @@
 import AppKit
-import AVFoundation
 
 /// Accès aux volets d'autorisation des Réglages Système.
 ///

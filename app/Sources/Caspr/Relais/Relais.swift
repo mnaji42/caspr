@@ -176,7 +176,6 @@ final class Relais: ObservableObject {
     /// l'application. Une étape d'accueil doit toujours pouvoir être
     /// abandonnée — c'est même là qu'on en a le plus besoin.
     private var calibration: Task<Void, Never>?
-    var calibrationEnCours: Bool { occupation == .calibration }
     /// La calibration en cours est-elle le parcours automatique ? Abandonné,
     /// il laisse une page à remettre d'aplomb (cf. `abandonnerCalibration`).
     private var calibrationAutomatique = false

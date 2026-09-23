@@ -50,7 +50,7 @@ final class DictationController {
     /// modèle français — panne parfaitement muette, puisque le moteur rend
     /// simplement un texte vide ou absurde. Toute copie d'un réglage est une
     /// occasion de divergence ; il n'y en a plus.
-    var language: String { Preferences.shared.language }
+    var language: String { Preferences.shared.primaryLanguage }
 
     /// Destination du texte : curseur actif, ou fichier de notes.
     ///

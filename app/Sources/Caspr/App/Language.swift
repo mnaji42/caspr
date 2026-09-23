@@ -282,15 +282,4 @@ extension Language {
         return await SpeechTranscriber.supportedLocales
             .map { $0.identifier.replacingOccurrences(of: "_", with: "-") }
     }
-
-    /// Les locales dont le modèle est **déjà sur le disque**.
-    ///
-    /// Quelqu'un a pu les installer depuis Réglages Système ou Siri avant même
-    /// de connaître Caspr : proposer un téléchargement dans ce cas ferait
-    /// perdre du temps et de la confiance. Cf. `03_REGLES_SYSTEME_MACOS`.
-    static func systemInstalledLocales() async -> [String] {
-        guard #available(macOS 26.0, *) else { return [] }
-        return await SpeechTranscriber.installedLocales
-            .map { $0.identifier.replacingOccurrences(of: "_", with: "-") }
-    }
 }

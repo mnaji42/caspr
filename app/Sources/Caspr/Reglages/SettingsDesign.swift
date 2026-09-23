@@ -19,7 +19,6 @@ enum Style {
     /// Toutes les surfaces de Caspr sont sombres, donc rien n'oblige à suivre
     /// l'apparence claire du système.
     static let accent = Color(hex: 0x00E5CC)
-    static let accentHover = Color(hex: 0x38EFD8)
     static let accentDim = accent.opacity(0.12)
     static let accentBorder = accent.opacity(0.35)
     static let accentGlow = accent.opacity(0.30)
@@ -52,7 +51,6 @@ enum Style {
     // MARK: Surfaces
 
     static let cardFill = Color.white.opacity(0.035)
-    static let cardHover = Color.white.opacity(0.055)
     static let cardStroke = Color.white.opacity(0.08)
     /// Le fond des encarts d'action à l'intérieur d'une carte.
     static let innerBoxFill = Color.black.opacity(0.28)
@@ -60,7 +58,6 @@ enum Style {
     // MARK: Géométrie
 
     static let cardRadius: CGFloat = 14
-    static let cardPadding: CGFloat = 16
     /// Encarts d'action et zone d'essai, à l'intérieur d'une carte.
     static let innerRadius: CGFloat = 11
     /// Champs de saisie et barres de recherche.
@@ -78,8 +75,6 @@ enum Style {
     static let windowWidth: CGFloat = 580
     static let windowHeight: CGFloat = 700
     static let windowPadding: CGFloat = 30
-    /// Largeur utile des cartes — `windowWidth - 2 × windowPadding`.
-    static var contentWidth: CGFloat { windowWidth - 2 * windowPadding }
 }
 
 extension NSColor {
@@ -268,24 +263,6 @@ struct WindowBackground: View {
             GlassBackground()
             Color(hex: 0x141821).opacity(0.85)
         }
-    }
-}
-
-/// La barre de titre : la place des feux tricolores, et ce qu'on met à droite.
-///
-/// La fenêtre est en `fullSizeContentView`, donc le contenu passerait sous les
-/// feux sans cette réserve de 48 pt. Le titre lui-même reste celui de macOS —
-/// le redessiner donnerait deux titres à trois pixels d'écart.
-struct WindowChrome<Trailing: View>: View {
-    @ViewBuilder var trailing: Trailing
-
-    var body: some View {
-        HStack {
-            Spacer()
-            trailing
-        }
-        .frame(height: 48)
-        .padding(.horizontal, Style.windowPadding)
     }
 }
 

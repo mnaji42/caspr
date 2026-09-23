@@ -1,6 +1,4 @@
 import AppKit
-import SwiftUI
-import CasprCore
 
 /// L'accueil du premier lancement.
 ///

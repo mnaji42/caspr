@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 
 /// L'état des autorisations, relu périodiquement.
 ///
@@ -38,12 +37,6 @@ final class PermissionsMonitor {
     /// bascule quelque chose, et rien ne revient nous le dire. C'est exactement
     /// le trou que ce moniteur existe pour boucher.
     private(set) var dictationDisabled = SystemDictation.isDisabled
-
-    /// Le droit de reconnaissance vocale n'entre dans le compte que s'il sert :
-    /// l'exiger sur une machine qui dictera avec Apple Intelligence bloquerait
-    /// l'accueil sur une autorisation inutile.
-    /// Combien d'autorisations cette machine réclame réellement.
-    var neededCount: Int { requiresSpeech ? 3 : 2 }
 
     /// Le droit de reconnaissance vocale est-il en jeu ici ?
     ///
@@ -188,30 +181,6 @@ final class PermissionsMonitor {
             try? await Task.sleep(for: .milliseconds(450))
             guard !NSApp.isActive else { return }
             returnToForeground()
-        }
-    }
-}
-
-// MARK: - Pièces d'interface
-
-/// Une ligne « pastille + libellé + état », pour ce que l'application subit au
-/// lieu de le décider : version du système, autorisations.
-struct StatusRow: View {
-    let ok: Bool
-    let label: String
-    let detail: String
-    /// Un manque qui n'empêche pas d'avancer se signale en orange, pas en
-    /// rouge : c'est un avertissement, pas une panne.
-    var warningOnly = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .foregroundStyle(ok ? Style.accent : Style.pending)
-                .font(.system(size: 15))
-            Text(label).font(.system(size: 13, weight: .medium))
-            Text(detail).font(.system(size: 12)).foregroundStyle(.secondary)
-            Spacer()
         }
     }
 }

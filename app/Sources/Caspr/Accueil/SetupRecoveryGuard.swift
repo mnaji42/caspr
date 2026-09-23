@@ -1,4 +1,3 @@
-import AppKit
 
 /// Empêche de se servir de Caspr tant qu'il ne peut pas encore dicter.
 ///
@@ -93,6 +92,5 @@ enum SetupRecoveryGuard {
     enum Reason: String {
         case dictation
         case settings
-        case launch
     }
 }

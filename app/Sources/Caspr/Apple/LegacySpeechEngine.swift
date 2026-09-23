@@ -105,20 +105,6 @@ final class LegacySpeechEngine: TranscripteurMacOS {
             + "elle qui installe les modèles dont Caspr se sert."
     }
 
-    /// Les langues que ce moteur sait traiter hors ligne, en codes courts.
-    ///
-    /// Regroupées par langue et non par région : l'application propose « fr »,
-    /// pas « fr-BE » — et `fr-CA` prouve que le français est couvert.
-    static var offlineLanguages: Set<String> {
-        var found: Set<String> = []
-        for locale in SFSpeechRecognizer.supportedLocales() {
-            guard let code = locale.language.languageCode?.identifier else { continue }
-            if found.contains(code) { continue }
-            if isAvailable(for: locale.identifier) { found.insert(code) }
-        }
-        return found
-    }
-
     /// Le reconnaisseur d'une langue, résolu par la liste du système.
     ///
     /// La version précédente concaténait « -FR » quand le code court ne

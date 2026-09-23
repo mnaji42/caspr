@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Où le texte dicté atterrit : au curseur, ou dans un fichier.
 ///

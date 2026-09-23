@@ -115,13 +115,6 @@ final class PillSelector: NSView {
 
     required init?(coder: NSCoder) { fatalError("non utilisé") }
 
-    func setLabel(_ text: String, at index: Int) {
-        guard buttons.indices.contains(index) else { return }
-        buttons[index].title = text
-        buttons[index].restyle(selected: index == selectedIndex, accent: accent)
-        invalidateIntrinsicContentSize()
-    }
-
     func setEnabled(_ enabled: Bool, at index: Int) {
         guard buttons.indices.contains(index) else { return }
         buttons[index].isEnabled = enabled

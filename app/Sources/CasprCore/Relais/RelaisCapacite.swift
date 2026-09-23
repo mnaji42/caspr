@@ -55,9 +55,6 @@ public enum RelaisCapacite: String, CaseIterable, Codable {
         }
     }
 
-    /// Le socle est exigé de tous et ne se propose pas.
-    public var estSocle: Bool { self == .dicter }
-
     public func estAcquise(_ s: RelaisSelecteurs) -> Bool {
         switch self {
         case .dicter: s.estCalibre

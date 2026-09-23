@@ -76,5 +76,21 @@ final class ReglagesEnMemoire: UserDefaults {
         valeurs[defaultName] as? [String: Any]
     }
 
+    override func double(forKey defaultName: String) -> Double {
+        (valeurs[defaultName] as? NSNumber)?.doubleValue ?? 0
+    }
+
+    override func float(forKey defaultName: String) -> Float {
+        (valeurs[defaultName] as? NSNumber)?.floatValue ?? 0
+    }
+
+    override func url(forKey defaultName: String) -> URL? {
+        valeurs[defaultName] as? URL
+    }
+
+    override func stringArray(forKey defaultName: String) -> [String]? {
+        valeurs[defaultName] as? [String]
+    }
+
     override func dictionaryRepresentation() -> [String: Any] { valeurs }
 }

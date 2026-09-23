@@ -20,8 +20,7 @@ import SwiftUI
 /// liste où on ne l'a pas trouvé.
 ///
 /// La disponibilité est **mesurée** — `SpeechTranscriber.supportedLocales`,
-/// `SFSpeechRecognizer`, la couverture des poids Whisper — jamais déduite d'un
-/// numéro de version. Cf. `03_REGLES_SYSTEME_MACOS`.
+/// `SFSpeechRecognizer` — jamais déduite d'un numéro de version.
 struct LanguagePicker: View, ValidatingComponent {
     @State private var prefs = Preferences.shared
     @State private var search = ""

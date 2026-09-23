@@ -36,7 +36,6 @@ final class LegacySpeechEngine: TranscripteurMacOS {
         case notAuthorised
         case offlineUnsupported(String)
         case dictationDisabled
-        case noResult
 
         var errorDescription: String? {
             switch self {
@@ -53,8 +52,6 @@ final class LegacySpeechEngine: TranscripteurMacOS {
                     + "machine. Caspr n'enverra pas votre voix à un serveur "
                     + "sans que vous l'ayez choisi : dictez dans une autre "
                     + "langue, ou passez par ChatGPT dans l'onglet Voie."
-            case .noResult:
-                "La dictée de macOS n'a rien produit."
             }
         }
     }

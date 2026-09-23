@@ -1,22 +1,24 @@
 import AVFoundation
 import Foundation
 
-/// Capture micro, convertie à la volée au format attendu par le moteur.
+/// Capture micro, convertie à la volée en 16 kHz mono.
 ///
-/// Le matériel délivre typiquement du 44,1 ou 48 kHz ; Whisper veut du 16 kHz
-/// mono. On convertit pendant l'enregistrement plutôt qu'à la fin : ça étale
-/// le coût sur la durée de la dictée au lieu de l'ajouter à la latence
-/// perçue, qui commence au relâchement de la touche.
+/// Le matériel délivre typiquement du 44,1 ou 48 kHz. Le 16 kHz est un héritage
+/// du moteur local, qui l'exigeait ; il reste parce qu'il suffit à la voix et
+/// tient une longue dictée en trois fois moins de mémoire. `SpeechTranscriber`
+/// le reconvertit au format de son analyseur (cf. `AppleSpeechEngine.buffers`),
+/// `SFSpeechRecognizer` le prend tel quel.
+///
+/// On convertit pendant l'enregistrement plutôt qu'à la fin : ça étale le coût
+/// sur la durée de la dictée au lieu de l'ajouter à la latence perçue, qui
+/// commence au relâchement de la touche.
 final class AudioRecorder: @unchecked Sendable {
     enum RecorderError: LocalizedError {
-        case permissionDenied
         case noInputDevice
         case converterUnavailable
 
         var errorDescription: String? {
             switch self {
-            case .permissionDenied:
-                return "Accès au micro refusé. Réglages › Confidentialité › Microphone."
             case .noInputDevice:
                 return "Aucun micro disponible."
             case .converterUnavailable:
@@ -32,12 +34,6 @@ final class AudioRecorder: @unchecked Sendable {
     private var samples: [Float] = []
     private var converter: AVAudioConverter?
     private var isRunning = false
-
-    var duration: TimeInterval {
-        lock.lock()
-        defer { lock.unlock() }
-        return Double(samples.count) / Self.targetSampleRate
-    }
 
     /// Second consommateur des tampons micro, pour l'aperçu en direct.
     ///

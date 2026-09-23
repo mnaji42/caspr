@@ -273,7 +273,9 @@ inachevée » à qui vient de la terminer. C'est arrivé en 0.13.0.
 chemin d'une dictée, une attente ne finit que par un geste de l'utilisateur —
 la touche de dictée, Échap pendant l'écoute — ou par un échec que la page
 **prouve** : une alerte de refus apparue depuis la demande, le processus
-WebKit mort, l'écran d'authentification montré. Le propriétaire, le
+WebKit mort, l'écran d'authentification montré, le pont de Caspr absent d'une
+page chargée (le script ne s'y est pas installé, rien ne l'y installera :
+l'attendre serait attendre toujours). Le propriétaire, le
 24 septembre 2026 : « Des fois ça prend dix, vingt, trente secondes, parce
 que si je parle plusieurs minutes, ChatGPT prend beaucoup de temps. Donc non,
 il n'y a pas de limite. » Une échéance a existé, sur la durée parlée, et un
@@ -284,10 +286,13 @@ quand un appel JavaScript ne revient jamais —, et la barre dit laquelle dès
 dix secondes. Restent des **délais de geste**, qui prouvent l'effet d'un
 geste de Caspr et non la lenteur de ChatGPT : le bouton micro qui existe dès
 que la page s'est dite connectée, la page qui se met à écouter après son
-clic, l'arrêt pendant l'écoute, la consigne qui se relit dans la zone, le
+clic — un micro que WebKit tenait déjà avant ce clic ne le prouve pas, seul
+l'enregistrement le fait alors —, l'arrêt pendant l'écoute, la consigne qui se relit dans la zone, le
 bouton d'envoi, le message qui quitte la zone après son clic — un clic sans
 effet est un échec dit, pas une attente sans fin —, la copie qui atterrit
-après le clic, « Lire à haute voix » sous une réponse finie. Ils sont tous
+après le clic, la réponse qu'on vient de copier qui se montre dans la page
+— le texte attend ce relevé pour s'insérer, et dépassé il s'insère sans la
+voix —, « Lire à haute voix » sous une réponse finie. Ils sont tous
 dans `RelaisDelai`, et il n'en existe aucun autre ; chaque appel qui en
 passe un le dit dans un commentaire « délai de geste : … ». Dans le doute,
 pas de délai. Au repos, en revanche, un silence se constate

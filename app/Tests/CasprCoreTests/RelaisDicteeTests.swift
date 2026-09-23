@@ -54,7 +54,9 @@ struct RelaisDicteeTests {
         lazy var presse = PressePapiersFactice(horloge)
         var epoque = 0
         var chargementEnCours = false
-        var microOuvert: Bool { ecoute }
+        /// WebKit tient le micro hors de toute écoute : resté pris d'avant.
+        var microTenu = false
+        var microOuvert: Bool { ecoute || microTenu }
         var selecteurs: RelaisSelecteurs = {
             var s = RelaisSelecteurs()
             (s.micro, s.stop, s.composeur, s.envoi, s.copier, s.lecture) = ("m", "s", "c", "e", "k", "l")
@@ -77,6 +79,8 @@ struct RelaisDicteeTests {
         var reponsePrecedente = false
         var deconnecteA: Duration?
         var mortA: Duration?
+        /// Une page chargée sans le pont de Caspr, à partir de cet instant.
+        var pontAbsentA: Duration?
         var echec: (Duration) -> RelaisInstantane.Echec? = { _ in nil }
         /// La copie n'atterrit qu'après ce délai.
         var copieEnRetard: Duration = .zero
@@ -108,6 +112,7 @@ struct RelaisDicteeTests {
         func instantane(_ demande: RelaisDemande) async throws -> RelaisInstantane {
             if releveSuspendu { return try await withCheckedThrowingContinuation { suspendus.append($0) } }
             if let m = mortA, t >= m, epoque == 0 { epoque = 1 }
+            if let p = pontAbsentA, t >= p { throw RelaisErreur.pontAbsent }
             var vu = RelaisInstantane()
             vu.authentification = deconnecteA.map { t >= $0 } ?? false
             vu.composeur = !ecoute && !transcrit
@@ -238,6 +243,17 @@ struct RelaisDicteeTests {
         try await dictee.ouvrirLEcoute()
         await #expect(throws: RelaisErreur.pageInterrompue) { try await dictee.arreterEtLire() }
         #expect(dictee.pageMorte)
+        #expect(page.horloge.ecoule < .seconds(11))
+    }
+
+    @Test("Un pont absent d'une page chargée pendant l'attente : échec prouvé, et non attente sans fin")
+    func pontAbsentPendantLAttente() async throws {
+        let page = PageFactice()
+        page.transcription = .seconds(60)
+        page.pontAbsentA = .seconds(10)
+        let dictee = Self.dictee(page)
+        try await dictee.ouvrirLEcoute()
+        await #expect(throws: RelaisErreur.pontAbsent) { try await dictee.arreterEtLire() }
         #expect(page.horloge.ecoule < .seconds(11))
     }
 
@@ -426,6 +442,18 @@ struct RelaisDicteeTests {
         #expect(page.clics == [.micro] && !page.echoArme)
     }
 
+    @Test("Un micro que WebKit tenait déjà avant le clic ne prouve pas l'écoute")
+    func microDejaTenu() async throws {
+        let page = PageFactice()
+        page.ecoutePrend = false
+        page.microTenu = true
+        let dictee = Self.dictee(page)
+        await #expect(throws: RelaisErreur.ecouteNonOuverte) { try await dictee.ouvrirLEcoute() }
+        // Tenu d'avant, il n'empêche pas une écoute qui prend.
+        page.ecoutePrend = true
+        try await Self.dictee(page).ouvrirLEcoute()
+    }
+
     @Test("Une page qui se met à écouter une seconde après le clic est une écoute ouverte")
     func ecouteQuiTarde() async throws {
         let page = PageFactice()
@@ -446,7 +474,7 @@ struct RelaisDicteeTests {
         while !page.clics.contains(.micro) { await Task.yield() }
         appui.cancel()
         _ = try? await appui.value
-        await Self.dictee(page).arreterApresAbandon(ecouteQuiDemarre: true)
+        await Self.dictee(page).arreterApresAbandon(auRepos: try await page.instantane([]), ecouteQuiDemarre: true)
         #expect(page.arrete && !page.microOuvert && !page.echoArme)
     }
 
@@ -455,12 +483,11 @@ struct RelaisDicteeTests {
     @Test("La préparation de la dictée suivante, cas par cas")
     func preparation() {
         typealias P = RelaisPreparation
-        #expect(P.decision(enDiscussion: false, page: .morte) == .recharger)
-        #expect(P.decision(enDiscussion: true, page: .enChargement) == .attendreLeChargement)
-        #expect(P.decision(enDiscussion: true, page: .muette) == .reconstruire)
-        #expect(P.decision(enDiscussion: true, page: .repond(conversation: true)) == .garderLeFil)
-        #expect(P.decision(enDiscussion: true, page: .repond(conversation: false)) == .garderLeFil)
-        #expect(P.decision(enDiscussion: false, page: .repond(conversation: true)) == .conversationNeuve)
-        #expect(P.decision(enDiscussion: false, page: .repond(conversation: false)) == .vider)
+        #expect(P.decision(enDiscussion: true, conversation: nil) == .reconstruire)
+        #expect(P.decision(enDiscussion: false, conversation: nil) == .reconstruire)
+        #expect(P.decision(enDiscussion: true, conversation: true) == .garderLeFil)
+        #expect(P.decision(enDiscussion: true, conversation: false) == .garderLeFil)
+        #expect(P.decision(enDiscussion: false, conversation: true) == .conversationNeuve)
+        #expect(P.decision(enDiscussion: false, conversation: false) == .vider)
     }
 }

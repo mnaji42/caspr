@@ -326,8 +326,11 @@ final class Relais: ObservableObject {
     /// `RelaisDictee`) ; oublié avec la page.
     private var dictee: RelaisDictee?
 
-    private func scenario() throws -> RelaisDictee {
-        guard let dictee else { throw RelaisErreur.relaisEteint }
+    /// Un scénario neuf sur `page`, qui écrit au journal et dit la session vue.
+    private func scenario(_ page: RelaisPage) -> RelaisDictee {
+        let dictee = RelaisDictee(page: page, pressePapiers: NSPasteboard.general)
+        dictee.journal = { $1 ? Log.error($0) : Log.info($0) }
+        dictee.surSession = { [weak self] in self?.sessionVue = $0 ? .connecte : .deconnecte }
         return dictee
     }
 
@@ -462,49 +465,39 @@ final class Relais: ObservableObject {
     /// dictée abandonnée le fasse aussi (cf. `interrompre`) : une question
     /// posée à la page, et ce qu'en décide `RelaisPreparation`.
     private func preparer(_ page: RelaisPage) async {
+        // Morte et laissée morte (cf. la récidive dans `RelaisPage`), elle se
+        // recharge ici plutôt que dans la question, qui la verrait muette.
+        if page.rechargementRetenu { page.charger() }
+        // Une page qui se charge est déjà la page de départ neuve —
+        // `charger()` ne mène que là : il n'y a qu'à l'attendre. L'interroger
+        // tombait sur un pont pas encore injecté, pris pour une page figée, et
+        // la rechargeait par-dessus — après la mort du processus, typiquement.
         // Un chargement resté en route au-delà de l'attente passe par la
         // question ordinaire.
-        var chargementAttendu = false
-        while !Task.isCancelled {
-            let etat: RelaisPreparation.Page
-            if page.rechargementRetenu {
-                etat = .morte
-            } else if page.chargementEnCours, !chargementAttendu {
-                etat = .enChargement
-            } else {
-                etat = await page.auRepos().map { .repond(conversation: $0.conversation) } ?? .muette
-                guard !Task.isCancelled else { return }
-            }
-            switch RelaisPreparation.decision(enDiscussion: enDiscussion, page: etat) {
-            case .recharger:
-                page.charger()
-            case .attendreLeChargement:
-                if await page.attendreComposeurPret(secondes: 30) { return }
-                chargementAttendu = true
-            case .garderLeFil:
-                return
-            case .conversationNeuve:
-                page.charger()
-                let prete = await page.attendreComposeurPret(secondes: 30)
-                guard !prete, !Task.isCancelled else { return }
-                // La page vient d'être rechargée : il n'y a rien à y perdre. Un
-                // chargement resté en route trente secondes est un fil bloqué,
-                // qu'un second rechargement n'aurait pas débloqué.
-                Log.error("relais : la page rechargée est restée sans zone de saisie")
-                await reconstruireLaPage()
-                return
-            case .vider:
-                // Un vidage refusé par une page qui répond se retente à l'appui ;
-                // par une page devenue muette entre-temps, il la laissait figée
-                // devant l'appui suivant, sans reconstruction.
-                guard await !page.viderComposeur(), !Task.isCancelled,
-                      await page.auRepos() == nil, !Task.isCancelled else { return }
-                await reconstruireLaPage()
-                return
-            case .reconstruire:
-                await reconstruireLaPage()
-                return
-            }
+        if page.chargementEnCours, await page.attendreComposeurPret(secondes: 30) { return }
+        guard !Task.isCancelled else { return }
+        let conversation = await page.auRepos()?.conversation
+        guard !Task.isCancelled else { return }
+        switch RelaisPreparation.decision(enDiscussion: enDiscussion, conversation: conversation) {
+        case .garderLeFil:
+            return
+        case .conversationNeuve:
+            page.charger()
+            guard await !page.attendreComposeurPret(secondes: 30), !Task.isCancelled else { return }
+            // La page vient d'être rechargée : il n'y a rien à y perdre. Un
+            // chargement resté en route trente secondes est un fil bloqué,
+            // qu'un second rechargement n'aurait pas débloqué.
+            Log.error("relais : la page rechargée est restée sans zone de saisie")
+            await reconstruireLaPage()
+        case .vider:
+            // Un vidage refusé par une page qui répond se retente à l'appui ;
+            // par une page devenue muette entre-temps, il la laissait figée
+            // devant l'appui suivant, sans reconstruction.
+            guard await !page.viderComposeur(), !Task.isCancelled,
+                  await page.auRepos() == nil, !Task.isCancelled else { return }
+            await reconstruireLaPage()
+        case .reconstruire:
+            await reconstruireLaPage()
         }
     }
 
@@ -647,25 +640,20 @@ final class Relais: ObservableObject {
         reponseObtenue = false
         avertissement = nil
         let page = try pageActive()
-        let dictee = RelaisDictee(page: page, pressePapiers: NSPasteboard.general)
-        dictee.journal = { $1 ? Log.error($0) : Log.info($0) }
-        dictee.surSession = { [weak self] in self?.sessionVue = $0 ? .connecte : .deconnecte }
+        let dictee = scenario(page)
         self.dictee = dictee
         do {
             // Déjà affichée, la barre n'est pas redessinée : le chrono part de
             // l'appui et continue.
             try await dictee.ouvrirLEcoute(siElleTarde: dejaDit ? {} : patienter)
-        } catch RelaisErreur.pasConnecte {
+        } catch let erreur as RelaisErreur where [.pasConnecte, .ecouteNonOuverte].contains(erreur) {
             // La page a montré l'écran de connexion : la grande fenêtre
-            // s'ouvre pour qu'on s'y connecte.
-            page.montrer()
-            throw RelaisErreur.pasConnecte
-        } catch RelaisErreur.ecouteNonOuverte {
-            // Le micro a été cliqué : la page peut encore se mettre à écouter,
-            // hors champ, une fois la dictée échouée. Elle est arrêtée comme
-            // après un appui abandonné juste après ce clic.
-            interrompre(ecouteQuiDemarre: true)
-            throw RelaisErreur.ecouteNonOuverte
+            // s'ouvre pour qu'on s'y connecte. Ou le micro a été cliqué sans
+            // qu'elle écoute : elle peut encore s'y mettre, hors champ, une
+            // fois la dictée échouée, et elle est arrêtée comme après un appui
+            // abandonné juste après ce clic.
+            if erreur == .pasConnecte { page.montrer() } else { interrompre(ecouteQuiDemarre: true) }
+            throw erreur
         }
     }
 
@@ -677,7 +665,8 @@ final class Relais: ObservableObject {
         let attente = RelaisAttente()
         self.attente = attente
         Log.info("relais : attente ouverte, sans échéance")
-        return try await scenario().arreterEtLire()
+        guard let dictee else { throw RelaisErreur.relaisEteint }
+        return try await dictee.arreterEtLire()
     }
 
     /// Détruit la page, quand on passe à la voie macOS.
@@ -871,7 +860,7 @@ final class Relais: ObservableObject {
         // L'attente ouverte à l'arrêt de l'écoute : la barre y lit la phase,
         // et le chrono continue d'une phase à l'autre.
         let attente = self.attente ?? RelaisAttente()
-        let dictee = try scenario()
+        guard let dictee else { throw RelaisErreur.relaisEteint }
         attente.entrer(.envoi)
         // Une sortie qui n'écrit nulle part n'a rien à rapatrier : on envoie,
         // et l'on s'arrête là. La réponse s'affichera dans la page, que
@@ -896,8 +885,9 @@ final class Relais: ObservableObject {
             // Un refus — un quota —, une session fermée se disent dans la
             // barre : sans quoi on attend une voix qui ne viendra pas, et
             // l'on redemande.
-            if module.ditLaReponse, let echec = await faireLire(dictee, attente, dejaFinie: false) {
-                avertissement = echec.raisonCourte
+            if module.ditLaReponse {
+                attente.entrer(.reponse)
+                avertissement = await dictee.faireLire(dejaFinie: false) { attente.entrer(.lecture) }?.raisonCourte
             }
             // WebKit a tué la page après l'envoi : rechargée, elle porte une
             // conversation vierge. Le message est parti, mais ni la voix ni
@@ -936,7 +926,7 @@ final class Relais: ObservableObject {
                 // reprouver (cf. `dejaFinie`). L'appui, désormais, ne fait
                 // plus que cesser d'attendre (cf. `reponseObtenue`).
                 reponseObtenue = true
-                await faireLire(dictee, attente, dejaFinie: true)
+                await dictee.faireLire(dejaFinie: true) { attente.entrer(.lecture) }
             }
             Log.info("relais : \(module.identifiant) — \(brut.count) → \(texte.count) caractères")
             return texte
@@ -966,16 +956,6 @@ final class Relais: ObservableObject {
             }
             return brut
         }
-    }
-
-    /// Fait lire la réponse à haute voix, et la barre dit la phase : la
-    /// réponse qu'on attend, puis la lecture.
-    @discardableResult
-    private func faireLire(_ dictee: RelaisDictee, _ attente: RelaisAttente,
-                           dejaFinie: Bool) async -> RelaisErreur? {
-        guard page?.selecteurs.saitLire == true else { return nil }
-        attente.entrer(.reponse)
-        return await dictee.faireLire(dejaFinie: dejaFinie, quandFinie: { attente.entrer(.lecture) })
     }
 
     /// La fin d'une dictée ChatGPT, quelle qu'en soit l'issue — réussite,
@@ -1135,32 +1115,21 @@ final class Relais: ObservableObject {
     func interrompre(quitterLaDiscussion: Bool = false, ecouteQuiDemarre: Bool = false) {
         if quitterLaDiscussion { enDiscussion = false }
         lancerPreparation { [weak self] page in
-            await self?.arreterApresAbandon(page, ecouteQuiDemarre: ecouteQuiDemarre)
+            // Borné, comme tout ce qui se fait au repos : un relevé, puis trois
+            // secondes pour que la page se mette à écouter, cinq pour son
+            // arrêt, et de quoi vider (cf. `RelaisDictee.arreterApresAbandon`).
+            // Tenant le micro, elle est à arrêter quoi qu'elle réponde : on ne
+            // lui demande rien.
+            let vu = page.microOuvert ? nil : await page.auRepos()
+            _ = await page.sonder(auPlus: .seconds(10)) {
+                await self?.scenario(page).arreterApresAbandon(auRepos: vu, ecouteQuiDemarre: ecouteQuiDemarre)
+            }
             await page.rendreLeMicro()
             // Une dictée a pu commencer entre-temps et afficher sa barre : ce
             // n'est plus à nous de la ranger.
             guard let self else { return }
             if occupation == .libre { ranger(page) }
             await preparer(page)
-        }
-    }
-
-    /// Arrête la page d'un appui abandonné — au repos, depuis la préparation
-    /// (cf. `RelaisDictee.arreterApresAbandon`).
-    ///
-    /// Une page muette qui ne tient pas le micro n'a rien à arrêter : la
-    /// préparation qui suit la reconstruit. Tenant le micro, on essaie quand
-    /// même l'arrêt — et l'appelant rend le micro de toute façon. Borné, comme
-    /// tout ce qui se fait au repos : trois secondes pour que la page se mette
-    /// à écouter, cinq pour son arrêt, et de quoi relever et vider.
-    private func arreterApresAbandon(_ page: RelaisPage, ecouteQuiDemarre: Bool) async {
-        page.echo.desarmer()
-        if !page.microOuvert, await page.auRepos() == nil { return }
-        let arret = RelaisDictee(page: page, pressePapiers: NSPasteboard.general)
-        arret.journal = { $1 ? Log.error($0) : Log.info($0) }
-        _ = await page.sonder(auPlus: .seconds(10)) {
-            await arret.arreterApresAbandon(ecouteQuiDemarre: ecouteQuiDemarre)
-            return true
         }
     }
 
@@ -1173,7 +1142,7 @@ final class Relais: ObservableObject {
     /// range seulement ce que l'appui a ouvert ; la préparation continue.
     ///
     /// Plus tard, le clic du micro a pu partir : l'arrêt attend alors que la
-    /// page écoute (cf. `arreterApresAbandon`).
+    /// page écoute (cf. `RelaisDictee.arreterApresAbandon`).
     func interrompreLeDemarrage() {
         guard preparation == nil else {
             if let page { ranger(page) }

@@ -31,61 +31,45 @@ public final class RelaisHorlogeReelle: RelaisHorloge {
 /// Chacun prouve l'**effet d'un geste** de Caspr — un bouton qui doit exister,
 /// un clic qui doit prendre —, et rattrape un geste raté, jamais une réponse
 /// lente. Dans le doute, pas de délai. Chaque appel qui en passe un dit
-/// pourquoi.
-public enum RelaisDelai {
+/// pourquoi. Dépassé, il lève son erreur : le geste n'a pas pris.
+public struct RelaisDelai {
+    public let nom: String
+    public let duree: Duration
+    public let erreur: RelaisErreur
+
     /// Le bouton micro existe dès que la page s'est dite connectée.
-    case micro
+    public static let micro = RelaisDelai(nom: "micro", duree: .seconds(8), erreur: .introuvable(.micro))
     /// Après le clic du micro, la page capte : micro tenu, ou enregistrement.
-    case ecoute
+    public static let ecoute = RelaisDelai(nom: "ecoute", duree: .seconds(5), erreur: .ecouteNonOuverte)
     /// Le bouton d'arrêt existe pendant l'écoute.
-    case arret
+    public static let arret = RelaisDelai(nom: "arret", duree: .seconds(15), erreur: .introuvable(.stop))
     /// Ce qu'on vient d'écrire se relit aussitôt, ou n'a pas pris ; six
     /// secondes laissent large à une machine qui rame.
-    case consigne
+    public static let consigne = RelaisDelai(nom: "consigne", duree: .seconds(6), erreur: .consigneNonPosee)
     /// Le bouton d'envoi existe dès que la zone est remplie.
-    case envoi
+    public static let envoi = RelaisDelai(nom: "envoi", duree: .seconds(10), erreur: .introuvable(.envoi))
     /// ChatGPT vide la zone à l'instant du clic, sans attendre le réseau :
     /// après le clic, le message a quitté la zone, ou une réponse commence.
-    case depart
+    public static let depart = RelaisDelai(nom: "depart", duree: .seconds(10), erreur: .envoiSansEffet)
     /// La réponse est finie et le clic parti : la copie atterrit dans
     /// l'instant.
-    case copie
-    /// La réponse vient d'être copiée, finie : il ne reste qu'à la voir dans
-    /// la page. Sans elle, le texte s'insère sans la voix.
-    case reponseCopiee
+    public static let copie = RelaisDelai(nom: "copie", duree: .seconds(10), erreur: .pasDeReponse)
+    /// La réponse vient d'être copiée — elle est donc finie, et dans la page :
+    /// il ne reste qu'à l'y voir. Le seul délai d'avant la lecture à haute
+    /// voix qu'on ne peut pas retirer : le texte copié attend ce relevé pour
+    /// s'insérer, et sans borne une page qui ne la montre pas retiendrait
+    /// l'insertion pour une voix. Dépassé, le texte s'insère sans la voix.
+    public static let reponseCopiee = RelaisDelai(nom: "reponseCopiee", duree: .seconds(10), erreur: .pasDeReponse)
     /// La barre d'actions d'une réponse finie s'affiche juste après la fin
     /// de la génération, pas au même instant.
-    case lecture
+    public static let lecture = RelaisDelai(nom: "lecture", duree: .seconds(5), erreur: .introuvable(.lecture))
     /// Après un appui abandonné juste après le clic du micro, la page se met
     /// à écouter en trois secondes au plus…
-    case ecouteApresAbandon
+    public static let ecouteApresAbandon = RelaisDelai(nom: "ecouteApresAbandon", duree: .seconds(3),
+                                                       erreur: .ecouteNonOuverte)
     /// … et son bouton d'arrêt paraît en cinq.
-    case arretApresAbandon
-
-    public var duree: Duration {
-        switch self {
-        case .micro: .seconds(8)
-        case .ecoute, .lecture, .arretApresAbandon: .seconds(5)
-        case .arret: .seconds(15)
-        case .consigne: .seconds(6)
-        case .envoi, .depart, .copie, .reponseCopiee: .seconds(10)
-        case .ecouteApresAbandon: .seconds(3)
-        }
-    }
-
-    /// Ce que dit un délai dépassé : le geste n'a pas pris.
-    public var erreur: RelaisErreur {
-        switch self {
-        case .micro: .introuvable(.micro)
-        case .ecoute, .ecouteApresAbandon: .ecouteNonOuverte
-        case .arret, .arretApresAbandon: .introuvable(.stop)
-        case .consigne: .consigneNonPosee
-        case .envoi: .introuvable(.envoi)
-        case .depart: .envoiSansEffet
-        case .copie, .reponseCopiee: .pasDeReponse
-        case .lecture: .introuvable(.lecture)
-        }
-    }
+    public static let arretApresAbandon = RelaisDelai(nom: "arretApresAbandon", duree: .seconds(5),
+                                                      erreur: .introuvable(.stop))
 }
 
 /// Un appel dont on peut cesser d'attendre la réponse, à tout instant.

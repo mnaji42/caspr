@@ -45,7 +45,9 @@ public protocol RelaisPressePapiers: AnyObject {
 /// attente de ChatGPT ne finit que par un geste de l'utilisateur — la touche
 /// de dictée, Échap pendant l'écoute, qui annulent la tâche — ou par un échec
 /// que la page PROUVE : une alerte de refus apparue depuis la demande, le
-/// processus WebKit mort, l'écran d'authentification montré. Jamais par le
+/// processus WebKit mort, l'écran d'authentification montré, le pont de
+/// Caspr absent d'une page chargée — le script ne s'y est pas installé, rien
+/// ne l'y installera, et l'attendre serait attendre toujours. Jamais par le
 /// temps. Restent les délais de geste, tous dans `RelaisDelai`.
 ///
 /// Toutes les attentes passent par `observer` : une seule façon d'attendre,
@@ -133,6 +135,13 @@ public final class RelaisDictee {
         page.armerEcho()
         var ouverte = false
         defer { if !ouverte { page.desarmerEcho() } }
+        // WebKit peut tenir le micro d'avant le clic : aucune fin ordinaire de
+        // dictée ne le rend — seuls l'abandon, la reconstruction, la
+        // libération et la calibration le font. Tenu déjà, il ne prouverait
+        // pas que ce clic-ci a pris ; seul l'enregistrement le prouve alors.
+        // Journalisé à chaque dictée, pour le mesurer plutôt que le supposer.
+        let microDejaTenu = page.microOuvert
+        journal("relais : micro de WebKit \(microDejaTenu ? "déjà tenu" : "libre") avant le clic", false)
         // Délai de geste : le bouton micro existe dès que la page s'est dite
         // connectée.
         //
@@ -145,7 +154,7 @@ public final class RelaisDictee {
         // écoute : la barre disait « on vous écoute » devant une page sourde,
         // et tout ce qu'on disait se perdait à l'arrêt, sur « rien n'a été
         // entendu ».
-        try await observer([], delai: .ecoute) { $0.enregistrement || self.page.microOuvert ? () : nil }
+        try await observer([], delai: .ecoute) { self.ecoute($0, microDejaTenu: microDejaTenu) ? () : nil }
         ouverte = true
     }
 
@@ -224,13 +233,8 @@ public final class RelaisDictee {
             // délai fixe marcherait jusqu'au jour où la machine rame.
             if !empreinte.isEmpty {
                 let signe = empreinte
-                do {
-                    // Délai de geste : la consigne écrite se relit aussitôt.
-                    try await observer(.texte, delai: .consigne) { $0.texte?.contains(signe) == true ? () : nil }
-                } catch RelaisErreur.consigneNonPosee {
-                    journal("relais : la consigne n'a pas tenu dans la zone de saisie", true)
-                    throw RelaisErreur.consigneNonPosee
-                }
+                // Délai de geste : la consigne écrite se relit aussitôt.
+                try await observer(.texte, delai: .consigne) { $0.texte?.contains(signe) == true ? () : nil }
             }
         }
         // Seule une alerte ou une réponse apparue depuis la marque compte.
@@ -324,35 +328,31 @@ public final class RelaisDictee {
         // avant, c'était la laisser écraser le presse-papiers sans plus
         // personne pour le rendre. Il attend donc cette copie une seconde
         // encore, la défait, et seulement alors lève.
-        let fin = horloge.maintenant + RelaisDelai.copie.duree
-        var finAbandon: ContinuousClock.Instant?
-        while horloge.maintenant < (finAbandon ?? fin) {
-            if finAbandon == nil, Task.isCancelled { finAbandon = min(fin, horloge.maintenant + .seconds(1)) }
-            if finAbandon == nil {
-                try? await horloge.dormir(.milliseconds(250))
-            } else {
-                // Le sommeil d'une tâche annulée rend la main aussitôt : on
-                // dort dans une tâche à part, que l'annulation n'atteint pas.
-                let horloge = horloge
-                await Task { try? await horloge.dormir(.milliseconds(100)) }.value
+        var fin = horloge.maintenant + RelaisDelai.copie.duree
+        while presse.changeCount == avant {
+            if Task.isCancelled { fin = min(fin, horloge.maintenant + .seconds(1)) }
+            guard horloge.maintenant < fin else {
+                try Task.checkCancellation()
+                throw RelaisDelai.copie.erreur
             }
-            guard presse.changeCount != avant else { continue }
-            let texte = presse.texte() ?? ""
-            restaurer()
-            try Task.checkCancellation()
-            guard !texte.isEmpty else { throw RelaisErreur.pasDeReponse }
-            // Garde-fou : le délimiteur de la consigne ne figure jamais dans
-            // une réponse, et sa présence signe un bouton « copier » pris sous
-            // le mauvais message — c'est le prompt lui-même qui s'écrivait
-            // dans l'éditeur, sans que rien ne trahisse la méprise.
-            if !empreinte.isEmpty, texte.contains(empreinte) {
-                journal("relais : copie de la demande au lieu de la réponse", true)
-                throw RelaisErreur.pasDeReponse
-            }
-            return texte
+            // Le sommeil d'une tâche annulée rend la main aussitôt : on dort
+            // dans une tâche à part, que l'annulation n'atteint pas.
+            let horloge = horloge
+            await Task { try? await horloge.dormir(.milliseconds(100)) }.value
         }
+        let texte = presse.texte() ?? ""
+        restaurer()
         try Task.checkCancellation()
-        throw RelaisDelai.copie.erreur
+        guard !texte.isEmpty else { throw RelaisErreur.pasDeReponse }
+        // Garde-fou : le délimiteur de la consigne ne figure jamais dans une
+        // réponse, et sa présence signe un bouton « copier » pris sous le
+        // mauvais message — c'est le prompt lui-même qui s'écrivait dans
+        // l'éditeur, sans que rien ne trahisse la méprise.
+        if !empreinte.isEmpty, texte.contains(empreinte) {
+            journal("relais : copie de la demande au lieu de la réponse", true)
+            throw RelaisErreur.pasDeReponse
+        }
+        return texte
     }
 
     // MARK: - Faire lire
@@ -373,6 +373,7 @@ public final class RelaisDictee {
     /// `dejaFinie` : la réponse vient d'être copiée, et le texte attend ce
     /// clic pour s'insérer. Le premier relevé qui la montre suffit.
     /// `quandFinie` : la réponse est finie, les clics commencent.
+    @discardableResult
     public func faireLire(dejaFinie: Bool,
                           quandFinie: @escaping @MainActor () -> Void = {}) async -> RelaisErreur? {
         guard page.selecteurs.saitLire, !lectureInterrompue else { return nil }
@@ -407,9 +408,6 @@ public final class RelaisDictee {
             journal("relais : \(erreur.raisonCourte ?? "\(erreur)"), lecture à haute voix abandonnée", true)
             return erreur
         } catch {
-            if !Task.isCancelled {
-                journal("relais : réponse copiée introuvable dans la page, lecture à haute voix abandonnée", true)
-            }
             return nil
         }
         quandFinie()
@@ -437,22 +435,25 @@ public final class RelaisDictee {
     // MARK: - Abandonner
 
     /// Arrête la page après un appui abandonné, et vide la zone — au repos :
-    /// l'appelant borne l'ensemble, une page muette n'a rien à arrêter.
+    /// l'appelant borne l'ensemble.
+    ///
+    /// `auRepos` : ce que la page a répondu au relevé borné de l'appelant,
+    /// `nil` quand elle s'est tue. Muette sans tenir le micro, elle n'a rien à
+    /// arrêter : la préparation qui suit la reconstruit. Tenant le micro, on
+    /// essaie l'arrêt quoi qu'elle réponde.
     ///
     /// `ecouteQuiDemarre` : l'appui vient d'être abandonné, peut-être juste
     /// après le clic du micro. La page ne se met alors à écouter qu'une fois
     /// le micro accordé, quelques centaines de millisecondes plus tard :
     /// cliquer l'arrêt sur-le-champ ne trouvait rien, et ChatGPT se mettait
     /// ensuite à écouter hors champ, le micro de la machine avec lui.
-    public func arreterApresAbandon(ecouteQuiDemarre: Bool) async {
+    public func arreterApresAbandon(auRepos vu: RelaisInstantane?, ecouteQuiDemarre: Bool) async {
         page.desarmerEcho()
-        let vu = try? await essayer { try await self.page.instantane([]) }
-        var ecoute = vu?.enregistrement == true || page.microOuvert
+        guard vu != nil || page.microOuvert else { return }
+        var ecoute = vu.map { self.ecoute($0) } ?? page.microOuvert
         if !ecoute, ecouteQuiDemarre {
             // Délai de geste : après le clic du micro, la page se met à écouter.
-            ecoute = (try? await observer([], delai: .ecouteApresAbandon) {
-                $0.enregistrement || self.page.microOuvert ? () : nil
-            }) != nil
+            ecoute = (try? await observer([], delai: .ecouteApresAbandon) { self.ecoute($0) ? () : nil }) != nil
         }
         if ecoute {
             // Délai de geste : la page écoute, son bouton d'arrêt va paraître.
@@ -463,6 +464,12 @@ public final class RelaisDictee {
         }
         // L'arrêt a pu déposer une transcription dans la zone.
         _ = try? await essayer { try await self.page.vider() }
+    }
+
+    /// La page capte : elle enregistre, ou WebKit tient son micro — sauf un
+    /// micro tenu d'avant le geste, qui ne prouve rien (cf. `ouvrirLEcoute`).
+    private func ecoute(_ vu: RelaisInstantane, microDejaTenu: Bool = false) -> Bool {
+        vu.enregistrement || (!microDejaTenu && page.microOuvert)
     }
 
     // MARK: - La primitive d'attente
@@ -478,7 +485,8 @@ public final class RelaisDictee {
     /// relevé qui échoue ne dit rien, et l'on passe au suivant : le compter
     /// comme une zone vide finirait par conclure « rien n'a été dit » devant
     /// une page qui en a. Sauf un pont absent d'une page chargée : elle a dit
-    /// tout ce qu'elle dira.
+    /// tout ce qu'elle dira, à cette attente comme à toute autre (cf.
+    /// `essayer`).
     ///
     /// Le reste appartient à l'utilisateur : annulée, l'attente rend la main
     /// dans l'instant, même si l'appel en cours ne revient jamais.
@@ -495,7 +503,8 @@ public final class RelaisDictee {
             if pageMorte { throw RelaisErreur.pageInterrompue }
             tour += 1
             let alertes = marquee && tour % 4 == 0
-            if !page.chargementEnCours, let vu = try await releve(alertes ? demande.union(.alertes) : demande) {
+            if !page.chargementEnCours,
+               let vu = try await essayer({ try await self.page.instantane(alertes ? demande.union(.alertes) : demande) }) {
                 if pageMorte { throw RelaisErreur.pageInterrompue }
                 // L'échec prouvé qu'une échéance rattrapait jadis : une session
                 // perdue en pleine attente ne rendra jamais rien.
@@ -511,25 +520,26 @@ public final class RelaisDictee {
                 if let valeur = try await juger(vu) {
                     // Un geste qui a demandé plusieurs essais : le prochain
                     // défaut se lira dans le journal plutôt que dans une capture.
-                    if let delai, tour > 1 { journal("relais : \(delai) au \(tour)e relevé", false) }
+                    if let delai, tour > 1 { journal("relais : \(delai.nom) au \(tour)e relevé", false) }
                     return valeur
                 }
             }
-            if let delai, horloge.maintenant - debut >= delai.duree { throw delai.erreur }
+            if let delai, horloge.maintenant - debut >= delai.duree {
+                // Le geste n'a pas pris : la ligne dit lequel, pour que le
+                // prochain défaut se lise dans le journal.
+                journal("relais : \(delai.nom) sans effet en \(delai.duree) (\(tour) relevés)", true)
+                throw delai.erreur
+            }
             try await horloge.dormir(.milliseconds(250))
         }
     }
 
-    private func releve(_ demande: RelaisDemande) async throws -> RelaisInstantane? {
-        do { return try await AppelAnnulable.appeler { try await self.page.instantane(demande) } }
-        catch RelaisErreur.pontAbsent where !Task.isCancelled { throw RelaisErreur.pontAbsent }
-        catch { if Task.isCancelled { throw CancellationError() }; return nil }
-    }
-
     /// Un appel à la page dont l'échec ne dit rien — sauf l'annulation, qui
-    /// tranche sur-le-champ.
+    /// tranche sur-le-champ, et un pont absent d'une page chargée : elle a dit
+    /// tout ce qu'elle dira (cf. `RelaisErreur.pontAbsent`).
     private func essayer<T>(_ operation: @escaping @MainActor () async throws -> T) async throws -> T? {
         do { return try await AppelAnnulable.appeler(operation) }
+        catch RelaisErreur.pontAbsent where !Task.isCancelled { throw RelaisErreur.pontAbsent }
         catch { if Task.isCancelled { throw CancellationError() }; return nil }
     }
 
@@ -548,7 +558,7 @@ public final class RelaisDictee {
     /// si une alerte en est un.
     private func alerteNouvelle() async -> String? {
         guard marquee else { return nil }
-        return (try? await releve(.alertes))?.echec?.texte
+        return (try? await essayer { try await self.page.instantane(.alertes) })??.echec?.texte
     }
 
     private func annoncer(apres delai: Duration,
@@ -569,47 +579,32 @@ public final class RelaisDictee {
 /// rien à décider à l'appui — la page est prête, quel que soit le module qu'on
 /// choisira en parlant.
 public enum RelaisPreparation {
-    /// Ce que la page a répondu, au repos.
-    public enum Page: Equatable {
-        /// Elle répond, et dit si elle porte une conversation.
-        case repond(conversation: Bool)
-        /// Elle ne répond pas : un fil JavaScript bloqué, un pont absent.
-        case muette
-        /// Son processus est mort, et elle n'a pas été rechargée.
-        case morte
-        case enChargement
-    }
-
     public enum Decision: Equatable {
-        case garderLeFil, conversationNeuve, vider, reconstruire, recharger, attendreLeChargement
+        case garderLeFil, conversationNeuve, vider, reconstruire
     }
 
-    public static func decision(enDiscussion: Bool, page: Page) -> Decision {
-        switch page {
-        // Morte et laissée morte (cf. la récidive dans `RelaisPage`), elle se
-        // recharge ici plutôt que dans la question, qui la verrait muette.
-        case .morte: .recharger
-        // Une page qui se charge est déjà la page de départ neuve —
-        // `charger()` ne mène que là : il n'y a qu'à l'attendre. L'interroger
-        // tombait sur un pont pas encore injecté, pris pour une page figée, et
-        // la rechargeait par-dessus — après la mort du processus, typiquement.
-        case .enChargement: .attendreLeChargement
+    /// `conversation` : ce que la page a répondu au repos — si elle porte une
+    /// conversation —, `nil` quand elle s'est tue : un fil JavaScript bloqué,
+    /// un pont absent. La page morte, et celle qui se charge, ne se demandent
+    /// pas : l'appelant recharge l'une et attend l'autre avant la question.
+    public static func decision(enDiscussion: Bool, conversation: Bool?) -> Decision {
+        switch conversation {
         // Recharger ne répare pas un fil JavaScript bloqué (mesuré) : on la
         // reconstruit, discussion comprise. Une page muette ne doit pas
         // devenir la panne de la dictée suivante. En discussion aussi : figée,
         // le fil est perdu de toute façon, et la garder sous prétexte d'une
         // discussion condamnait chaque appui au même échec, sous un message
         // qui promettait un rechargement jamais fait.
-        case .muette: .reconstruire
+        case nil: .reconstruire
         // En discussion, le fil ouvert *est* la page prête — tant qu'elle
         // répond.
-        case .repond where enDiscussion: .garderLeFil
+        case _ where enDiscussion: .garderLeFil
         // Un message est parti, que la suite ait abouti ou non.
-        case .repond(conversation: true): .conversationNeuve
+        case true?: .conversationNeuve
         // Le cas de « Brut », qui n'envoie rien : vider la zone suffit. Une
         // zone qui refuse de se vider sur une page qui répond n'est pas une
         // page à jeter — c'est souvent une transcription encore en cours.
-        case .repond(conversation: false): .vider
+        case false?: .vider
         }
     }
 }

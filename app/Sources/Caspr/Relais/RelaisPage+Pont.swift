@@ -190,7 +190,8 @@ extension RelaisPage {
         let limite = Date.now.addingTimeInterval(6)
         while Date.now < limite {
             if Task.isCancelled { return false }
-            _ = await sonder { try await self.vider(sel: sel) }
+            // Vider, c'est écrire vide : une seule règle pour les deux.
+            _ = await sonder { try await self.ecrire("", sel: sel) }
             try? await Task.sleep(for: .milliseconds(500))
             if await sonder({ try await self.lire(sel: sel) })?.isEmpty == true { return true }
         }
@@ -201,7 +202,11 @@ extension RelaisPage {
     // MARK: - Les fonctions de la page
 
     func cliquer(_ cible: RelaisCible, sel: String) async throws -> Bool {
-        try await (pont(.cliquer, cible.rawValue, sel) as Rendu).ok
+        let clique = try await (pont(.cliquer, cible.rawValue, sel) as Rendu).ok
+        // La page écoute : une dictée qui a armé l'écho aura sa ligne (cf.
+        // `RelaisEcho`) ; sans écho armé — la calibration —, rien.
+        if clique, cible == .micro { echo.ecouter() }
+        return clique
     }
 
     /// Le texte de la zone de saisie ; `nil` quand elle est introuvable.
@@ -211,9 +216,6 @@ extension RelaisPage {
     func ecrire(_ texte: String, sel: String) async throws -> Bool {
         try await (pont(.ecrire, sel, texte) as Rendu).ok
     }
-
-    /// Vide la zone : l'écrire vide, une seule règle pour les deux.
-    func vider(sel: String) async throws { try await ecrire("", sel: sel) }
 
     /// Clique « copier » ; rend la voie suivie — la paire, ou le repère seul
     /// autour de la dernière réponse —, `nil` quand rien n'a été cliqué.
@@ -286,14 +288,8 @@ extension RelaisPage: RelaisPageDictee {
         try await instantane(demande, reperes: nil)
     }
 
-    func cliquer(_ cible: RelaisCible) async throws -> Bool {
-        let clique = try await cliquer(cible, sel: selecteurs[cible])
-        // La page écoute : la dictée aura sa ligne d'écho (cf. `RelaisEcho`).
-        if clique, cible == .micro { echo.ecouter() }
-        return clique
-    }
-
-    func vider() async throws { try await vider(sel: selecteurs.composeur) }
+    func cliquer(_ cible: RelaisCible) async throws -> Bool { try await cliquer(cible, sel: selecteurs[cible]) }
+    func vider() async throws { try await ecrire("", sel: selecteurs.composeur) }
 
     func encadrer(avant: String, apres: String) async throws -> Bool {
         try await (pont(.encadrer, selecteurs.composeur, avant, apres) as Rendu).ok

@@ -234,6 +234,16 @@ final class DictationController {
     /// pour la dictée suivante, et le relais garde sa page jusqu'à la fin de
     /// celle-ci (cf. `Relais.suivreLaVoie`).
     private var voieDuCycle: VoieDeDictee?
+
+    /// L'application où l'on parlait, capturée à l'appui ; `nil` quand c'était
+    /// Caspr lui-même — la zone d'essai de l'accueil.
+    ///
+    /// L'insertion par accessibilité vise l'élément focalisé **au moment
+    /// d'écrire**. Sous macOS, moins d'une seconde sépare la parole de
+    /// l'insertion ; sous ChatGPT, de trente secondes à trois minutes, pendant
+    /// lesquelles on a toutes les raisons d'aller travailler ailleurs — et la
+    /// dictée s'écrivait alors dans la fenêtre où l'on était passé.
+    private var applicationVisee: NSRunningApplication?
     // RELAIS — début de la dictée, faute d'enregistrement pour en déduire la
     // durée. Elle sert à dimensionner l'attente de la transcription.
     private var relaisDebut = Date()
@@ -325,6 +335,7 @@ final class DictationController {
             }
         }
         voieDuCycle = voie
+        applicationVisee = Self.applicationDevant()
         state = .starting
         let demarrage = Task { await startRecording(voie: voie) }
         switch voie {
@@ -629,6 +640,9 @@ final class DictationController {
         // elle reprend la main, elle n'a plus rien à faire : l'abandon a déjà
         // tout défait, et un autre cycle a peut-être commencé.
         let numero = cycle
+        // Lue une fois : c'est l'application de l'appui qui compte, pas celle
+        // d'un appui qui viendrait pendant la transcription.
+        let visee = applicationVisee
         state = .processing
         // Le relais se conforme au protocole des moteurs, donc tout ce qui suit
         // (insertion, historique, échecs, barre) marche sans le savoir — à la
@@ -774,6 +788,11 @@ final class DictationController {
             // ou si l'on bascule vers un module qui écrit en pleine dictée, la
             // fenêtre du relais est au premier plan : le texte y partirait.
             if parRelais { await Relais.partage.rendreLeClavier() }
+            // Et là où l'on parlait, si l'on en est parti entre-temps.
+            switch target {
+            case .caret: await ramener(visee)
+            case .file: break
+            }
             // RELAIS — la touche de dictée abandonne jusqu'ici, et
             // l'insertion ne vérifie rien : un texte arrivé au moment de
             // l'abandon s'écrivait quand même.
@@ -869,6 +888,47 @@ final class DictationController {
             try TargetWriter.append(text, to: url)
             NSLog("caspr: ajouté à %@", url.lastPathComponent)
         }
+    }
+
+    /// L'application au premier plan, sauf si c'est Caspr.
+    private static func applicationDevant() -> NSRunningApplication? {
+        guard let devant = NSWorkspace.shared.frontmostApplication,
+              devant.processIdentifier != NSRunningApplication.current.processIdentifier
+        else { return nil }
+        return devant
+    }
+
+    /// Ramène au premier plan l'application où l'on parlait, si l'on en est
+    /// parti et qu'elle tourne encore.
+    ///
+    /// Le système ne garantit ni que l'activation ait lieu, ni quand : on
+    /// **observe** donc qu'elle soit devant, une seconde au plus, avant
+    /// d'écrire. Passé ce délai, ou si elle a été quittée, le texte part là où
+    /// l'on se trouve — c'était le comportement d'avant, et l'historique le
+    /// garde de toute façon.
+    private func ramener(_ application: NSRunningApplication?) async {
+        guard let application, !application.isTerminated else { return }
+        let workspace = NSWorkspace.shared
+        func devant() -> Bool {
+            workspace.frontmostApplication?.processIdentifier == application.processIdentifier
+        }
+        guard !devant() else { return }
+        let nom = application.bundleIdentifier ?? application.localizedName ?? "?"
+        // Céder d'abord : depuis macOS 14, l'activation est coopérative, et une
+        // application qui a le premier plan — la fenêtre du relais, parfois —
+        // doit le rendre pour qu'une autre puisse le prendre.
+        NSApp.yieldActivation(to: application)
+        application.activate(options: [])
+        let echeance = ContinuousClock.now + .seconds(1)
+        while ContinuousClock.now < echeance {
+            if devant() {
+                Log.info("insertion : retour à \(nom), où l'on parlait")
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        Log.error("insertion : \(nom) n'a pas repris le premier plan en 1 s — "
+                  + "texte inséré devant")
     }
 
     /// Insère un texte déjà transcrit — réinsertion depuis l'historique.
@@ -1017,6 +1077,9 @@ final class DictationController {
         // Seule la voie macOS garde de l'audio : c'est elle qui le rejoue,
         // quelle que soit la voie retenue depuis.
         voieDuCycle = .apple
+        // Le menu de Caspr ne prend pas le premier plan : l'application devant
+        // est celle où l'on veut le texte, comme à l'appui.
+        applicationVisee = Self.applicationDevant()
         Task { await transcribeAndInject(pendingAudio, voie: .apple) }
     }
 

@@ -1,16 +1,16 @@
 /* =============================================================================
    Caspr — feuille de style du site
    -----------------------------------------------------------------------------
-   Les tokens ci-dessous sont repris de app/Sources/Caspr/SettingsDesign.swift.
+   Les tokens ci-dessous sont repris de app/Sources/Caspr/Reglages/SettingsDesign.swift.
    Le site et l'application doivent parler le même dialecte visuel : quand une
-   valeur change dans Style.swift, elle change ici, et la provenance est notée
+   valeur change dans Style, elle change ici, et la provenance est notée
    en commentaire pour que la correspondance reste vérifiable.
    ============================================================================= */
 
 :root {
   /* --- Couleurs, reprises de Style.swift --------------------------------- */
   --accent: #00e5cc;                          /* Style.accent */
-  --accent-hover: #38efd8;                    /* Style.accentHover */
+  --accent-hover: #38efd8;                    /* propre au site : l'app ne s'en servait pas */
   --accent-dim: rgba(0, 229, 204, 0.12);      /* Style.accentDim */
   --accent-border: rgba(0, 229, 204, 0.35);   /* Style.accentBorder */
   --accent-glow: rgba(0, 229, 204, 0.30);     /* Style.accentGlow */
@@ -28,7 +28,7 @@
   --surface: #141821;                         /* la couleur de fenêtre de l'app */
   --canvas: #0b0e14;                          /* un cran plus sombre, pour que les cartes s'élèvent */
   --card: rgba(255, 255, 255, 0.035);         /* Style.cardFill */
-  --card-hover: rgba(255, 255, 255, 0.055);   /* Style.cardHover */
+  --card-hover: rgba(255, 255, 255, 0.055);   /* propre au site : l'app ne s'en servait pas */
   --stroke: rgba(255, 255, 255, 0.08);        /* Style.cardStroke */
   --stroke-strong: rgba(255, 255, 255, 0.14);
   --inner: rgba(0, 0, 0, 0.28);               /* Style.innerBoxFill */

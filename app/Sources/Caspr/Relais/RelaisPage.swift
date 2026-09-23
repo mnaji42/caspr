@@ -255,9 +255,10 @@ final class RelaisPage: NSObject {
     /// Assez d'écart au-dessus de la barre de Caspr pour qu'on lise deux objets
     /// distincts et non un bloc collé.
     private static let hauteurBarre: CGFloat = 218
-    /// La page rendue à 55 % : 500 points d'écran valent alors 900 points CSS,
-    /// assez pour que ChatGPT garde sa mise en page large plutôt que de basculer
-    /// sur celle des téléphones, où la pastille se réorganise.
+    /// La page rendue à 65 % : les 420 points de la barre valent alors environ
+    /// 650 points CSS. Le dézoom élargit la page que voit ChatGPT, pour qu'il
+    /// garde sa mise en page large plutôt que de basculer sur celle des
+    /// téléphones, où la pastille se réorganise.
     private static let zoomBarre: CGFloat = 0.65
 
     override init() {
@@ -991,21 +992,6 @@ final class RelaisPage: NSObject {
         return false
     }
 
-    /// Encadre la transcription déjà présente, l'envoie, et rend la réponse.
-    ///
-    /// Aucun rechargement au milieu du chemin, et c'est le changement de fond.
-    /// La version précédente rechargeait la page pour ouvrir un fil neuf, puis
-    /// réécrivait la transcription entière avec la consigne devant. Trois
-    /// défauts d'un coup : on interrogeait la page qu'on était en train de
-    /// quitter, on demandait à un éditeur ProseMirror d'avaler dix minutes de
-    /// texte d'un coup, et le moindre accroc laissait la zone dans un état
-    /// qu'on ne savait plus nommer.
-    ///
-    /// Le texte est déjà là. On n'ajoute que la consigne, à ses deux bouts.
-    ///
-    /// Le fil neuf, lui, est ouvert **après** — quand la réponse est lue et que
-    /// plus rien n'est en jeu. La page est alors prête pour la dictée suivante,
-    /// et le contexte ne s'accumule pas d'une note à l'autre.
     /// Envoie sans rien rapatrier, et **sans ouvrir de fil neuf**.
     ///
     /// Le pendant de `reorganiserSurPlace` pour une sortie qui n'écrit nulle
@@ -1038,6 +1024,21 @@ final class RelaisPage: NSObject {
         }
     }
 
+    /// Encadre la transcription déjà présente, l'envoie, et rend la réponse.
+    ///
+    /// Aucun rechargement au milieu du chemin, et c'est le changement de fond.
+    /// La version précédente rechargeait la page pour ouvrir un fil neuf, puis
+    /// réécrivait la transcription entière avec la consigne devant. Trois
+    /// défauts d'un coup : on interrogeait la page qu'on était en train de
+    /// quitter, on demandait à un éditeur ProseMirror d'avaler dix minutes de
+    /// texte d'un coup, et le moindre accroc laissait la zone dans un état
+    /// qu'on ne savait plus nommer.
+    ///
+    /// Le texte est déjà là. On n'ajoute que la consigne, à ses deux bouts.
+    ///
+    /// Le fil neuf, lui, est ouvert **après** — quand la réponse est lue et que
+    /// plus rien n'est en jeu. La page est alors prête pour la dictée suivante,
+    /// et le contexte ne s'accumule pas d'une note à l'autre.
     func reorganiserSurPlace(_ encadrement: (avant: String, apres: String),
                              attente: RelaisAttente) async throws -> String {
         attente.entrer(.envoi)
@@ -1070,11 +1071,13 @@ final class RelaisPage: NSObject {
             ? try await copierReponse(attente: attente,
                                       empreinteEnvoyee: empreinte(encadrement.avant))
             : try await attendreReponse(attente: attente)
-        // Pas de rechargement ici : la page neuve est ouverte à l'appui
-        // suivant, pour toutes les dictées et au même endroit. En recharger une
-        // seconde fois depuis ce chemin-ci, c'était une deuxième politique de
-        // fil neuf — celle qui ne s'appliquait qu'aux réorganisations réussies,
-        // et laissait donc la conversation en place quand elles échouaient.
+        // Pas de rechargement ici : la page neuve est ouverte à la fin de la
+        // dictée, par la préparation de la suivante (cf.
+        // `Relais.preparerLaProchaine`), pour toutes les dictées et au même
+        // endroit. En recharger une seconde fois depuis ce chemin-ci, c'était
+        // une deuxième politique de fil neuf — celle qui ne s'appliquait
+        // qu'aux réorganisations réussies, et laissait donc la conversation en
+        // place quand elles échouaient.
         return reponse
     }
 
@@ -1493,12 +1496,6 @@ final class RelaisPage: NSObject {
         Log.info("relais : micro rendu")
     }
 
-    /// Remet la page à plat après un échec.
-    ///
-    /// Recharger est brutal mais sûr : une dictée interrompue laisse la page
-    /// dans un état qu'on ne sait pas nommer, et sans issue l'utilisateur reste
-    /// enfermé dans la barre d'onde — ce qui est arrivé.
-
     /// Annule une dictée en cours sans rien récupérer.
     func annuler() async {
         _ = try? await appeler("return window.__relais.cliquer('stop', sel);",
@@ -1521,8 +1518,6 @@ final class RelaisPage: NSObject {
             throw Erreur.introuvable(cible)
         }
         selecteurs[cible] = sel
-        // Le bloc qui porte l'élément, retenu avec lui pour le bouton
-        // « copier » : c'est la paire qui lève l'ambiguïté, pas le bouton seul.
         // Le bloc qui porte l'élément, retenu avec lui pour les boutons des
         // barres d'actions : la page en pose une sous chaque message, et seul
         // le couple dit de laquelle il s'agit.

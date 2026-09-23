@@ -4,9 +4,10 @@ import SwiftUI
 /// Comment on lance une dictée, et les deux droits que ça demande.
 ///
 /// La même vue dans l'accueil et dans les Réglages — c'est tout l'intérêt du
-/// composant. Elle n'a qu'un paramètre, `showTrialSandbox`, parce que la zone
-/// d'essai n'a de sens qu'une fois : à l'accueil, quand on n'a encore jamais vu
-/// Caspr écrire.
+/// composant. Ses deux paramètres ne règlent que ce qui n'a de sens qu'à un
+/// endroit : la zone d'essai à l'accueil, quand on n'a encore jamais vu Caspr
+/// écrire ; le raccourci « Changer de voie » dans les Réglages, parce que
+/// l'accueil ne présente pas encore les deux voies.
 ///
 /// ## Ce qui se replie, et ce qui ne doit jamais se replier
 ///
@@ -31,6 +32,8 @@ import SwiftUI
 struct TriggerCard: View, ValidatingComponent {
     /// Affiche la zone d'essai. Vrai dans l'accueil, faux dans les Réglages.
     var showTrialSandbox = true
+    /// Affiche le raccourci « Changer de voie ». Faux dans l'accueil.
+    var showVoieShortcut = false
 
     @State private var prefs = Preferences.shared
     @State private var monitor = PermissionsMonitor.shared
@@ -65,6 +68,11 @@ struct TriggerCard: View, ValidatingComponent {
                 optionMode
             } else {
                 shortcutMode
+            }
+
+            if showVoieShortcut {
+                Divider().opacity(0.25)
+                voieShortcut
             }
 
             permissions
@@ -135,7 +143,7 @@ struct TriggerCard: View, ValidatingComponent {
     @ViewBuilder
     private var shortcutMode: some View {
         Row(label: "Raccourci :") {
-            ShortcutRecorder(shortcut: $prefs.dictateShortcut) { _ in }
+            ShortcutRecorder(shortcut: $prefs.dictateShortcut)
                 .frame(width: 150, height: 26)
                 .help("Cliquez pour changer le raccourci")
         }
@@ -144,6 +152,58 @@ struct TriggerCard: View, ValidatingComponent {
              + "déclenche plus rien. Vous déclenchez l'écoute avec votre "
              + "raccourci, et Caspr insère le texte directement à votre "
              + "curseur grâce à l'Accessibilité.")
+    }
+
+    // MARK: - Changer de voie
+
+    /// Un second raccourci, facultatif, qui fait passer de macOS à ChatGPT et
+    /// retour.
+    ///
+    /// Carbon, comme celui de la dictée : il ne demande aucune autorisation,
+    /// et il marche quel que soit le déclencheur retenu — la touche Option
+    /// seule ne sait porter qu'un geste.
+    @ViewBuilder
+    private var voieShortcut: some View {
+        Row(label: "Changer de voie :") {
+            HStack(spacing: 8) {
+                if prefs.voieShortcut != nil {
+                    Button("Retirer") { prefs.voieShortcut = nil }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+                ShortcutRecorder(optional: $prefs.voieShortcut,
+                                 id: HotkeyMonitor.Shortcut.voieID)
+                    .frame(width: 150, height: 26)
+                    .help("Cliquez pour choisir un raccourci")
+            }
+        }
+        if let conflit = voieShortcutConflict {
+            Note(conflit, warning: true)
+        } else {
+            Note("Passe de macOS à ChatGPT et retour, sans ouvrir de menu. "
+                 + "Aucun par défaut : un raccourci global prend la combinaison "
+                 + "à toutes les applications. Le menu de la barre porte la même "
+                 + "bascule.")
+        }
+    }
+
+    /// Une combinaison déjà prise par Caspr lui-même.
+    ///
+    /// macOS n'en enregistre qu'une par combinaison, et c'est la première
+    /// arrivée qui la garde : la dictée, enregistrée avant, la garde — la
+    /// bascule ne répondrait jamais, sans rien pour le dire.
+    private var voieShortcutConflict: String? {
+        guard let voie = prefs.voieShortcut else { return nil }
+        func same(_ other: HotkeyMonitor.Shortcut) -> Bool {
+            other.keyCode == voie.keyCode && other.modifiers == voie.modifiers
+        }
+        if prefs.triggerKind == .shortcut, same(prefs.dictateShortcut) {
+            return "\(voie.label) déclenche déjà la dictée : choisissez-en un autre."
+        }
+        if same(.history) {
+            return "\(voie.label) ouvre déjà l'historique : choisissez-en un autre."
+        }
+        return nil
     }
 
     // MARK: - Autorisations

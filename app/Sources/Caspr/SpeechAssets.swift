@@ -61,19 +61,6 @@ final class SpeechAssets {
         var isReady: Bool { self == .ready }
     }
 
-    /// Combien de locales Apple Intelligence propose **sur cette machine**.
-    ///
-    /// `nil` tant que le système n'a pas répondu. Annoncé plutôt que deviné :
-    /// la liste dépend de la version de macOS et du matériel — trente ici,
-    /// peut-être davantage demain — et un nombre écrit en dur deviendrait faux
-    /// sans que personne s'en aperçoive.
-    private(set) var appleLocaleCount: Int?
-
-    func refreshLocaleCount() async {
-        guard appleLocaleCount == nil else { return }
-        appleLocaleCount = await Language.systemSupportedLocales().count
-    }
-
     /// Un état par code de langue — « fr », « en ».
     private(set) var states: [String: State] = [:]
 

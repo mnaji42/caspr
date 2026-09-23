@@ -168,6 +168,12 @@ nothing upstream; they meet at delivery:
           └───────────────────────────┘
 ```
 
+The path is switched in Settings › Voie, from the menu bar menu (« Écrire
+avec ChatGPT »), or with an optional global shortcut, empty by default. A
+switch applies to the next dictation. While ChatGPT is the path, the menu bar
+ghost wears a sparkle — the one permanent sign that your voice goes through
+your ChatGPT account rather than staying on the Mac.
+
 ```
 caspr/
 ├── app/             Swift menu-bar app (builds to app/build/, gitignored)
@@ -179,6 +185,7 @@ caspr/
 │           ├── VoieApple.swift            macOS: mic, live preview, transcription
 │           ├── VoieChatGPT.swift          ChatGPT: the page listens and answers
 │           ├── Livraison.swift            insert, history, retry
+│           ├── CarteVoie.swift            Settings › Voie: switch paths
 │           ├── RecordingOverlay.swift     the floating bar
 │           └── Relais/                    the ChatGPT page and its calibration
 ├── scripts/

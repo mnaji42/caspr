@@ -52,11 +52,4 @@ struct EngineChoiceTests {
         let labels = EngineChoice.allCases.map(\.fullLabel)
         #expect(Set(labels).count == labels.count)
     }
-
-    @Test("Chaque version explique ce qu'elle change")
-    func everyVersionExplainsItself() {
-        for engine in EngineChoice.allCases {
-            #expect(!engine.versionExplanation.isEmpty)
-        }
-    }
 }

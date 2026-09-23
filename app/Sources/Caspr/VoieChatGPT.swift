@@ -75,8 +75,8 @@ final class VoieChatGPT {
         }
         guard relais.estCalibre else {
             relais.rendreLaMain()
-            return "ChatGPT Web Preview est actif mais pas configuré — "
-                + "voir Réglages › Moteur IA."
+            return "La voie ChatGPT n'est pas encore calibrée — "
+                + "voir Réglages › Voie."
         }
         return nil
     }

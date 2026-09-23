@@ -225,7 +225,10 @@ final class Relais: ObservableObject {
     /// pas une mesure fraîche — seule la page en donne une, et pas sans
     /// attendre —, c'est la dernière chose **vue** : l'écran de connexion
     /// d'une session perdue, ou « Se déconnecter ».
-    private(set) var sessionVue: RelaisPage.Connexion = .inconnu
+    ///
+    /// Publiée : les réglages de la voie la montrent, et doivent changer
+    /// d'avis quand la page change le sien.
+    @Published private(set) var sessionVue: RelaisPage.Connexion = .inconnu
 
     /// Connecté et calibré, autant qu'on puisse le savoir sans interroger la
     /// page : ce que la voie ChatGPT exige pour dicter.

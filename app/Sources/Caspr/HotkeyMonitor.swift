@@ -50,6 +50,14 @@ final class HotkeyMonitor {
             id: 3
         )
 
+        /// L'identifiant du raccourci « Changer de voie ».
+        ///
+        /// Un identifiant sans raccourci : celui-ci n'a pas de défaut (cf.
+        /// `Preferences.voieShortcut`), mais il lui faut un numéro à lui dès
+        /// qu'on en choisit un, sans quoi le moniteur de dictée le prendrait
+        /// pour le sien.
+        static let voieID: UInt32 = 4
+
         /// Échap, capté uniquement pendant l'enregistrement pour annuler.
         static let cancel = Shortcut(
             keyCode: UInt32(kVK_Escape),

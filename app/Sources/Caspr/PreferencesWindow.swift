@@ -9,18 +9,26 @@ import CasprCore
 @MainActor
 final class PreferencesWindowController {
     private var window: NSWindow?
+    /// L'onglet affiché, tenu hors de la vue pour qu'on puisse y mener une
+    /// fenêtre déjà ouverte — le menu et le raccourci de la voie y envoient
+    /// quand ChatGPT n'est pas prêt.
+    private let navigation = PreferencesNavigation()
 
     /// L'historique appartient au contrôleur de dictée : on le passe plutôt
     /// que d'en faire un singleton de plus, pour qu'il n'existe qu'un seul
     /// propriétaire de ces données.
-    func show(history: TranscriptionHistory) {
+    ///
+    /// Sans onglet, la fenêtre s'ouvre là où on l'avait laissée.
+    func show(history: TranscriptionHistory, on tab: PreferencesView.Tab? = nil) {
+        if let tab { navigation.tab = tab }
         if let window {
             window.showCentered()
             return
         }
 
+        let navigation = navigation
         let window = NSWindow.caspr(title: "Réglages de Caspr") {
-            PreferencesView(history: history)
+            PreferencesView(history: history, navigation: navigation)
         }
         self.window = window
 
@@ -30,19 +38,27 @@ final class PreferencesWindowController {
 
 // MARK: - Fenêtre
 
+@MainActor
+@Observable
+final class PreferencesNavigation {
+    var tab: PreferencesView.Tab = .general
+}
+
 struct PreferencesView: View {
     let history: TranscriptionHistory
-    @State private var tab: Tab = .general
+    @Bindable var navigation: PreferencesNavigation
+
+    private var tab: Tab { navigation.tab }
 
     /// Quatre onglets, dans l'ordre où l'on se pose les questions : *ce qui
-    /// vaut pour toute l'application*, *comment on déclenche*, *avec quoi ça
+    /// vaut pour toute l'application*, *comment on déclenche*, *par où ça
     /// transcrit*, puis ce qui a été dicté.
     ///
     /// Il y en avait six. Les deux autres ne servaient que l'ancien moteur
     /// local — l'un le réglait, l'autre le comparait aux moteurs de macOS — et
     /// sont partis avec lui : la migration du lancement efface leurs réglages.
     enum Tab: String, CaseIterable {
-        case general, recording, engine, history
+        case general, recording, voie, history
 
         /// Le symbole de l'onglet.
         ///
@@ -54,15 +70,15 @@ struct PreferencesView: View {
         /// sinon — et s'aligne sur la ligne de base du libellé.
         ///
         /// Le choix suit ce que la page *fait*, pas son titre :
-        /// - `⚡` était l'éclair de la vitesse ; le Moteur IA n'a rien de
-        ///   rapide, il fait tourner un réseau de neurones — d'où le cerveau.
+        /// - La Voie est un aiguillage entre deux chemins — macOS ou ChatGPT —,
+        ///   pas un moteur qu'on règle : d'où les deux flèches opposées.
         /// - `🕒` disait l'heure ; l'Historique dit ce qui est *passé* — d'où
         ///   la flèche qui revient en arrière.
         var icon: String {
             switch self {
             case .general: "gearshape"
             case .recording: "mic"
-            case .engine: "brain"
+            case .voie: "arrow.left.arrow.right"
             case .history: "clock.arrow.circlepath"
             }
         }
@@ -79,7 +95,7 @@ struct PreferencesView: View {
             switch self {
             case .general: "Général"
             case .recording: "Dictée"
-            case .engine: "Moteur IA"
+            case .voie: "Voie"
             case .history: "Historique"
             }
         }
@@ -95,10 +111,10 @@ struct PreferencesView: View {
                 ("Dictée & Barre flottante",
                  "Comment vous appelez Caspr, ce que la barre affiche pendant "
                     + "que vous parlez, et les sons qui l'accompagnent.")
-            case .engine:
-                ("Moteur IA & Transcription Finale",
-                 "Choisissez le moteur neuronal qui rédige le texte définitif "
-                    + "de votre dictée vocale.")
+            case .voie:
+                ("Voie de Dictée",
+                 "Qui transcrit ce que vous dites : macOS, sur ce Mac et sans "
+                    + "compte, ou ChatGPT, par votre propre compte.")
             case .history:
                 ("Historique des Dictées",
                  "Retrouvez et copiez vos dernières transcriptions locales en "
@@ -118,7 +134,7 @@ struct PreferencesView: View {
                     switch tab {
                     case .general: GeneralTab()
                     case .recording: RecordingTab()
-                    case .engine: TranscriptionSettings()
+                    case .voie: CarteVoie()
                     case .history: HistoryTab(history: history)
                     }
                 }
@@ -153,7 +169,7 @@ struct PreferencesView: View {
                 // fenêtre. Un bouton se tabule, se déclenche à l'Espace et
                 // s'annonce comme sélectionné.
                 Button {
-                    tab = item
+                    navigation.tab = item
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: item.icon)
@@ -240,7 +256,7 @@ private struct RecordingTab: View {
         // la dictée depuis les Réglages. Les deux écrans posaient la même
         // question avec deux implémentations, et elles avaient déjà divergé.
         SectionLabel("Déclencheur & Permissions", followsHeader: true)
-        TriggerCard(showTrialSandbox: false)
+        TriggerCard(showTrialSandbox: false, showVoieShortcut: true)
 
         SectionLabel("Aperçu du texte en direct (Live Preview)")
         SettingsToggleRow(
@@ -254,9 +270,9 @@ private struct RecordingTab: View {
                   + "uniquement les ondes sonores pendant la parole.",
             isOn: $prefs.livePreviewEnabled,
             bottomMargin: 0)
-        // Pas de carte du moteur ici : l'aperçu tourne sur la version qui
-        // écrit, et celle-ci est dans l'onglet Moteur IA. Une seconde carte
-        // identique laisserait croire qu'il y a deux réglages.
+        // Pas de carte du moteur ici : l'aperçu tourne sur la version de
+        // macOS qui écrit, et celle-ci est dans l'onglet Voie. Une seconde
+        // carte identique laisserait croire qu'il y a deux réglages.
 
         SectionLabel("Retours Sonores")
         Card {

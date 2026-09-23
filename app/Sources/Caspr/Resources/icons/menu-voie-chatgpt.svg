@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" fill="none">
+  <!-- Marque de la voie ChatGPT, posée par-dessus n'importe quelle variante
+       `menu-caspr-ghost*` (cf. MenuBarIcon.markedForChatGPT) : une étincelle
+       à quatre branches, dans le coin haut droit que le fantôme laisse libre.
+       Seule, sur un canevas de la même taille que les fantômes, pour se
+       superposer sans calcul de position. -->
+  <path fill="#FFFFFF" d="M218 4 C222 30 230 38 254 42 C230 46 222 54 218 80 C214 54 206 46 182 42 C206 38 214 30 218 4 Z"/>
+</svg>

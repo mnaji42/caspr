@@ -14,17 +14,30 @@ import SwiftUI
 /// pour le dire tout de suite, plutôt que de laisser l'enregistrement échouer
 /// silencieusement.
 struct ShortcutRecorder: NSViewRepresentable {
-    @Binding var shortcut: HotkeyMonitor.Shortcut
-    /// Signalé quand une combinaison valide a été retenue.
-    var onChange: (HotkeyMonitor.Shortcut) -> Void
+    /// `nil` quand aucun raccourci n'est retenu — cf. `init(optional:id:)`.
+    @Binding var shortcut: HotkeyMonitor.Shortcut?
+    /// L'identifiant que porte la combinaison retenue. Pris au raccourci
+    /// quand il y en a un ; un raccourci facultatif, lui, n'en a pas toujours
+    /// un à qui le demander.
+    let id: UInt32
+
+    /// Un raccourci qui existe toujours, comme celui de la dictée.
+    init(shortcut: Binding<HotkeyMonitor.Shortcut>) {
+        _shortcut = Binding(shortcut)
+        id = shortcut.wrappedValue.id
+    }
+
+    /// Un raccourci qu'on peut ne pas avoir.
+    init(optional shortcut: Binding<HotkeyMonitor.Shortcut?>, id: UInt32) {
+        _shortcut = shortcut
+        self.id = id
+    }
 
     func makeNSView(context: Context) -> RecorderView {
         let view = RecorderView()
         view.shortcut = shortcut
-        view.onChange = { new in
-            shortcut = new
-            onChange(new)
-        }
+        view.shortcutID = id
+        view.onChange = { new in shortcut = new }
         return view
     }
 
@@ -34,7 +47,8 @@ struct ShortcutRecorder: NSViewRepresentable {
     }
 
     final class RecorderView: NSView {
-        var shortcut: HotkeyMonitor.Shortcut = .dictate
+        var shortcut: HotkeyMonitor.Shortcut?
+        var shortcutID: UInt32 = HotkeyMonitor.Shortcut.dictate.id
         var onChange: ((HotkeyMonitor.Shortcut) -> Void)?
         private var recording = false
         private var refusal: String?
@@ -84,7 +98,7 @@ struct ShortcutRecorder: NSViewRepresentable {
                 keyCode: UInt32(event.keyCode),
                 modifiers: carbon,
                 label: Self.label(flags: flags, keyCode: event.keyCode),
-                id: shortcut.id)
+                id: shortcutID)
             shortcut = new
             recording = false
             refusal = nil
@@ -145,7 +159,8 @@ struct ShortcutRecorder: NSViewRepresentable {
             (recording ? NSColor.casprAccent : NSColor.white.withAlphaComponent(0.10)).setStroke()
             path.stroke()
 
-            let text = refusal ?? (recording ? "Tapez la combinaison…" : shortcut.label)
+            let text = refusal
+                ?? (recording ? "Tapez la combinaison…" : shortcut?.label ?? "Aucun")
             let colour: NSColor = refusal != nil ? .casprWarning
                 : (recording ? .casprAccent : .secondaryLabelColor)
             let attributes: [NSAttributedString.Key: Any] = [

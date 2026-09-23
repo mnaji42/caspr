@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var hotkey: HotkeyMonitor!
     private var historyHotkey: HotkeyMonitor!
+    private var voieHotkey: HotkeyMonitor!
     private var modifierKey: ModifierKeyMonitor!
     private var reArmTimer: Timer?
     private var controller: DictationController!
@@ -84,6 +85,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyHotkey = HotkeyMonitor { [weak self] in self?.openMenu() }
         _ = historyHotkey.register(.history)
 
+        // Après les deux autres, et c'est voulu : macOS ne donne une
+        // combinaison qu'à un seul raccourci, le premier arrivé. Une bascule
+        // réglée sur la combinaison de la dictée ne doit pas la lui prendre.
+        voieHotkey = HotkeyMonitor { [weak self] in self?.changerDeVoie() }
+        registerVoieShortcut()
+
         // Le système désactive un tap dont le processus a trop tardé ; sans ce
         // réarmement la dictée cesserait de répondre sans prévenir. Le même
         // appel crée le tap s'il n'a pas pu l'être au lancement, faute
@@ -114,6 +121,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: .casprTriggerChanged, object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.applyPreferences() }
+        }
+
+        // La voie peut changer depuis les Réglages, le menu ou le raccourci ;
+        // l'icône et le menu doivent suivre dans les trois cas.
+        NotificationCenter.default.addObserver(
+            forName: .casprVoieChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.render(self.controller.state)
+            }
         }
 
         Task {
@@ -305,6 +323,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         modifierKey?.stop()
         hotkey?.unregister()
         historyHotkey?.unregister()
+        voieHotkey?.unregister()
     }
 
     // MARK: - Barre de menus
@@ -347,10 +366,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             (MenuBarIcon.image(.error), "Caspr — erreur")
         }
 
-        image?.isTemplate = true
-        image?.accessibilityDescription = description
-        button.image = image
-        button.toolTip = description
+        // La voie ChatGPT se voit dans tous les états, pas seulement au
+        // repos : c'est le seul signal permanent que la voix part par le
+        // compte ChatGPT plutôt que de rester sur ce Mac.
+        let chatgpt = switch Preferences.shared.voie {
+        case .chatgpt: true
+        case .apple: false
+        }
+        let marked = chatgpt ? image.map(MenuBarIcon.markedForChatGPT) : image
+        let said = chatgpt ? description + " · voie ChatGPT" : description
+
+        marked?.isTemplate = true
+        marked?.accessibilityDescription = said
+        button.image = marked
+        button.toolTip = said
 
         if case .failed(let message) = state {
             button.toolTip = message
@@ -424,6 +453,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(triggerDictation), keyEquivalent: "")
         dictate.target = self
         menu.addItem(dictate)
+
+        // La bascule de voie, juste sous la dictée qu'elle commande. Le menu
+        // est reconstruit à chaque changement d'état et de voie : la coche
+        // dit toujours ce que fera le prochain appui.
+        let voieLabel = prefs.voieShortcut.map { "  \($0.label)" } ?? ""
+        let voie = NSMenuItem(title: "Écrire avec ChatGPT\(voieLabel)",
+                              action: #selector(toggleVoie), keyEquivalent: "")
+        voie.target = self
+        switch prefs.voie {
+        case .chatgpt:
+            voie.state = .on
+            voie.toolTip = "Décocher : la prochaine dictée passe par macOS, hors "
+                + "ligne. Une dictée en cours va au bout sur ChatGPT."
+        case .apple:
+            voie.state = .off
+            voie.toolTip = Relais.partage.saitDicter
+                ? "Cocher : la prochaine dictée passe par votre compte ChatGPT."
+                : "ChatGPT n'est pas encore prêt : ouvre les réglages de la voie "
+                  + "pour s'y connecter et apprendre ses boutons."
+        }
+        menu.addItem(voie)
 
         // La sortie de la discussion ChatGPT, quand Échap n'est pas pris.
         //
@@ -603,6 +653,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// dure une minute, elle a des étapes, elle peut échouer pour une raison
     /// qui demande une phrase entière. Un élément de menu ne sait rien montrer
     /// de tout ça, et la barre se referme au premier clic.
+    @objc private func toggleVoie() {
+        changerDeVoie()
+    }
+
+    /// Passe à l'autre voie — depuis le menu ou le raccourci.
+    ///
+    /// Vaut pour la dictée suivante : une dictée en cours garde la voie
+    /// qu'elle avait à l'appui (cf. `Preferences.voie`).
+    ///
+    /// **Vers ChatGPT, seulement s'il sait dicter** — connecté et calibré,
+    /// autant qu'on le sache sans interroger la page. Sinon on ouvre les
+    /// réglages de la voie au lieu de basculer : c'est là que se font la
+    /// connexion et la calibration, et elles demandent une fenêtre et des
+    /// clics qu'un élément de menu ou un raccourci ne sait pas mener.
+    /// Basculer quand même rendrait une voie qui refuse chaque dictée.
+    ///
+    /// **Vers macOS, toujours.** C'est la porte de sortie : une page ChatGPT
+    /// qui ne répond plus ne doit pas retenir qui veut en sortir. Si le
+    /// modèle de la langue manque, les réglages s'ouvrent en plus, pour qu'on
+    /// voie ce qui empêchera la prochaine dictée.
+    private func changerDeVoie() {
+        let prefs = Preferences.shared
+        switch prefs.voie {
+        case .chatgpt:
+            prefs.voie = .apple
+            Log.info("voie : macOS")
+            if !AppleEngineCard.isValid { showPreferences(on: .voie) }
+        case .apple:
+            guard Relais.partage.saitDicter else {
+                Log.info("voie ChatGPT pas prête — réglages ouverts au lieu de basculer")
+                showPreferences(on: .voie)
+                return
+            }
+            prefs.voie = .chatgpt
+            Log.info("voie : ChatGPT")
+        }
+    }
+
     @objc private func openUpdate() {
         openPreferences()
     }
@@ -636,10 +724,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openPreferences() {
+        showPreferences(on: nil)
+    }
+
+    /// Ouvre les réglages, sur un onglet donné ou là où on les avait laissés.
+    private func showPreferences(on tab: PreferencesView.Tab?) {
         guard !SetupRecoveryGuard.intercept(.settings, reopening: onboarding) else {
             return
         }
-        preferences.show(history: controller.history)
+        preferences.show(history: controller.history, on: tab)
     }
 
     /// Reporte les réglages sur les composants déjà en place.
@@ -657,12 +750,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if prefs.triggerKind == .option { modifierKey.start() }
 
         // Le raccourci Carbon est enregistré auprès du système : en changer
-        // suppose de rendre l'ancien avant de prendre le nouveau.
+        // suppose de rendre l'ancien avant de prendre le nouveau. Les deux
+        // sont rendus avant d'être repris, la dictée d'abord : si l'on vient
+        // de lui donner la combinaison de la bascule, c'est elle qui la garde.
         hotkey.unregister()
+        voieHotkey.unregister()
         if prefs.triggerKind == .shortcut, !hotkey.register(prefs.dictateShortcut) {
             Log.error("raccourci \(prefs.dictateShortcut.label) refusé — déjà pris ?")
         }
+        registerVoieShortcut()
         Task { await refreshMenu() }
+    }
+
+    /// Le raccourci « Changer de voie », s'il y en a un.
+    private func registerVoieShortcut() {
+        guard let shortcut = Preferences.shared.voieShortcut else {
+            voieHotkey.unregister()
+            return
+        }
+        if !voieHotkey.register(shortcut) {
+            Log.error("raccourci \(shortcut.label) (changer de voie) refusé — déjà pris ?")
+        }
     }
 
     @objc private func revealTarget() {

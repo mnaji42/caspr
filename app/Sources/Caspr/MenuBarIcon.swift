@@ -66,4 +66,41 @@ enum MenuBarIcon {
         image.isTemplate = true
         return image
     }
+
+    /// Le même état, marqué d'une étincelle en haut à droite : la voie
+    /// ChatGPT.
+    ///
+    /// **Une marque, pas un état de plus.** La bulle du bas porte déjà ce que
+    /// fait Caspr — écouter, traiter, attendre une suite —, et la voie vaut
+    /// dans tous ces états : un sixième dessin de bulle aurait dû choisir
+    /// entre dire la voie et dire l'état. L'étincelle occupe le coin que le
+    /// fantôme laisse libre, et se superpose à n'importe lequel des dessins.
+    ///
+    /// Elle est **détourée** : le dessin de base est d'abord effacé sous elle,
+    /// un peu plus large qu'elle. En gabarit, seul l'alpha compte ; posée
+    /// telle quelle, elle se fondrait dans la tête du fantôme qu'elle touche.
+    /// Le détourage est l'étincelle elle-même, effacée décalée dans huit
+    /// directions — une dilatation, sans second dessin à tenir d'accord.
+    static func markedForChatGPT(_ base: NSImage) -> NSImage {
+        guard let url = Bundle.main.url(forResource: "menu-voie-chatgpt",
+                                        withExtension: "svg",
+                                        subdirectory: "icons"),
+              let mark = NSImage(contentsOf: url)
+        else { return base }
+        let marked = NSImage(size: size, flipped: false) { rect in
+            base.draw(in: rect)
+            let gap: CGFloat = 1.1
+            let diagonal = gap * 0.7
+            for (dx, dy) in [(gap, 0), (-gap, 0), (0, gap), (0, -gap),
+                             (diagonal, diagonal), (-diagonal, diagonal),
+                             (diagonal, -diagonal), (-diagonal, -diagonal)] {
+                mark.draw(in: rect.offsetBy(dx: dx, dy: dy), from: .zero,
+                          operation: .destinationOut, fraction: 1)
+            }
+            mark.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+            return true
+        }
+        marked.isTemplate = true
+        return marked
+    }
 }

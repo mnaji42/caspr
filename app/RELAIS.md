@@ -25,7 +25,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
 | `RelaisAttente.swift` | L'échéance **unique** d'une dictée, fixée à l'arrêt de l'écoute sur la durée parlée, et la phase en cours que la barre affiche. Toutes les attentes après l'arrêt la consomment ; aucune n'a plus son propre budget. |
-| `RelaisCard.swift` | La bascule entre les deux voies, dans Réglages › Moteur IA, et ce que le relais a appris. |
+| `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. |
 | `RelaisModuleCard.swift` | Le réglage d'un module : ses actions, sa sortie, son affichage. |
 | `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
 
@@ -94,12 +94,18 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
 Plus des accroches à défaire un jour : les endroits où la voie ChatGPT se
 distingue de la voie macOS, et pourquoi.
 
-- **`TranscriptionSettings.swift`** — une ligne.
-  `RelaisCard { AppleEngineCard() }` enveloppe la carte de macOS, dont elle
-  décide l'affichage : les deux voies s'excluent à l'écran comme en
-  fonctionnement.
-- **`CasprApp.swift`** — la page est chargée au lancement quand la voie est
-  ChatGPT, pour que la première dictée ne paie pas l'ouverture de chatgpt.com.
+- **`CarteVoie.swift`** — la bascule, dans Réglages › Voie : deux lignes de
+  même rang, macOS et ChatGPT, et sous elles les réglages de la seule voie
+  retenue. Sous macOS, la page n'existe pas : des boutons qui la calibrent
+  n'auraient rien à calibrer.
+- **`CasprApp.swift`** — la même bascule dans le menu de la barre (« Écrire
+  avec ChatGPT », coché ou non) et sur un raccourci facultatif, vide par
+  défaut. Vers ChatGPT, seulement si la page sait dicter — connectée et
+  calibrée — ; sinon ces deux chemins ouvrent Réglages › Voie au lieu de
+  basculer. Vers macOS, toujours : c'est la porte de sortie. L'icône porte
+  une étincelle tant que la voie est ChatGPT (`MenuBarIcon.markedForChatGPT`).
+  Et la page est chargée au lancement quand la voie est ChatGPT, pour que la
+  première dictée ne paie pas l'ouverture de chatgpt.com.
 - **`UninstallWindow.swift`** — la session est effacée par l'API de WebKit
   avant le balayage des fichiers. C'est l'appelant qui attend, parce qu'il est
   dans un contexte qui le peut : le faire depuis le désinstalleur lui-même

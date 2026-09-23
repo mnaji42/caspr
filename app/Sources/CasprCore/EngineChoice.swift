@@ -81,22 +81,4 @@ public enum EngineChoice: String, CaseIterable, Sendable, Codable {
         if legacyReady { return .appleLegacy }
         return appleNotRefused ? .apple : .appleLegacy
     }
-
-    /// Ce que change le choix de version, sous le sélecteur.
-    ///
-    /// Court exprès : il n'apparaît que sous la carte de macOS, qui dit déjà
-    /// ce que le moteur est.
-    public var versionExplanation: String {
-        switch self {
-        case .apple:
-            "Le moteur apparu avec macOS 26. Plus fin sur les passages longs, "
-                + "et son modèle se télécharge par langue — il demande Apple "
-                + "Intelligence."
-        case .appleLegacy:
-            "Le moteur de la Dictée de macOS, présent sur toute machine où la "
-                + "dictée du système fonctionne, Mac Intel compris. Rien à "
-                + "télécharger : il se sert des modèles que la Dictée a déjà "
-                + "installés, et il couvre plus de langues que l'autre."
-        }
-    }
 }

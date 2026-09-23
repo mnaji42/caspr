@@ -3,8 +3,15 @@ import Observation
 import CasprCore
 
 extension Notification.Name {
-    /// Le déclencheur a changé : le tap clavier doit être reconstruit.
+    /// Un déclencheur a changé — la touche, ou l'un des raccourcis : le tap
+    /// clavier et les raccourcis Carbon doivent être repris.
     static let casprTriggerChanged = Notification.Name("caspr.trigger.changed")
+
+    /// La voie a changé, d'où que vienne la bascule — réglages, menu ou
+    /// raccourci. L'icône de la barre la montre, et rien d'autre ne la
+    /// redessinerait : elle ne se repeint qu'aux changements d'état de la
+    /// dictée.
+    static let casprVoieChanged = Notification.Name("caspr.voie.changed")
 
     /// L'accessibilité vient d'être accordée, alors que l'application tourne
     /// déjà. Le tap clavier n'a pas pu être créé au lancement et rien ne le
@@ -34,6 +41,7 @@ final class Preferences {
         static let destination = "caspr.dictation.destination"
         static let livePreview = "caspr.preview.live"
         static let shortcut = "caspr.shortcut"
+        static let voieShortcut = "caspr.shortcut.voie"
         static let onboarded = "caspr.onboarded"
         /// Le nom de l'étape, et non plus son numéro — cf. `onboardingScreen`.
         static let onboardingScreen = "caspr.onboarding.screen"
@@ -130,6 +138,25 @@ final class Preferences {
             defaults.set(["keyCode": Int(dictateShortcut.keyCode),
                           "modifiers": Int(dictateShortcut.modifiers),
                           "label": dictateShortcut.label], forKey: Key.shortcut)
+            NotificationCenter.default.post(name: .casprTriggerChanged, object: nil)
+        }
+    }
+
+    /// Le raccourci qui fait passer d'une voie à l'autre, s'il y en a un.
+    ///
+    /// **Aucun par défaut.** Un raccourci global s'approprie la combinaison
+    /// dans toutes les applications ; en imposer un à qui ne change jamais de
+    /// voie, c'est lui voler une touche pour rien. Le menu de la barre porte
+    /// la même bascule, sans rien prendre à personne.
+    var voieShortcut: HotkeyMonitor.Shortcut? {
+        didSet {
+            if let voieShortcut {
+                defaults.set(["keyCode": Int(voieShortcut.keyCode),
+                              "modifiers": Int(voieShortcut.modifiers),
+                              "label": voieShortcut.label], forKey: Key.voieShortcut)
+            } else {
+                defaults.removeObject(forKey: Key.voieShortcut)
+            }
             NotificationCenter.default.post(name: .casprTriggerChanged, object: nil)
         }
     }
@@ -341,6 +368,7 @@ final class Preferences {
             defaults.set(voie.rawValue, forKey: VoieDeDictee.cle)
             guard voie != oldValue else { return }
             Relais.partage.suivreLaVoie()
+            NotificationCenter.default.post(name: .casprVoieChanged, object: nil)
         }
     }
 
@@ -403,6 +431,16 @@ final class Preferences {
                 label: label, id: HotkeyMonitor.Shortcut.dictate.id)
         } else {
             dictateShortcut = .dictate
+        }
+        if let stored = defaults.dictionary(forKey: Key.voieShortcut),
+           let code = stored["keyCode"] as? Int,
+           let modifiers = stored["modifiers"] as? Int,
+           let label = stored["label"] as? String {
+            voieShortcut = HotkeyMonitor.Shortcut(
+                keyCode: UInt32(code), modifiers: UInt32(modifiers),
+                label: label, id: HotkeyMonitor.Shortcut.voieID)
+        } else {
+            voieShortcut = nil
         }
 
         ignoredUpdateVersion = defaults.string(forKey: Key.ignoredUpdate)

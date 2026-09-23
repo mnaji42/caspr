@@ -1,7 +1,7 @@
 import SwiftUI
 import CasprCore
 
-/// Le moteur de macOS : la version qui écrit, et les modèles qu'elle réclame.
+/// La voie macOS : la version qui écrit, et le modèle qu'elle réclame.
 ///
 /// ## Aucun choix de version
 ///
@@ -10,7 +10,9 @@ import CasprCore
 /// parce que le texte définitif pouvait être CrisperWhisper. La version se
 /// choisit désormais toute seule, sur ce que la machine sait écrire dans la
 /// langue (`EngineChoice.automatic`) : la carte **montre** celle qui écrit,
-/// et ce qui lui manque.
+/// et ce qui lui manque. Rien de plus — la couverture des langues et
+/// l'histoire des deux versions, qu'elle racontait aussi, ne servaient qu'à
+/// choisir, et il n'y a plus rien à choisir.
 ///
 /// ## Ce qui bloque, et ce qui n'a pas à bloquer
 ///
@@ -116,10 +118,6 @@ struct AppleEngineCard: View, ValidatingComponent {
         // fait pas battre l'horloge deux fois.
         .onAppear { monitor.observe() }
         .onDisappear { monitor.release() }
-        // Sur la carte entière, et non plus dans la branche des modèles d'Apple
-        // Intelligence : ce compte sert aussi à `inconsistency`, qui ne se pose
-        // que sur les machines où cette branche-là ne s'affiche jamais.
-        .task { await assets.refreshLocaleCount() }
     }
 
     @ViewBuilder
@@ -237,28 +235,16 @@ struct AppleEngineCard: View, ValidatingComponent {
         EngineChoice.availableSystemEngines(for: prefs.primaryLanguage)
     }
 
-    /// La version qui écrit, et pourquoi c'est elle. Aucune version
+    /// Pourquoi c'est la Dictée qui écrit, quand c'est elle. Aucune version
     /// disponible reste un cas à part : la raison mesurée, et le bouton qui y
     /// mène.
+    ///
+    /// Rien sous Apple Intelligence : l'en-tête la nomme, et c'est le cas
+    /// attendu. La Dictée, elle, avale des mots — on doit savoir pourquoi elle
+    /// écrit, et si on y peut quelque chose.
     @ViewBuilder
     private var versionSection: some View {
-        if !available.isEmpty {
-            Divider().opacity(0.25)
-            Text("VERSION DU MOTEUR")
-                .font(.system(size: 10, weight: .bold))
-                .kerning(0.6)
-                .foregroundStyle(Style.textTertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Dit une fois, pour qu'on ne cherche pas le sélecteur : la
-            // Dictée écrit nettement moins bien, et elle ne sert que là où
-            // Apple Intelligence ne sait pas.
-            Note("Caspr choisit tout seul : Apple Intelligence quand elle sait "
-                 + "écrire votre langue principale, la Dictée de macOS sinon.")
-            languageCoverage
-
-            Note(shownTechnology.versionExplanation)
-        } else {
+        if available.isEmpty {
             Note(LegacySpeechEngine.unavailabilityReason(for: prefs.primaryLanguage)
                  ?? "Aucune version du moteur de macOS n'est utilisable ici.",
                  warning: true)
@@ -268,6 +254,28 @@ struct AppleEngineCard: View, ValidatingComponent {
                         "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
                 }
             }
+        } else if shownTechnology == .appleLegacy {
+            Note(legacyReason)
+        }
+    }
+
+    private var legacyReason: String {
+        switch Language.appleSupports(prefs.primaryLanguage) {
+        case true?:
+            // Proposée, mais pas prête : son modèle manque ou arrive.
+            "Apple Intelligence sait écrire le **\(prefs.primary.displayName)**, "
+                + "mais son modèle n'est pas encore sur ce Mac : la Dictée de "
+                + "macOS écrit en attendant, moins fidèle."
+        case false?:
+            // La seule chose qu'on puisse y faire est de le savoir.
+            "Apple Intelligence ne propose pas le "
+                + "**\(prefs.primary.displayName)** sur ce Mac : la Dictée de "
+                + "macOS écrit à sa place, moins fidèle."
+        // Pas de réponse du système : Apple Intelligence absente de ce Mac,
+        // ou pas encore interrogée. On ne dit que ce qu'on sait.
+        case nil:
+            "La Dictée de macOS écrit, moins fidèle : Apple Intelligence n'est "
+                + "pas utilisable ici dans cette langue."
         }
     }
 
@@ -370,43 +378,6 @@ struct AppleEngineCard: View, ValidatingComponent {
     /// Apple n'expose la taille d'un actif ni avant ni pendant l'installation.
     /// Afficher « 123 Mo » au point près serait un chiffre qu'on serait
     /// incapable de tenir, sur une opération que les gens surveillent.
-    /// Combien de langues cette version sait écrire, et si la vôtre en est.
-    ///
-    /// Le nombre vient du système, jamais d'une liste écrite ici : il dépend de
-    /// la version de macOS et du matériel. Trois exemples suffisent à donner
-    /// l'idée — en aligner soixante ferait de cette carte un catalogue.
-    @ViewBuilder
-    private var languageCoverage: some View {
-        switch shownTechnology {
-        case .apple:
-            if let count = assets.appleLocaleCount {
-                Note("**\(count) langues** sur ce Mac — français, anglais, espagnol, "
-                     + "allemand, italien, portugais, japonais, coréen, chinois…")
-            }
-        case .appleLegacy:
-            if Language.appleSupports(prefs.primaryLanguage) == true {
-                // Proposée, mais pas prête : son modèle manque ou arrive. La
-                // Dictée n'écrit qu'en attendant.
-                Note("Apple Intelligence sait écrire le "
-                     + "**\(prefs.primary.displayName)**, mais son modèle n'est "
-                     + "pas encore sur ce Mac : la Dictée écrit en attendant.")
-            } else if let count = assets.appleLocaleCount, count > 0,
-               Language.appleSupports(prefs.primaryLanguage) == false {
-                // Apple Intelligence existe ici, mais pas pour cette langue :
-                // c'est la raison du choix, et la seule chose qu'on puisse y
-                // faire est de le savoir.
-                Note("Apple Intelligence ne propose pas le "
-                     + "**\(prefs.primary.displayName)** sur ce Mac : la Dictée "
-                     + "écrit à sa place, dans ses \(LegacySpeechEngine.supportedLocaleCount) "
-                     + "langues.")
-            } else {
-                Note("**\(LegacySpeechEngine.supportedLocaleCount) langues** sur ce "
-                     + "Mac : c'est la liste de la Dictée de macOS, la plus large "
-                     + "des deux.")
-            }
-        }
-    }
-
     private func totalLabel(_ languages: [Language]) -> String {
         let total = languages.reduce(Int64(0)) { $0 + $1.estimatedModelBytes }
         return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)

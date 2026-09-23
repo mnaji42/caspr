@@ -30,6 +30,7 @@ struct LegacyCleanupTests {
         "relais.modules": ["brut"],
         "relais.mode": "reorganiser",
         "caspr.shortcut": ["keyCode": 2, "modifiers": 256, "label": "⌘D"],
+        "caspr.shortcut.voie": ["keyCode": 9, "modifiers": 4352, "label": "⌃⌘V"],
         "caspr.languages.selected": ["fr-FR", "en-US"],
         "caspr.languages.primary": "fr-FR",
         "caspr.history": Data([4, 5, 6]),

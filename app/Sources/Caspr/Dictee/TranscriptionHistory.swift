@@ -1,4 +1,5 @@
 import AppKit
+import CasprCore
 
 /// Les dernières transcriptions, pour les réinsérer sans reparler.
 ///
@@ -10,55 +11,9 @@ import AppKit
 /// fichier résiduel ni passage par la corbeille.
 @MainActor
 final class TranscriptionHistory {
-    struct Entry: Codable, Identifiable {
-        let id: UUID
-        let text: String
-        let date: Date
-        /// Ce que ChatGPT avait transcrit, quand un module l'a repris et que
-        /// le texte inséré en diffère.
-        ///
-        /// La reprise est une seconde passe, et une seconde passe peut se
-        /// tromper — résumer ce qu'il fallait garder, suivre de travers une
-        /// consigne dite trop vite. Ce qu'on a dit mot pour mot ne devait pas
-        /// disparaître parce qu'elle a abouti.
-        ///
-        /// Facultatif, et c'est ce qui garde le format : le décodage
-        /// synthétisé lit une clé absente comme `nil` pour un optionnel, et
-        /// l'encodage n'en écrit aucune. Les entrées d'avant se relisent donc
-        /// telles quelles, et celles-ci se relisent dans une version qui ne
-        /// connaît pas le champ — le décodeur ignore les clés qu'il ne connaît
-        /// pas.
-        let brut: String?
-        // Les entrées écrites avant la refonte portent aussi un champ `mode`,
-        // du temps où la dictée en avait deux. Le décodeur ignore les clés
-        // qu'il ne connaît pas : elles se relisent telles quelles.
-        init(text: String, brut: String? = nil) {
-            self.id = UUID()
-            self.text = text
-            self.date = Date()
-            self.brut = brut
-        }
-
-        /// « à l'instant », « il y a 3 min » — repère plus utile qu'une heure
-        /// absolue pour retrouver ce qu'on vient de dicter.
-        var relativeAge: String {
-            let seconds = Int(Date().timeIntervalSince(date))
-            switch seconds {
-            case ..<10: return "à l'instant"
-            case ..<60: return "il y a \(seconds) s"
-            case ..<3600: return "il y a \(seconds / 60) min"
-            default: return "il y a \(seconds / 3600) h"
-            }
-        }
-
-        var preview: String { Self.apercu(de: text) }
-
-        /// Une ligne de menu : le texte aplati, coupé à soixante caractères.
-        static func apercu(de texte: String) -> String {
-            let flat = texte.replacingOccurrences(of: "\n", with: " ")
-            return flat.count <= 60 ? flat : String(flat.prefix(58)) + "…"
-        }
-    }
+    /// Le format écrit vit dans CasprCore, où il est testé : il doit se
+    /// relire dans les versions d'avant comme dans celles d'après.
+    typealias Entry = HistoryEntry
 
     /// Les capacités proposées. Cinq par défaut : au-delà, retrouver la bonne
     /// entrée dans une liste coûte plus de temps que de redicter la phrase —

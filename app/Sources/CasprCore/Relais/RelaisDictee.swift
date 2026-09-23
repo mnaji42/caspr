@@ -88,7 +88,8 @@ public final class RelaisDictee {
 
     // MARK: - Écouter
 
-    /// Attend la session, vide la zone, pose la marque et clique le micro.
+    /// Attend la session, vide la zone, pose la marque, clique le micro, et
+    /// voit la page se mettre à écouter.
     ///
     /// La session s'attend **sans fin**. Au tout premier appui d'une session,
     /// chatgpt.com se charge encore, à froid ; conclure « pas connecté » à cet
@@ -130,8 +131,8 @@ public final class RelaisDictee {
         try await marquer()
         // L'écho doit être prêt quand la page demandera le micro, au clic.
         page.armerEcho()
-        var clique = false
-        defer { if !clique { page.desarmerEcho() } }
+        var ouverte = false
+        defer { if !ouverte { page.desarmerEcho() } }
         // Délai de geste : le bouton micro existe dès que la page s'est dite
         // connectée.
         //
@@ -139,7 +140,13 @@ public final class RelaisDictee {
         // page vit hors champ, le système diffère ses rendus, et un bouton
         // créé en réaction à un geste arrive parfois après la question.
         try await observer([], delai: .micro) { _ in try await self.cliquer(.micro) }
-        clique = true
+        // Délai de geste : après le clic, la page capte — elle tient le micro,
+        // ou elle enregistre. Un clic qui ne prenait pas passait pour une
+        // écoute : la barre disait « on vous écoute » devant une page sourde,
+        // et tout ce qu'on disait se perdait à l'arrêt, sur « rien n'a été
+        // entendu ».
+        try await observer([], delai: .ecoute) { $0.enregistrement || self.page.microOuvert ? () : nil }
+        ouverte = true
     }
 
     // MARK: - Transcrire

@@ -414,6 +414,26 @@ struct RelaisDicteeTests {
         #expect(dictee.lectureInterrompue && page.lectures == 0)
     }
 
+    // MARK: - L'écoute
+
+    @Test("Le micro cliqué sans que la page écoute : « ChatGPT n'a pas ouvert son micro » au bout de cinq secondes")
+    func ecouteNonOuverte() async throws {
+        let page = PageFactice()
+        page.ecoutePrend = false
+        let dictee = Self.dictee(page)
+        await #expect(throws: RelaisErreur.ecouteNonOuverte) { try await dictee.ouvrirLEcoute() }
+        #expect(page.horloge.ecoule >= .seconds(5) && page.horloge.ecoule < .seconds(6))
+        #expect(page.clics == [.micro] && !page.echoArme)
+    }
+
+    @Test("Une page qui se met à écouter une seconde après le clic est une écoute ouverte")
+    func ecouteQuiTarde() async throws {
+        let page = PageFactice()
+        page.ecouteEnRetard = .seconds(1)
+        try await Self.dictee(page).ouvrirLEcoute()
+        #expect(page.microOuvert && page.echoArme)
+    }
+
     // MARK: - L'abandon
 
     @Test("Abandonné juste après le clic du micro, la page qui se met à écouter est arrêtée")

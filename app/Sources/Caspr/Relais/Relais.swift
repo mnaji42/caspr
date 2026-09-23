@@ -660,6 +660,12 @@ final class Relais: ObservableObject {
             // s'ouvre pour qu'on s'y connecte.
             page.montrer()
             throw RelaisErreur.pasConnecte
+        } catch RelaisErreur.ecouteNonOuverte {
+            // Le micro a été cliqué : la page peut encore se mettre à écouter,
+            // hors champ, une fois la dictée échouée. Elle est arrêtée comme
+            // après un appui abandonné juste après ce clic.
+            interrompre(ecouteQuiDemarre: true)
+            throw RelaisErreur.ecouteNonOuverte
         }
     }
 

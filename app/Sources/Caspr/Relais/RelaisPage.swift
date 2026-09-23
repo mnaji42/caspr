@@ -130,18 +130,6 @@ final class RelaisPage: NSObject {
     /// L'appui a demandé de ne plus attendre la lecture à haute voix (cf.
     /// `Relais.cesserDAttendreLaLecture`). Remis à zéro à chaque dictée.
     var lectureInterrompue = false
-    /// Les alertes que la page affichait avant qu'on lui demande quelque chose.
-    ///
-    /// Une bannière déjà là n'est pas une réponse à notre demande — celle d'un
-    /// quota « bientôt atteint » reste affichée des jours. Seule une alerte
-    /// apparue depuis peut en être une.
-    var alertesAvant: [String] = []
-    /// Le nombre de réponses de ChatGPT dans la page au moment d'envoyer.
-    ///
-    /// C'est ce qui distingue la réponse attendue de la précédente : dans une
-    /// discussion, le fil en porte déjà une, finie et immobile, qui passerait
-    /// sinon pour celle qu'on attend.
-    var reponsesAvantEnvoi = 0
     var selecteurs = RelaisSelecteurs.charger()
     /// Les appels au pont qui attendent leur réponse, pour que `detruire` les
     /// rende : sur une vue détruite, aucun ne reviendrait jamais.
@@ -296,15 +284,8 @@ final class RelaisPage: NSObject {
         var silences = 0
         for essai in 0..<max(patience, 1) {
             if Task.isCancelled { return .inconnu }
-            if let r = await sonder({ try await self.etat() }) {
-                if r["connecte"] as? Bool == true {
-                    surConnexion?(.connecte)
-                    return .connecte
-                }
-                if r["authentification"] as? Bool == true {
-                    surConnexion?(.deconnecte)
-                    return .deconnecte
-                }
+            if let vu = await sonder({ try await self.instantane() }) {
+                if let connexion = session(vu) { return connexion }
             } else if !chargementEnCours {
                 // Une page qui se charge exécute son bundle, à froid au
                 // premier lancement : un appel qui s'y perd n'est pas une page
@@ -343,15 +324,9 @@ final class RelaisPage: NSObject {
             // qu'on quitte. Un silence, lui, ne conclut rien : la borne s'en
             // charge.
             if !chargementEnCours,
-               let r = await sonder({ try await self.etat(micro: "", stop: "", composeur: "") }) {
-                if r["connecte"] as? Bool == true {
-                    surConnexion?(.connecte)
-                    return .connecte
-                }
-                if r["authentification"] as? Bool == true {
-                    surConnexion?(.deconnecte)
-                    return .deconnecte
-                }
+               let vu = await sonder({ try await self.instantane(reperes: RelaisSelecteurs()) }),
+               let connexion = session(vu) {
+                return connexion
             }
             try? await Task.sleep(for: .milliseconds(400))
         }
@@ -380,12 +355,13 @@ final class RelaisPage: NSObject {
         guard !morteDepuisLeDepart else { throw Erreur.pageInterrompue }
     }
 
-    /// Ce que la page affiche à cet instant — ses alertes, et combien de
-    /// réponses de ChatGPT elle porte — pour ne compter ensuite que ce qui est
-    /// apparu depuis.
-    func relever() async -> (alertes: [String], reponses: Int) {
-        let r = try? await releve()
-        return ((r?["alertes"] as? [String]) ?? [], (r?["reponses"] as? Int) ?? 0)
+    /// La session que montre ce relevé (cf. `RelaisVeille.session`), dite à
+    /// `surConnexion` ; `nil` quand la page n'a rien dit.
+    func session(_ vu: RelaisInstantane) -> Connexion? {
+        guard let connectee = RelaisVeille.session(vu) else { return nil }
+        let connexion: Connexion = connectee ? .connecte : .deconnecte
+        surConnexion?(connexion)
+        return connexion
     }
 
     /// Rend sur-le-champ chaque appel au pont resté en suspens : l'attente

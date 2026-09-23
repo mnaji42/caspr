@@ -82,10 +82,73 @@ struct RelaisScriptsTests {
         let ctx = JSContext()!
         ctx.evaluateScript("var window = this, document = {}, location = { hostname: 'chatgpt.com' };")
         ctx.evaluateScript(RelaisScripts.pont)
-        let cles = ctx.evaluateScript("Object.keys(window.__relais)")!.toArray() as? [String] ?? []
+        // `pur` n'est pas une fonction de la page : les règles, pour les tests.
+        let cles = ctx.evaluateScript("Object.keys(window.__relais).filter((c) => c !== 'pur')")!
+            .toArray() as? [String] ?? []
         #expect(cles.sorted() == RelaisScripts.Fonction.allCases.map(\.rawValue).sorted())
         for cle in cles {
             #expect(ctx.evaluateScript("typeof window.__relais['\(cle)']")!.toString() == "function")
+        }
+    }
+
+    /// Les règles du pont qui ne regardent pas la page, évaluées telles que
+    /// la page les exécute.
+    static func regle(_ appel: String) -> Bool {
+        let ctx = JSContext()!
+        ctx.evaluateScript("var window = this, document = {}, location = { hostname: 'chatgpt.com' };")
+        ctx.evaluateScript(RelaisScripts.pont)
+        return ctx.evaluateScript("window.__relais.pur.\(appel)")!.toBool()
+    }
+
+    /// Un identifiant fabriqué à chaque rendu vise, à la dictée suivante, un
+    /// élément qui n'existe plus ; un numéro final, le message d'un autre fil.
+    @Test("Aucun repère n'est tiré d'un identifiant engendré")
+    func identifiantsEngendres() {
+        for id in ["", "radix-_r_6s_", ":r1:", "_r_12_", "«r3»", "conversation-turn-6", "item_12", "x1234"] {
+            #expect(Self.regle("idEngendre('\(id)')"), "\(id)")
+        }
+        for id in ["prompt-textarea", "send-button", "composer-speech-button", "copy-turn-action-button"] {
+            #expect(!Self.regle("idEngendre('\(id)')"), "\(id)")
+        }
+    }
+
+    /// Dans un projet aussi : c'est le point de départ que les réglages
+    /// recommandent, et ne pas l'y reconnaître y laissait le fil ouvert.
+    @Test("Une conversation se reconnaît à son adresse, dans un projet aussi")
+    func conversation() {
+        #expect(Self.regle("estConversation('/c/68d2-abc')"))
+        #expect(Self.regle("estConversation('/g/g-p-123-caspr/c/68d2-abc')"))
+        for chemin in ["/", "/g/g-p-123-caspr", "/g/g-p-123-caspr/project", "/gpts", "/codex"] {
+            #expect(!Self.regle("estConversation('\(chemin)')"), "\(chemin)")
+        }
+    }
+
+    @Test("L'écran d'authentification se reconnaît à son adresse, et à elle seule")
+    func authentification() {
+        #expect(Self.regle("estAuthentification({ hostname: 'chatgpt.com', pathname: '/auth/login' })"))
+        #expect(Self.regle("estAuthentification({ hostname: 'chatgpt.com', pathname: '/log-in' })"))
+        #expect(Self.regle("estAuthentification({ hostname: 'auth.openai.com', pathname: '/u/login' })"))
+        #expect(!Self.regle("estAuthentification({ hostname: 'chatgpt.com', pathname: '/' })"))
+        #expect(!Self.regle("estAuthentification({ hostname: 'chatgpt.com', pathname: '/authors' })"))
+        #expect(!Self.regle("estAuthentification({ hostname: 'chatgpt.com', pathname: '/c/login-page' })"))
+    }
+
+    /// Étroits, délibérément : une bannière de quota affichée des jours
+    /// interromprait sinon chaque dictée.
+    @Test("Les motifs d'échec restent étroits ; seul un bouton qui invite à se connecter compte")
+    func motifs() {
+        for texte in ["Je n'ai pas compris", "Nous n'avons pas compris l'audio", "Sorry, I didn't catch that",
+                      "Something went wrong. Try again", "Veuillez réessayer"] {
+            #expect(Self.regle("estEchec(\"\(texte)\")"), "\(texte)")
+        }
+        for texte in ["Limite d'utilisation hebdomadaire bientôt atteinte", "Mise à niveau disponible"] {
+            #expect(!Self.regle("estEchec(\"\(texte)\")"), "\(texte)")
+        }
+        for texte in ["Se connecter", "Connexion", "Log in", "Sign up for free", "S'inscrire gratuitement"] {
+            #expect(Self.regle("estInvite(\"\(texte)\")"), "\(texte)")
+        }
+        for texte in ["Se déconnecter", "Déconnexion", "Nouvelle conversation", "Partager"] {
+            #expect(!Self.regle("estInvite(\"\(texte)\")"), "\(texte)")
         }
     }
 

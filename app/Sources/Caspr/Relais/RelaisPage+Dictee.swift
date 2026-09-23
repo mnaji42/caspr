@@ -28,7 +28,7 @@ extension RelaisPage {
     /// enregistrait toujours, si bien que le geste suivant relançait une
     /// dictée par-dessus au lieu de l'arrêter.
     func estEnEnregistrement() async -> Bool {
-        await etatAuRepos()?["enregistrement"] as? Bool == true
+        await etatAuRepos()?.enregistrement == true
     }
 
     /// La page porte-t-elle une conversation ?
@@ -42,12 +42,11 @@ extension RelaisPage {
     /// alors est de la reconstruire. Une page en cours de chargement n'est pas
     /// interrogée (cf. `Relais.preparer`).
     func tientUneConversation() async -> Bool? {
-        guard let r = await etatAuRepos() else { return nil }
-        return r["conversation"] as? Bool == true
+        await etatAuRepos()?.conversation
     }
 
-    private func etatAuRepos() async -> [String: Any]? {
-        await sonder { try await self.etat() }
+    private func etatAuRepos() async -> RelaisInstantane? {
+        await sonder { try await self.instantane() }
     }
 
     /// Clique le micro. La page commence à écouter.
@@ -84,7 +83,8 @@ extension RelaisPage {
         // suite au lieu de remplacer, si bien que le texte suivant arrivait
         // collé au précédent, et le suivant encore aux deux.
         try? await vider(sel: selecteurs.composeur)
-        alertesAvant = await relever().alertes
+        // Ce que la page affiche déjà n'est pas un échec de cette dictée.
+        try? await marquer()
         // L'écho doit être prêt quand la page demandera le micro, au clic.
         echo.armer()
         var clique = false
@@ -111,21 +111,18 @@ extension RelaisPage {
     private func attendreLaSession() async throws {
         while true {
             try Task.checkCancellation()
-            var vu: [String: Any]?
-            do { vu = chargementEnCours ? nil : try await etat() }
+            var vu: RelaisInstantane?
+            do { vu = chargementEnCours ? nil : try await instantane() }
             catch Erreur.pontAbsent { throw Erreur.pontAbsent } catch {}
-            if let r = vu {
-                if r["connecte"] as? Bool == true {
-                    surConnexion?(.connecte)
-                    return
-                }
-                if r["authentification"] as? Bool == true {
-                    surConnexion?(.deconnecte)
-                    montrer()
-                    throw Erreur.pasConnecte
-                }
+            switch vu.flatMap(session) {
+            case .connecte?:
+                return
+            case .deconnecte?:
+                montrer()
+                throw Erreur.pasConnecte
+            default:
+                try await Task.sleep(for: .milliseconds(400))
             }
-            try await Task.sleep(for: .milliseconds(400))
         }
     }
 
@@ -187,87 +184,59 @@ extension RelaisPage {
         }
         guard arrete else { throw Erreur.introuvable(.stop) }
 
-        // La page dit parfois elle-même qu'elle a échoué : c'est la seule
-        // chose, avec l'utilisateur, qui interrompe l'attente.
-        let refus = { await self.erreurAffichee(nouvelles: false) }
-        try await veiller(refus) { () -> Bool? in
-            (try? await lire(sel: selecteurs.composeur)) != nil ? true : nil
-        }
-
-        // La stabilisation. Une seconde pleine sans changement, et non
-        // 500 ms : le flux marque entre deux fragments des pauses plus
-        // longues qu'on ne l'imagine, et c'est précisément là que le seuil
-        // précédent coupait la phrase. Un texte qui bouge encore n'est jamais
-        // rendu : coupé au milieu, il s'insérerait sans que rien signale la
-        // coupure, ce qui est pire que pas de texte.
-        var precedent = ""
-        var stable = 0
-        var vide = 0
-        return try await veiller(refus) { () -> String? in
-            // Un appel qui échoue ne dit rien du texte : le compter comme une
-            // zone vide finirait par conclure « rien n'a été dit » devant une
-            // page qui en a. Une zone introuvable, elle, compte comme vide.
-            guard let lu = try? await Optional(lire(sel: selecteurs.composeur)) else { return nil }
-            let texte = lu ?? ""
-            defer { precedent = texte }
-
-            // La zone est revenue et reste vide : il n'y avait rien à
-            // transcrire. Appuyer sur la touche sans parler est un geste
-            // ordinaire — on se ravise, on est interrompu — et il laissait la
-            // barre sur « Transcription… » sans autre issue qu'Échap.
-            //
-            // Quatre secondes, et non une : dans le cas normal, la zone
-            // revient déjà remplie, mais rien ne garantit que les deux
-            // arrivent au même instant. C'est un jugement sur une zone
-            // revenue, pas une échéance : ChatGPT a déjà rendu la main.
-            guard !texte.isEmpty else {
-                stable = 0
-                vide += 1
-                guard vide >= 16 else { return nil }
-                // Sauf si la page dit pourquoi : un refus — un quota atteint,
-                // par exemple — rend lui aussi la zone vide, et « avez-vous
-                // parlé ? » ferait chercher la panne au micro.
-                if let message = await erreurAffichee(nouvelles: true) {
-                    throw Erreur.refusParChatGPT(message)
-                }
-                Log.info("relais : la zone est revenue vide — rien n'a été dicté")
-                return ""
-            }
-            vide = 0
-            guard texte == precedent else { stable = 0; return nil }
-            stable += 1
-            // ~1 s sans changement. On ne vide pas ici. `demarrer()` le fait
-            // avant chaque dictée, ce qui suffit à empêcher toute
-            // concaténation, et vider exige de focaliser la zone — l'opération
-            // même qui détournait le curseur système. La faire à l'instant
-            // précis où Caspr s'apprête à insérer au curseur serait le pire
-            // moment possible. Le texte laissé dans la page est en prime un
-            // filet : il reste copiable si l'insertion échoue.
-            return stable >= 4 ? texte : nil
+        // La zone revient, puis son texte cesse de bouger (cf.
+        // `RelaisVeille.Stabilisation`). Avant l'envoi, seul un échec que la
+        // page reconnaît interrompt l'attente, avec l'utilisateur.
+        var stabilisation = RelaisVeille.Stabilisation()
+        switch try await veiller(.texte, apresEnvoi: false, { stabilisation.juger($0.texte) }) {
+        case .texte(let texte):
+            // On ne vide pas ici. `demarrer()` le fait avant chaque dictée, ce
+            // qui suffit à empêcher toute concaténation, et vider exige de
+            // focaliser la zone — l'opération même qui détournait le curseur
+            // système. La faire à l'instant précis où Caspr s'apprête à
+            // insérer au curseur serait le pire moment possible. Le texte
+            // laissé dans la page est en prime un filet : il reste copiable si
+            // l'insertion échoue.
+            return texte
+        case .vide:
+            // Sauf si la page dit pourquoi : un refus — un quota atteint, par
+            // exemple — rend lui aussi la zone vide, et « avez-vous parlé ? »
+            // ferait chercher la panne au micro.
+            if let message = await alerteNouvelle() { throw Erreur.refusParChatGPT(message) }
+            Log.info("relais : la zone est revenue vide — rien n'a été dicté")
+            return ""
         }
     }
 
-    /// L'attente sans fin d'une dictée : un relevé par quart de seconde,
-    /// jusqu'à ce que `juger` rende une valeur.
+    /// L'attente sans fin d'une dictée : un relevé de la page (`demande`)
+    /// par quart de seconde, jusqu'à ce que `juger` rende une valeur.
     ///
-    /// Une fois par seconde, les échecs que la page prouve : un refus selon
-    /// `refus`, et l'écran d'authentification. La mort du processus se lit à
-    /// chaque tour. Le reste appartient à l'utilisateur : l'annulation de la
-    /// tâche tranche l'attente, appel au pont en suspens compris (cf.
-    /// `appeler`).
-    @discardableResult
-    private func veiller<T>(_ refus: () async -> String?,
-                            _ juger: () async throws -> T?) async throws -> T {
+    /// Un tour sur quatre, le relevé porte aussi les alertes — les chercher
+    /// coûte à la page qu'on attend de voir avancer —, et les échecs que la
+    /// page prouve s'y jugent : un refus (cf. `RelaisVeille.refus`), l'écran
+    /// de connexion. La mort du processus se lit à chaque tour.
+    ///
+    /// Un relevé qui échoue ne dit rien, et l'on passe au suivant : le
+    /// compter comme une zone vide finirait par conclure « rien n'a été dit »
+    /// devant une page qui en a. Le reste appartient à l'utilisateur :
+    /// l'annulation de la tâche tranche l'attente, appel au pont en suspens
+    /// compris (cf. `appeler`).
+    private func veiller<T>(_ demande: RelaisDemande, apresEnvoi: Bool,
+                            _ juger: (RelaisInstantane) async throws -> T?) async throws -> T {
+        var veille = RelaisVeille(apresEnvoi: apresEnvoi)
         var tour = 0
         while true {
             try Task.checkCancellation()
             try verifierLaPage()
             try? await Task.sleep(for: .milliseconds(250))
-            if let valeur = try await juger() { return valeur }
             tour += 1
-            guard tour % 4 == 0 else { continue }
-            if let message = await refus() { throw Erreur.refusParChatGPT(message) }
-            if await sessionMontreeFermee() { throw Erreur.pasConnecte }
+            let alertes = tour % 4 == 0
+            guard let vu = try? await instantane(alertes ? demande.union(.alertes) : demande)
+            else { continue }
+            if let valeur = try await juger(vu) { return valeur }
+            guard alertes else { continue }
+            if let message = veille.refus(vu) { throw Erreur.refusParChatGPT(message) }
+            if sessionMontreeFermee(vu) { throw Erreur.pasConnecte }
         }
     }
 
@@ -276,9 +245,8 @@ extension RelaisPage {
     /// L'échec prouvé qu'une échéance rattrapait jusqu'ici : une session
     /// perdue en pleine attente ne rendra jamais rien, et sans ce relevé
     /// l'attente — désormais sans fin — le serait pour de bon.
-    private func sessionMontreeFermee() async -> Bool {
-        guard let r = try? await etat(), r["authentification"] as? Bool == true
-        else { return false }
+    private func sessionMontreeFermee(_ vu: RelaisInstantane) -> Bool {
+        guard RelaisVeille.session(vu) == false else { return false }
         Log.error("relais : la page montre l'écran de connexion pendant l'attente")
         surConnexion?(.deconnecte)
         return true
@@ -327,7 +295,7 @@ extension RelaisPage {
         if !encadrement.avant.isEmpty || !encadrement.apres.isEmpty {
             try await encadrer(encadrement)
         }
-        try await cliquerLEnvoi(empreinte: empreinte(encadrement.avant))
+        try await cliquerLEnvoi(empreinte: RelaisVeille.empreinte(encadrement.avant))
     }
 
     /// Encadre la transcription déjà présente, l'envoie, et rend la réponse.
@@ -349,7 +317,8 @@ extension RelaisPage {
                              attente: RelaisAttente) async throws -> String {
         attente.entrer(.envoi)
         try await encadrer(encadrement)
-        try await cliquerLEnvoi(empreinte: empreinte(encadrement.avant))
+        let empreinte = RelaisVeille.empreinte(encadrement.avant)
+        try await cliquerLEnvoi(empreinte: empreinte)
         attente.entrer(.reponse)
         // Le bouton de ChatGPT quand on sait où il est, la lecture du DOM
         // sinon — pour ne pas casser une configuration antérieure.
@@ -362,7 +331,7 @@ extension RelaisPage {
         // qu'aux réorganisations réussies, et laissait donc la conversation en
         // place quand elles échouaient.
         return selecteurs.saitCopier
-            ? try await copierReponse(empreinteEnvoyee: empreinte(encadrement.avant))
+            ? try await copierReponse(empreinteEnvoyee: empreinte)
             : try await attendreReponse()
     }
 
@@ -378,7 +347,7 @@ extension RelaisPage {
         guard try await encadrer(sel: selecteurs.composeur, avant: encadrement.avant,
                                  apres: encadrement.apres)
         else { throw Erreur.introuvable(.composeur) }
-        let empreinte = empreinte(encadrement.avant)
+        let empreinte = RelaisVeille.empreinte(encadrement.avant)
         guard !empreinte.isEmpty else { return }
         // Délai de geste : ce qu'on vient d'écrire se relit aussitôt, ou n'a
         // pas pris ; six secondes laissent large à une machine qui rame.
@@ -393,14 +362,13 @@ extension RelaisPage {
         throw Erreur.consigneNonPosee
     }
 
-    /// Clique l'envoi, en relevant d'abord ce que la page affiche : seule une
-    /// alerte ou une réponse apparue depuis compte. Puis vérifie que le
-    /// message est parti.
+    /// Clique l'envoi, en posant d'abord la marque : seule une alerte ou une
+    /// réponse apparue depuis compte. Puis vérifie que le message est parti.
     ///
     /// `empreinte` : ce qui, dans la zone, signe le message — le délimiteur
     /// de la consigne ; vide, la zone entière.
     private func cliquerLEnvoi(empreinte: String) async throws {
-        (alertesAvant, reponsesAvantEnvoi) = await relever()
+        try? await marquer()
         let marque = empreinte.isEmpty
             ? (try? await lire(sel: selecteurs.composeur)) ?? ""
             : empreinte
@@ -429,27 +397,15 @@ extension RelaisPage {
             try Task.checkCancellation()
             try verifierLaPage()
             try? await Task.sleep(for: .milliseconds(250))
-            guard let r = try? await depart(sel: selecteurs.composeur, avant: reponsesAvantEnvoi)
-            else { continue }
-            if r.repond { return }
-            if let zone = r.zone, !marque.isEmpty, !zone.contains(marque) { return }
+            guard let vu = try? await instantane([.texte, .reponse]) else { continue }
+            if let r = vu.reponse, r.nouvelles > 0 || r.enCours { return }
+            if let zone = vu.texte, !marque.isEmpty, !zone.contains(marque) { return }
         }
         try Task.checkCancellation()
-        // Une alerte apparue depuis le relevé dit pourquoi, mieux que nous.
-        if let message = await erreurAffichee(nouvelles: true) {
-            throw Erreur.refusParChatGPT(message)
-        }
+        // Une alerte apparue depuis la marque dit pourquoi, mieux que nous.
+        if let message = await alerteNouvelle() { throw Erreur.refusParChatGPT(message) }
         Log.error("relais : le clic d'envoi est resté sans effet — message toujours dans la zone")
         throw Erreur.envoiSansEffet
-    }
-
-    /// La dernière ligne non vide de la consigne — le délimiteur.
-    ///
-    /// Meilleure empreinte que le début du texte : elle est courte, très
-    /// distinctive, et elle ne souffre pas de la façon dont la page replie les
-    /// espaces d'un long paragraphe.
-    private func empreinte(_ avant: String) -> String {
-        avant.split(separator: "\n").last.map(String.init) ?? avant
     }
 
     /// Attend que la page rechargée soit prête, zone de saisie comprise — au
@@ -523,36 +479,25 @@ extension RelaisPage {
         // qu'à la voir dans la page, et dix secondes sans elle disent qu'on ne
         // la trouve pas — le texte s'insère alors sans la voix.
         let limite = dejaFinie ? Date.now.addingTimeInterval(10) : nil
-        var precedent = ""
-        var stable = 0
+        var veille = RelaisVeille(apresEnvoi: true)
+        var finie = RelaisVeille.ReponseFinie(seuil: dejaFinie ? 0 : 8)   // ~2 s sans changement
         var prete = false
         var tour = 0
-        var silences = 0
         while limite.map({ Date.now < $0 }) ?? true {
-            defer { tour += 1 }
             if Task.isCancelled || lectureInterrompue { return nil }
             if morteDepuisLeDepart { return .pageInterrompue }
             try? await Task.sleep(for: .milliseconds(250))
-            if tour % 4 == 3 {
-                if let message = await refusPendantLAttente(silences: &silences) {
+            tour += 1
+            let alertes = tour % 4 == 0
+            guard let vu = try? await instantane(alertes ? [.reponse, .alertes] : .reponse) else { continue }
+            if alertes {
+                if let message = veille.refus(vu) {
                     Log.error("relais : ChatGPT a refusé (« \(message) »), lecture abandonnée")
                     return .refusParChatGPT(message)
                 }
-                if await sessionMontreeFermee() { return .pasConnecte }
+                if sessionMontreeFermee(vu) { return .pasConnecte }
             }
-            guard let r = try? await etatReponse(avant: reponsesAvantEnvoi),
-                  r["nouvelle"] as? Bool == true
-            else { stable = 0; continue }
-            let texte = (r["texte"] as? String) ?? ""
-            let finie = r["enCours"] as? Bool != true && !texte.isEmpty
-            if dejaFinie, finie { prete = true; break }
-            if finie, texte == precedent {
-                stable += 1
-                if stable >= 8 { prete = true; break }      // ~2 s sans changement
-            } else {
-                stable = 0
-            }
-            precedent = texte
+            if finie.juger(vu.reponse) { prete = true; break }
         }
         guard prete else {
             Log.error("relais : réponse copiée introuvable dans la page, lecture à haute "
@@ -632,14 +577,10 @@ extension RelaisPage {
         var sauvegarde = PressePapiers(presse)
         var avant = presse.changeCount
 
-        // Jusqu'au clic, sans fin. Le refus se guette une fois par seconde,
-        // comme ailleurs : à chaque tour, la sonde relisait le texte de
-        // centaines d'éléments quatre fois par seconde — `innerText` force la
-        // page à recalculer sa disposition — au risque de ralentir la
-        // génération même qu'on attendait.
-        var silences = 0
-        let voie = try await veiller({ await refusPendantLAttente(silences: &silences) }) {
-            () -> String? in
+        // Jusqu'au clic, sans fin, et seulement sur une réponse nouvelle,
+        // finie : le bouton de son tour, qui la suit (`copierPret`).
+        let voie = try await veiller(.reponse, apresEnvoi: true) { vu -> String? in
+            guard vu.reponse?.copierPret == true else { return nil }
             // Le presse-papiers tel qu'il est juste avant ce clic. Relevé au
             // début de l'attente — désormais sans fin —, il prenait pour la
             // réponse ce que l'utilisateur copiait entre-temps, l'insérait, et
@@ -709,59 +650,28 @@ extension RelaisPage {
     /// Attend que la réponse apparaisse, puis cesse de grandir — sans fin.
     ///
     /// ChatGPT écrit par flux : le texte s'allonge mot à mot. On attend donc
-    /// deux secondes et demie sans changement, et non une — les pauses entre
-    /// deux fragments d'une longue réponse dépassent régulièrement la seconde,
-    /// et un seuil trop court rendrait un texte coupé au milieu, ce qui est
-    /// pire que pas de texte du tout : rien ne signale la coupure.
+    /// deux secondes et demie sans changement, et non une (cf.
+    /// `RelaisVeille.ReponseFinie`) : rien ne signale un texte coupé.
+    ///
+    /// Le calme se juge sur la longueur, et la réponse n'est lue qu'une fois,
+    /// finie : relire tout son texte quatre fois par seconde forçait la page
+    /// à se redisposer pendant qu'elle l'écrivait.
     private func attendreReponse() async throws -> String {
-        var precedent = ""
-        var stable = 0
-        var silences = 0
-        return try await veiller({ await refusPendantLAttente(silences: &silences) }) {
-            () -> String? in
-            let texte = (try? await lireReponse(sel: selecteurs.reponse)) ?? ""
-            defer { precedent = texte }
-            guard !texte.isEmpty, texte == precedent else { stable = 0; return nil }
-            stable += 1
-            return stable >= 10 ? texte : nil                // ~2,5 s sans changement
+        var finie = RelaisVeille.ReponseFinie(seuil: 10)                  // ~2,5 s
+        return try await veiller(.reponse, apresEnvoi: true) { vu -> String? in
+            guard finie.juger(vu.reponse),
+                  let texte = try? await lireReponse(sel: selecteurs.reponse), !texte.isEmpty
+            else { return nil }
+            return texte
         }
     }
 
-    /// Le message d'échec que ChatGPT affiche, s'il est apparu depuis le
-    /// dernier relevé.
-    ///
-    /// Les motifs d'échec restent étroits, délibérément (cf. `erreur()` dans
-    /// le pont). `nouvelles` y ajoute toute alerte apparue depuis le relevé,
-    /// quelle que soit sa formulation — mais pour **expliquer** un échec déjà
-    /// constaté seulement : la zone est revenue vide. Pendant l'attente d'une
-    /// réponse, c'est `refusPendantLAttente` qui décide.
-    private func erreurAffichee(nouvelles: Bool) async -> String? {
-        let r = try? await erreur(connues: alertesAvant, nouvelles: nouvelles, avant: -1)
-        let message = (r?["message"] as? String) ?? ""
-        return message.isEmpty ? nil : message
-    }
-
-    /// Un refus de ChatGPT, pendant qu'on attend sa réponse.
-    ///
-    /// Un échec reconnu par ses motifs interrompt l'attente sur-le-champ. Une
-    /// alerte nouvelle qu'aucun motif ne connaît — un quota atteint à
-    /// l'instant — ne compte, elle, que tant que ChatGPT ne répond pas :
-    /// aucune réponse nouvelle, aucune génération en cours (cf. `erreur()`).
-    /// Sans cette condition, une bannière « limite bientôt atteinte » apparue
-    /// à l'envoi faisait jeter la réponse que ChatGPT était en train d'écrire.
-    ///
-    /// Et ce silence doit durer trois relevés d'affilée : juste après l'envoi,
-    /// la réponse met un instant à paraître, et une bannière tombée dans ce
-    /// creux passerait sinon pour un refus.
-    private func refusPendantLAttente(silences: inout Int) async -> String? {
-        guard let r = try? await erreur(connues: alertesAvant, nouvelles: true,
-                                        avant: reponsesAvantEnvoi)
-        else { return nil }
-        let message = (r["message"] as? String) ?? ""
-        guard !message.isEmpty else { silences = 0; return nil }
-        if r["reconnue"] as? Bool == true { return message }
-        silences += 1
-        return silences >= 3 ? message : nil
+    /// L'alerte apparue depuis la marque, reconnue ou non — pour
+    /// **expliquer** un échec déjà constaté : la zone revenue vide, un envoi
+    /// sans effet. Pendant une attente, c'est `RelaisVeille.refus` qui décide
+    /// si une alerte en est un.
+    private func alerteNouvelle() async -> String? {
+        (try? await instantane(.alertes))?.echec?.texte
     }
 
     /// Annule une dictée en cours sans rien récupérer — au repos : l'arrêt
@@ -783,9 +693,9 @@ extension RelaisPage {
         let fin = Date.now.addingTimeInterval(ecouteQuiDemarre ? 3 : 0)
         var ecoute = false
         while true {
-            let etat = await etatAuRepos()
-            guard etat != nil || microOuvert else { return }
-            ecoute = etat?["enregistrement"] as? Bool == true || microOuvert
+            let vu = await etatAuRepos()
+            guard vu != nil || microOuvert else { return }
+            ecoute = vu?.enregistrement == true || microOuvert
             if ecoute || Date.now >= fin || Task.isCancelled { break }
             try? await Task.sleep(for: .milliseconds(200))
         }

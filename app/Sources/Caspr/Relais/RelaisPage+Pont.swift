@@ -19,8 +19,7 @@ extension RelaisPage {
     /// Ce que rend une fonction du pont : chacune n'en remplit qu'une partie.
     private struct Rendu: Decodable {
         let ok: Bool
-        let texte, voie, zone, selecteur, parent, menu, menuParent: String?
-        let repond: Bool?
+        let texte, voie, selecteur, parent, menu, menuParent: String?
     }
 
     private struct Liste<Element: Decodable>: Decodable {
@@ -40,12 +39,6 @@ extension RelaisPage {
     /// repos, où un silence doit se constater, on l'enveloppe dans `sonder`.
     func pont<T: Decodable>(_ fonction: RelaisScripts.Fonction, _ args: Any...) async throws -> T {
         try JSONDecoder().decode(T.self, from: await appeler(fonction, args))
-    }
-
-    /// Les relevés que la page rend en vrac — `etat`, `releve`, `erreur`,
-    /// `etatReponse` —, sans type dédié : ils seront fondus en un seul.
-    func pont(_ fonction: RelaisScripts.Fonction, _ args: Any...) async throws -> [String: Any] {
-        try JSONSerialization.jsonObject(with: await appeler(fonction, args)) as? [String: Any] ?? [:]
     }
 
     /// Un appel au pont, sur le chemin d'une dictée : **sans délai**.
@@ -157,17 +150,11 @@ extension RelaisPage {
         try await (pont(.ecrire, sel, texte) as Rendu).ok
     }
 
-    func vider(sel: String) async throws { let _: Rendu = try await pont(.vider, sel) }
+    /// Vide la zone : l'écrire vide, une seule règle pour les deux.
+    func vider(sel: String) async throws { try await ecrire("", sel: sel) }
 
     func encadrer(sel: String, avant: String, apres: String) async throws -> Bool {
         try await (pont(.encadrer, sel, avant, apres) as Rendu).ok
-    }
-
-    /// Le message a-t-il quitté la zone ? Ce qu'elle porte encore — `nil`
-    /// quand elle est absente, ce qui ne prouve rien —, et si ChatGPT répond.
-    func depart(sel: String, avant: Int) async throws -> (zone: String?, repond: Bool) {
-        let r: Rendu = try await pont(.depart, sel, avant)
-        return (r.zone, r.repond == true)
     }
 
     /// Clique « copier » ; rend la voie suivie — la paire, ou le repère seul
@@ -221,19 +208,18 @@ extension RelaisPage {
         _ = await sonder { try await self.pont(.abandonnerCalibration) as Rendu }
     }
 
-    /// Connecté ou non, en train d'écouter ou non — par les repères du
-    /// calibrage, sauf ceux qu'on donne.
-    func etat(micro: String? = nil, stop: String? = nil,
-              composeur: String? = nil) async throws -> [String: Any] {
-        try await pont(.etat, micro ?? selecteurs.micro, stop ?? selecteurs.stop,
-                       composeur ?? selecteurs.composeur)
+    /// Pose la marque : ce qu'un relevé comptera ensuite comme nouveau —
+    /// échecs affichés et réponses de ChatGPT — est ce qui apparaît après.
+    func marquer() async throws { let _: Rendu = try await pont(.marquer) }
+
+    /// Ce que la page dit d'elle-même, en un aller-retour — par les repères du
+    /// calibrage, sauf ceux qu'on donne (vides : le filet).
+    func instantane(_ demande: RelaisDemande = [],
+                    reperes: RelaisSelecteurs? = nil) async throws -> RelaisInstantane {
+        // Les repères sous leurs noms de toujours (`micro`, `copierParent`…).
+        let r = try JSONSerialization.jsonObject(with: JSONEncoder().encode(reperes ?? selecteurs))
+        return try await pont(.instantane, r, ["texte": demande.contains(.texte),
+                                              "reponse": demande.contains(.reponse),
+                                              "alertes": demande.contains(.alertes)])
     }
-
-    func releve() async throws -> [String: Any] { try await pont(.releve) }
-
-    func erreur(connues: [String], nouvelles: Bool, avant: Int) async throws -> [String: Any] {
-        try await pont(.erreur, connues, nouvelles, avant)
-    }
-
-    func etatReponse(avant: Int) async throws -> [String: Any] { try await pont(.etatReponse, avant) }
 }

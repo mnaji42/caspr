@@ -15,10 +15,10 @@ public enum RelaisScripts {
     /// et les tests vérifient que le pont expose ces fonctions-là, et elles
     /// seules.
     public enum Fonction: String, CaseIterable, Sendable {
-        case cliquer, lire, vider, ecrire, encadrer, depart, copierLaReponse, cliquerBouton
+        case cliquer, lire, ecrire, encadrer, copierLaReponse, cliquerBouton
         case lireReponse, compacter, oublierBrouillon, candidats, candidatsCopier
         case calibrer, calibrerAvecMenu, abandonnerCalibration
-        case etat, releve, erreur, etatReponse
+        case marquer, instantane
     }
 
     /// Le pont injecté dans la page.
@@ -36,6 +36,7 @@ public enum RelaisScripts {
       // message par son auteur, là où `article` porte aussi ceux de
       // l'utilisateur.
       const REPONSES = '[data-message-author-role="assistant"]';
+
 
       // Filet de secours tant que l'utilisateur n'a pas calibré, et rien de
       // plus : ce sont des paris sur des libellés d'accessibilité, pas un
@@ -88,9 +89,11 @@ public enum RelaisScripts {
       // WebKit ne la dispose pas, et la nôtre naît hors champ (cf. `trouver`).
       const vu = (el) => el.getClientRects().length > 0;
       const visible = (el) => !!el && el.isConnected && vu(el);
-      // Les visibles s'il y en a, sinon tous : sur une page jamais affichée,
-      // aucun ne l'est, et le dernier de tous reste le bon.
-      const vusSinon = (els) => { const vus = els.filter(vu); return vus.length ? vus : els; };
+      // Le dernier des visibles s'il y en a, sinon le dernier de tous : sur
+      // une page jamais affichée, aucun ne l'est, et le dernier de tous reste
+      // le bon. Une seule règle pour tout ce qui cherche « le dernier » — le
+      // bloc de « copier », le bouton cadré, la dernière réponse.
+      const dernierVu = (els) => { const vus = els.filter(vu); return (vus.length ? vus : els).pop() || null; };
 
       // Tout ce qui répond au sélecteur. Un sélecteur invalide — un repère
       // appris d'une page qui a changé — ne désigne rien, et ne lève rien.
@@ -103,6 +106,8 @@ public enum RelaisScripts {
       // L'espace insécable vient du rendu, pas de la dictée : le laisser
       // ferait arriver des U+00A0 dans le code et les terminaux.
       const net = (t) => (t || '').replace(/\u00a0/g, ' ').trim();
+
+      const texteDe = (el) => net(champ(el) ? el.value : el.innerText);
 
       // Ce qu'un repère doit désigner pour vouloir dire quelque chose.
       //
@@ -208,24 +213,6 @@ public enum RelaisScripts {
       const idEngendre = (id) => !id
         || /radix|^[:_]|_r_|^«|\d{3,}|[-_]\d+$/i.test(id);
 
-      // Un repère ne vaut que s'il retrouve l'élément qu'on a cliqué.
-      //
-      // C'est la vérification qui manquait, et son absence a coûté cher :
-      // l'attribut existait, on en tirait un sélecteur, et personne ne
-      // demandait jamais ce que ce sélecteur désignait vraiment. Le libellé de
-      // la zone de saisie était aussi porté par le bloc qui l'entoure, posé
-      // plus haut dans le document ; c'est donc le bloc qu'on retenait, et
-      // toutes les dictées se lisaient vides.
-      //
-      // On juge le repère avec la règle qui servira à s'en servir — les
-      // éléments du bon genre, dans l'ordre du document — et on ne le garde
-      // que si l'élément cliqué en fait partie. Plusieurs réponses sont
-      // permises : la page pose un bouton « copier » sous chaque message, et
-      // c'est le bloc parent, retenu au même clic, qui dira lequel.
-      function repereValide(selecteur, el, genre) {
-        return tous(selecteur).filter((c) => convient(genre, c)).includes(el);
-      }
-
       // Les repères qu'un élément porte, du plus solide au plus fragile.
       function reperesPossibles(el) {
         const guillemets = (v) => v.replace(/"/g, '\\"');
@@ -240,34 +227,37 @@ public enum RelaisScripts {
         return candidats;
       }
 
-      function reperesDe(el, genre) {
-        for (const c of reperesPossibles(el)) {
-          if (repereValide(c, el, genre)) return c;
-        }
-        return '';
-      }
+      // Le premier des repères de l'élément qui passe l'épreuve `garde` ; ''
+      // si aucun. Deux épreuves, selon qui a trouvé l'élément.
+      const premierRepere = (el, garde) => reperesPossibles(el).find(garde) || '';
 
-      // L'élément est-il le **seul** à répondre à ce sélecteur ?
+      // Un clic de l'utilisateur : le repère ne vaut que s'il retrouve
+      // l'élément cliqué.
       //
-      // Avec un genre, selon la règle de `trouver` — connectés, et du bon
-      // genre — pour un repère cherché dans tout le document. Sans genre, tout
-      // ce qui répond compte : c'est la règle de la paire « copier », où la
-      // page prend le premier élément du bloc sans rien filtrer.
-      const seulDans = (selecteur, portee, el, genre) => {
-        const repondent = tous(selecteur, portee);
-        const retenus = genre
-          ? repondent.filter((c) => c.isConnected && convient(genre, c)) : repondent;
-        return retenus.length === 1 && retenus[0] === el;
-      };
+      // C'est la vérification qui manquait, et son absence a coûté cher :
+      // l'attribut existait, on en tirait un sélecteur, et personne ne
+      // demandait jamais ce que ce sélecteur désignait vraiment. Le libellé de
+      // la zone de saisie était aussi porté par le bloc qui l'entoure, posé
+      // plus haut dans le document ; c'est donc le bloc qu'on retenait, et
+      // toutes les dictées se lisaient vides.
+      //
+      // On juge le repère avec la règle qui servira à s'en servir — les
+      // éléments du bon genre, dans l'ordre du document — et on ne le garde
+      // que si l'élément cliqué en fait partie. Plusieurs réponses sont
+      // permises : la page pose un bouton « copier » sous chaque message, et
+      // c'est le bloc parent, retenu au même clic, qui dira lequel.
+      const leRetrouve = (el, genre) => (c) => tous(c).filter((x) => convient(genre, x)).includes(el);
 
-      // Le repère qu'apprend la calibration automatique : une adresse, pas
-      // une ressemblance.
+      // L'automate : une adresse, pas une ressemblance — l'élément doit être
+      // le **seul** à répondre au repère.
       //
-      // `repereValide` ne peut pas servir ici. Il vérifie que le sélecteur
-      // retrouve l'élément — mais l'automate a trouvé l'élément *par* ce
-      // sélecteur : la question contient sa réponse. Ce qui dit quelque chose,
-      // c'est l'unicité : qu'un seul élément, du bon genre, y réponde. Le
-      // reste de la preuve est dans l'effet, que Swift observe.
+      // Retrouver l'élément ne prouverait rien ici : l'automate l'a trouvé
+      // *par* ce sélecteur, la question contient sa réponse. Ce qui dit
+      // quelque chose, c'est l'unicité. Le reste de la preuve est dans
+      // l'effet, que Swift observe. Avec un genre, selon la règle de
+      // `trouver` — connectés, et du bon genre. Sans genre, tout ce qui
+      // répond compte : c'est la règle de la paire « copier », où la page
+      // prend le premier élément du bloc sans rien filtrer.
       //
       // Jamais le sélecteur du filet qui a trouvé l'élément : ceux qui sont
       // des adresses (`data-testid`, `#prompt-textarea`), l'élément les porte
@@ -277,12 +267,10 @@ public enum RelaisScripts {
       // quelconque passait la preuve — puis, la zone de saisie retirée
       // pendant l'enregistrement, le repère rendait le canevas d'à côté au
       // lieu de dire « absent ».
-      function repereUnique(el, portee, genre) {
-        for (const c of reperesPossibles(el)) {
-          if (seulDans(c, portee, el, genre)) return c;
-        }
-        return '';
-      }
+      const seulA = (el, portee, genre) => (c) => {
+        const retenus = tous(c, portee).filter((x) => !genre || (x.isConnected && convient(genre, x)));
+        return retenus.length === 1 && retenus[0] === el;
+      };
 
       // Un bouton qui ouvre un menu, la page le déclare (cf.
       // `calibrerAvecMenu`). L'automate ne le clique jamais : le menu « … »
@@ -297,8 +285,8 @@ public enum RelaisScripts {
         let n = el.parentElement;
         for (let i = 0; i < 5 && n; i++) {
           for (const selParent of reperesPossibles(n)) {
-            if (vusSinon(tous(selParent)).pop() !== n) continue;
-            const selecteur = repereUnique(el, n, null);
+            if (dernierVu(tous(selParent)) !== n) continue;
+            const selecteur = premierRepere(el, seulA(el, n, null));
             if (selecteur) return { selecteur, parent: selParent };
           }
           n = n.parentElement;
@@ -318,12 +306,8 @@ public enum RelaisScripts {
       // aurait rendu à sa place le premier `article` venu — le message de
       // l'utilisateur, dans un fil neuf.
       function derniereReponse(selReponse) {
-        let reponses = selReponse ? tous(selReponse) : [];
-        for (const s of selReponse ? [] : HEURISTIQUES.reponse) {
-          reponses = tous(s);
-          if (reponses.length) break;
-        }
-        return reponses.filter(vu).pop() || null;
+        const listes = selReponse ? [tous(selReponse)] : HEURISTIQUES.reponse.map((s) => tous(s));
+        return dernierVu(listes.find((l) => l.length) || []);
       }
 
       // Le bouton que désigne un repère « copier » appris sans bloc : en
@@ -344,6 +328,28 @@ public enum RelaisScripts {
         return null;
       }
 
+      // Le bouton « copier » que la dictée cliquerait, sans le cliquer : la
+      // paire — le dernier bloc, le premier bouton dedans —, ou le repère
+      // seul autour de la dernière réponse (cf. `copierLaReponse`). Une seule
+      // règle pour le clic et pour dire qu'il est possible (`copierPret`).
+      function boutonCopier(selParent, selCopier, selReponse) {
+        if (!selCopier) return { raison: 'pas de repère' };
+        if (selParent) {
+          // Le dernier : un fil neuf n'a qu'une réponse, mais un
+          // rechargement qui n'aurait pas abouti en laisserait plusieurs.
+          const bloc = dernierVu(tous(selParent));
+          const bouton = bloc && tous(selCopier, bloc)[0];
+          return bouton ? { bouton, voie: 'paire' } : { raison: 'paire absente' };
+        }
+        // Sans bloc, le repère est cherché autour de la dernière réponse,
+        // là où il est seul. C'est ce chemin que la calibration automatique
+        // éprouve quand aucun bloc ne se laisse désigner.
+        const derniere = derniereReponse(selReponse);
+        if (!derniere) return { raison: 'pas de réponse' };
+        const bouton = copierAutour(derniere, selCopier);
+        return bouton ? { bouton, voie: 'repere' } : { raison: 'repère absent ou ambigu' };
+      }
+
       // Un sélecteur qui a une chance de survivre au prochain déploiement.
       //
       // Par ordre de solidité : `data-testid`, identifiant, libellé
@@ -359,7 +365,7 @@ public enum RelaisScripts {
       // Le chemin structurel n'est qu'un dernier recours — il casse au moindre
       // remaniement, mais recalibrer coûte trois clics.
       function selecteurStable(el, genre) {
-        const repere = reperesDe(el, genre);
+        const repere = premierRepere(el, leRetrouve(el, genre));
         if (repere) return repere;
 
         const parts = [];
@@ -390,7 +396,7 @@ public enum RelaisScripts {
       function selecteurAncetre(el) {
         let n = el.parentElement;
         for (let i = 0; i < 5 && n; i++) {
-          const repere = reperesDe(n, 'bloc');
+          const repere = premierRepere(n, leRetrouve(n, 'bloc'));
           if (repere) return repere;
           n = n.parentElement;
         }
@@ -404,8 +410,9 @@ public enum RelaisScripts {
       // hebdomadaire bientôt atteinte », qui porte le même rôle et reste
       // affichée des jours durant : chaque dictée aurait été interrompue. Ce
       // qu'un motif ne connaît pas se reconnaît autrement — à ce qu'il est
-      // apparu depuis la demande (cf. `erreur`).
+      // apparu depuis la marque (cf. `echecNouveau`).
       const MOTIFS_ECHEC = /n'a pas compris|pas compris|didn.t catch|try again|réessayer/i;
+      const estEchec = (texte) => MOTIFS_ECHEC.test(texte);
 
       // Les textes des alertes affichées. `role="alert"` est un rôle
       // d'accessibilité normalisé, et non une classe générée.
@@ -417,62 +424,167 @@ public enum RelaisScripts {
       // pas.
       //
       // Cherchés là où ils peuvent être seulement : le dernier tour de la
-      // conversation, et le formulaire de la zone de saisie. Parcourir tous
-      // les `div, span, p` du document, c'était lire `innerText` sur des
-      // milliers d'éléments — chaque lecture force la page à recalculer sa
-      // disposition — plusieurs fois par seconde, sur une conversation qu'on
-      // attendait justement de voir avancer.
+      // conversation, et le formulaire de la zone de saisie. Et lus sans
+      // forcer la mise en page : `textContent` d'abord, qui ne dispose rien ;
+      // `innerText` et la visibilité, qui recalculent la disposition, sur ce
+      // seul qui ressemble à un échec. Lire `innerText` de chaque `div, span,
+      // p` du tour, plusieurs fois par seconde, ralentissait la conversation
+      // qu'on attendait justement de voir avancer.
       //
-      // Dans ce tour, jamais le texte d'un message — ni ce qui le contient.
-      // La réponse de ChatGPT peut dire « on peut réessayer », la dictée
-      // envoyée « try again » : lus comme des échecs, ils faisaient jeter
-      // une réponse juste, ou conclure au refus avant même que ChatGPT ait
-      // répondu. Reste ce que la page dessine autour du message, où elle pose
-      // ses propres avis d'échec. Un échec écrit ailleurs n'est pas deviné :
-      // l'attente continue, et la touche de dictée en sort.
+      // Dans ce tour, jamais le texte d'un message — ni ce qui le contient :
+      // le parcours saute chaque message entier, et traverse sans les lire
+      // les blocs qui en portent un. La réponse de ChatGPT peut dire « on
+      // peut réessayer », la dictée envoyée « try again » : lus comme des
+      // échecs, ils faisaient jeter une réponse juste, ou conclure au refus
+      // avant même que ChatGPT ait répondu. Reste ce que la page dessine
+      // autour du message, où elle pose ses propres avis d'échec. Un échec
+      // écrit ailleurs n'est pas deviné : l'attente continue, et la touche de
+      // dictée en sort.
       const MESSAGE = '[data-message-author-role]';
       const echecsEcrits = () => {
-        const zones = [];
-        const tours = document.querySelectorAll('article');
-        if (tours.length) zones.push(tours[tours.length - 1]);
-        const formulaires = document.querySelectorAll('main form');
-        if (formulaires.length) zones.push(formulaires[formulaires.length - 1]);
         const textes = [];
-        for (const zone of zones) {
-          for (const el of zone.querySelectorAll('div, span, p')) {
-            if (el.closest(MESSAGE) || el.querySelector(MESSAGE)) continue;
+        for (const zone of [tous('article').pop(), tous('main form').pop()]) {
+          if (!zone) continue;
+          const porteurs = new Set();
+          for (const m of tous(MESSAGE, zone)) {
+            for (let n = m.parentElement; n && n !== zone; n = n.parentElement) porteurs.add(n);
+          }
+          const parcours = document.createTreeWalker(zone, NodeFilter.SHOW_ELEMENT, (el) =>
+            el.matches(MESSAGE) ? NodeFilter.FILTER_REJECT
+            : !porteurs.has(el) && /^(DIV|SPAN|P)$/.test(el.tagName) ? NodeFilter.FILTER_ACCEPT
+            : NodeFilter.FILTER_SKIP);
+          for (let el = parcours.nextNode(); el; el = parcours.nextNode()) {
+            if (!estEchec(el.textContent)) continue;
             const t = (el.innerText || '').trim();
-            if (t && t.length < 120 && MOTIFS_ECHEC.test(t) && vu(el)) textes.push(t);
+            if (t && t.length < 120 && estEchec(t) && vu(el)) textes.push(t);
           }
         }
         return textes;
       };
 
+      // Ce que la page montrait avant qu'on lui demande quelque chose (cf.
+      // `marquer`) : ses échecs affichés, et le nombre de réponses de
+      // ChatGPT. Gardé ici, dans le monde du pont, que la page ne voit pas.
+      let marque = { echecs: new Set(), reponses: 0 };
+
+      // Le premier échec apparu depuis la marque. Un échec **reconnu** — un
+      // motif — compte toujours. Une alerte nouvelle qu'aucun motif ne
+      // connaît — un plafond atteint à l'instant, formulé dans n'importe
+      // quelle langue — est rendue aussi, et c'est Swift qui juge si elle
+      // compte (cf. `RelaisVeille.refus`). Une bannière déjà là à la marque
+      // reste muette.
+      const echecNouveau = () => {
+        const nouveau = (t) => !marque.echecs.has(t);
+        const alertes = alertesVisibles().filter(nouveau);
+        const reconnu = alertes.find(estEchec) || echecsEcrits().find(nouveau);
+        if (reconnu) return { texte: reconnu, reconnue: true };
+        return alertes.length ? { texte: alertes[0], reconnue: false } : null;
+      };
+
       // ChatGPT est-il en train d'écrire sa réponse ?
       //
       // Le bouton qui arrête la génération le dit sans calibration : il
-      // n'existe que pendant l'écriture. Aucun repère appris ne le désigne ;
-      // les libellés d'arrêt que le filet connaît déjà — « stop », « arrêt »
-      // — le désignent aussi, et on les réutilise, hors des messages, où la
-      // page pose d'autres boutons.
-      const generationEnCours = () => {
-        for (const s of HEURISTIQUES.stop) {
-          for (const el of document.querySelectorAll(s)) {
-            if (el.closest('article, [data-message-author-role]')) continue;
-            if (visible(el) && convient('bouton', el)) return true;
-          }
-        }
-        return false;
+      // n'existe que pendant l'écriture. Cherché dans le formulaire de la
+      // zone de saisie, où la page le pose, et hors des messages, où elle
+      // pose d'autres boutons. **Jamais l'arrêt de la dictée** : il porte les
+      // mêmes libellés — « stop », « arrêt » —, et le prendre pour une
+      // génération faisait croire que ChatGPT répondait pendant qu'on lui
+      // parlait.
+      const GENERATION = ['[data-testid="stop-button"]', 'button[aria-label*="stop" i]',
+        'button[aria-label*="arrêt" i]', 'button[aria-label*="arret" i]', 'button[aria-label*="termin" i]'];
+      const generationEnCours = (zone, arretDictee) => {
+        const formulaire = (zone && zone.closest('form')) || tous('main form').pop() || document;
+        return GENERATION.some((s) => tous(s, formulaire).some((el) => el !== arretDictee
+          && !el.matches('[data-testid*="speech"]') && !el.closest('article, ' + MESSAGE)
+          && visible(el) && convient('bouton', el)));
       };
 
-      // Remplace le contenu de la zone de saisie — `delete` pour la vider,
-      // `insertText` pour y écrire.
+      // La page porte-t-elle une conversation ? C'est ce qui décide, une fois
+      // la dictée finie, s'il faut en ouvrir une neuve pour la prochaine ou
+      // s'il suffit de vider la zone de saisie.
+      //
+      // Dans un projet aussi — `/g/<projet>/c/<id>` —, qui est justement le
+      // point de départ que les réglages recommandent. Ne reconnaître que
+      // `/c/…` y laissait le fil ouvert d'une dictée à l'autre, et le
+      // contexte s'y accumulait.
+      const estConversation = (chemin) => /^(\/g\/[^/]+)?\/c\/[^/]+/.test(chemin || '');
+
+      // Un écran d'authentification, à son adresse (`location`, ou ce qui en
+      // a la forme).
+      const estAuthentification = (lieu) => /^\/(auth|login|log-in)\b/.test(lieu.pathname || '')
+        || (lieu.hostname || '').startsWith('auth.');
+
+      // La preuve de non-connexion, et non la preuve de connexion.
+      //
+      // Le critère était la présence de la zone de saisie, du micro ou du
+      // bouton d'arrêt. Or ChatGPT affiche une zone de saisie **et** un
+      // micro à qui n'est pas connecté : la page d'accueil déconnectée
+      // satisfaisait donc le test, et l'application sautait droit au
+      // calibrage en annonçant « vous êtes connecté » devant un écran qui
+      // proposait « Se connecter ». Un bouton de connexion, lui, ne s'affiche
+      // jamais une fois la session ouverte : une preuve négative, qu'on ne
+      // peut pas confondre avec un état transitoire.
+      //
+      // Reconnu d'abord à sa structure, qui ne dépend d'aucune langue. Lu à
+      // son libellé, il n'était connu qu'en français et en anglais — et un
+      // compte réglé dans une autre langue passait pour connecté devant
+      // l'écran même qui lui proposait de se connecter. Deux signes : un lien
+      // vers les pages de connexion, celles-là mêmes que `estAuthentification`
+      // reconnaît à leur adresse ; ou un lien ou un bouton que la page nomme
+      // connexion ou inscription dans son `data-testid`, écrit pour ses
+      // propres tests et donc jamais traduit. Le libellé reste en repli.
+      //
+      // Les pages de connexion **de ChatGPT** seulement : son propre domaine,
+      // ou son serveur d'authentification. Un lien vers le `/signup` de
+      // n'importe quel site passait pour un bouton de connexion — et une
+      // réponse qui en citait un suffisait à déclarer déconnectée une session
+      // ouverte, à chaque appui.
+      const versConnexion = (a) => {
+        try {
+          const u = new URL(a.href, location.href);
+          if (/log-?out|sign-?out/i.test(u.pathname)) return false;
+          const serveurAuth = /^auth[^.]*\./.test(u.hostname)
+            && /(^|\.)(openai|chatgpt)\.com$/.test(u.hostname);
+          return serveurAuth || (u.origin === location.origin
+            && /^\/(auth\/)?(log-?in|sign-?up)\b/i.test(u.pathname));
+        } catch (e) { return false; }
+      };
+      // Au début du nom seulement : une offre d'abonnement affichée à qui est
+      // connecté peut fort bien contenir « signup » plus loin.
+      const nommeConnexion = (el) => /^(log-?in|sign-?up)\b/i.test(el.getAttribute('data-testid') || '');
+      // Le libellé, sur les boutons seulement. Un lien de la colonne latérale
+      // porte le titre d'une conversation, écrit par elle (« Connexion SSH au
+      // serveur », « Login page design ») : lu comme une invite, il déclarait
+      // déconnectée une session ouverte, à chaque appui, tant que ce titre
+      // restait à l'écran. Un lien vers la connexion se reconnaît déjà à son
+      // adresse.
+      const INVITE = "(se connecter|connexion|log ?in|sign ?up|s'inscrire|inscription)";
+      const estInvite = (texte) => new RegExp('^' + INVITE, 'i').test(texte);
+      // Les seuls candidats, présélectionnés par le moteur CSS : la page n'est
+      // parcourue ni lue en entier à chaque relevé. La visibilité et le texte
+      // rendu ne se demandent qu'à eux.
+      const INVITES = ['a[href*="login" i]', 'a[href*="log-in" i]', 'a[href*="signup" i]',
+        'a[href*="sign-up" i]', 'a[href*="//auth" i]', ':is(a, button)[data-testid^="log" i]',
+        ':is(a, button)[data-testid^="sign" i]'].join(', ');
+      const inviteDeConnexion = () => [...tous(INVITES),
+          ...tous('button').filter((b) => new RegExp(INVITE, 'i').test(b.textContent))]
+        // Rien de ce qu'écrit la conversation : un message peut porter un
+        // lien ou un libellé « Sign up » sans que la page, elle, demande quoi
+        // que ce soit.
+        .some((el) => !el.closest('article, ' + MESSAGE) && vu(el)
+          && ((el.tagName === 'A' && el.hasAttribute('href') && versConnexion(el))
+              || nommeConnexion(el)
+              || (el.tagName === 'BUTTON' && estInvite((el.innerText || '').trim()))));
+
+      // Remplace le contenu de la zone de saisie — `delete` pour la vider (un
+      // texte vide), `insertText` pour y écrire.
       //
       // Par `execCommand` et non en écrasant le DOM : le composeur est un
       // éditeur ProseMirror, dont l'état interne se désynchronise si on le
       // modifie dans son dos — le message partirait vide, ou un brouillon
       // effacé reviendrait à la frappe suivante.
-      const remplacer = (selecteur, commande, texte) => {
+      const remplacer = (selecteur, texte) => {
+        const commande = texte ? 'insertText' : 'delete';
         const el = trouver('composeur', selecteur);
         if (!el) return { ok: false, raison: 'introuvable' };
         el.focus();
@@ -549,15 +661,13 @@ public enum RelaisScripts {
         lire(selecteur) {
           const el = trouver('composeur', selecteur);
           if (!el) return { ok: false, raison: 'introuvable' };
-          return { ok: true, texte: net(champ(el) ? el.value : el.innerText) };
+          return { ok: true, texte: texteDe(el) };
         },
 
-        vider(selecteur) { return remplacer(selecteur, 'delete', ''); },
-
         // Dépose un texte dans la zone de saisie, en remplaçant ce qui s'y
-        // trouve. Les retours à la ligne du texte n'envoient rien : seule une
-        // frappe sur Entrée le ferait, et on ne la simule pas.
-        ecrire(selecteur, texte) { return remplacer(selecteur, 'insertText', texte); },
+        // trouve ; vide, la vide. Les retours à la ligne du texte n'envoient
+        // rien : seule une frappe sur Entrée le ferait, et on ne la simule pas.
+        ecrire(selecteur, texte) { return remplacer(selecteur, texte); },
 
         // Encadre le texte déjà présent, sans le réécrire.
         //
@@ -610,58 +720,15 @@ public enum RelaisScripts {
         //
         // Le repère appris, et lui seul. Ne rien trouver veut dire que le
         // bouton n'est **pas encore là** — il n'apparaît qu'une fois la
-        // réponse finie —, et la dictée continue d'observer. Un repli sur les libellés cliquait, en pleine génération,
-        // le premier « Copier le code » de la réponse : le seul bloc de code
-        // s'insérait au curseur à la place du texte, sans que rien ne le dise.
+        // réponse finie —, et la dictée continue d'observer. Un repli sur les
+        // libellés cliquait, en pleine génération, le premier « Copier le
+        // code » de la réponse : le seul bloc de code s'insérait au curseur à
+        // la place du texte, sans que rien ne le dise.
         copierLaReponse(selParent, selCopier, selReponse) {
-          if (!selCopier) return { ok: false, raison: 'pas de repère' };
-          if (selParent) {
-            // Le dernier : un fil neuf n'a qu'une réponse, mais un
-            // rechargement qui n'aurait pas abouti en laisserait plusieurs.
-            const bloc = vusSinon(tous(selParent)).pop();
-            const bouton = bloc && tous(selCopier, bloc)[0];
-            if (!bouton) return { ok: false, raison: 'paire absente' };
-            bouton.click();
-            return { ok: true, voie: 'paire' };
-          }
-
-          // Sans bloc, le repère est cherché autour de la dernière réponse,
-          // là où il est seul (cf. `copierAutour`). C'est ce chemin que la
-          // calibration automatique éprouve quand aucun bloc ne se laisse
-          // désigner.
-          const derniere = derniereReponse(selReponse);
-          if (!derniere) return { ok: false, raison: 'pas de réponse' };
-          const bouton = copierAutour(derniere, selCopier);
-          if (!bouton) return { ok: false, raison: 'repère absent ou ambigu' };
+          const { bouton, voie, raison } = boutonCopier(selParent, selCopier, selReponse);
+          if (!bouton) return { ok: false, raison };
           bouton.click();
-          return { ok: true, voie: 'repere' };
-        },
-
-        // Le message est-il parti ? `cliquer` ne le dit pas : un bouton
-        // désactivé, ou un clic avalé par l'éditeur, rend ok quand même. Ce
-        // que la zone porte encore — `null` quand elle est absente, ce qui ne
-        // prouve rien —, et si ChatGPT répond déjà.
-        depart(selecteur, avant) {
-          const zone = this.lire(selecteur);
-          return { ok: true, zone: zone.ok ? zone.texte : null,
-                   repond: document.querySelectorAll(REPONSES).length > avant
-                           || generationEnCours() };
-        },
-
-        // Où en est la réponse attendue ?
-        //
-        // Sans aucun repère appris, pour les modules qui n'ont rien à
-        // rapatrier mais doivent attendre la fin — faire lire à haute voix un
-        // texte encore en train de s'écrire n'aurait pas de sens. `avant` est
-        // le nombre de réponses relevé à l'envoi : tant qu'il n'a pas augmenté,
-        // la dernière réponse est celle d'avant, et elle est finie depuis
-        // longtemps. Le texte est rendu pour que Swift juge de sa stabilité.
-        etatReponse(avant) {
-          const reponses = document.querySelectorAll(REPONSES);
-          const enCours = generationEnCours();
-          if (reponses.length <= avant) return { ok: true, nouvelle: false, enCours };
-          return { ok: true, nouvelle: true, enCours,
-                   texte: net(reponses[reponses.length - 1].innerText) };
+          return { ok: true, voie };
         },
 
         // Clique un bouton, éventuellement cadré dans un bloc.
@@ -672,8 +739,8 @@ public enum RelaisScripts {
         // qui n'existe qu'un à la fois.
         cliquerBouton(selParent, selBouton) {
           if (!selBouton) return { ok: false, raison: 'pas de sélecteur' };
-          const bloc = selParent ? tous(selParent).filter(vu).pop() : document;
-          const cible = bloc && vusSinon(tous(selBouton, bloc)).pop();
+          const bloc = selParent ? dernierVu(tous(selParent)) : document;
+          const cible = bloc && dernierVu(tous(selBouton, bloc));
           if (!cible) return { ok: false, raison: 'introuvable' };
           cible.click();
           return { ok: true };
@@ -697,54 +764,77 @@ public enum RelaisScripts {
           return { ok: true, texte: net(derniere.innerText) };
         },
 
-        // Ce que la page affiche avant qu'on lui demande quelque chose : ses
-        // alertes et ses échecs écrits, et le nombre de réponses de ChatGPT.
-        releve() {
-          return { ok: true,
-                   alertes: [...alertesVisibles(), ...echecsEcrits()],
-                   reponses: document.querySelectorAll(REPONSES).length };
+        // Pose la marque : ce que la page montre avant qu'on lui demande
+        // quelque chose — ses échecs affichés, et combien de réponses de
+        // ChatGPT elle porte. Avant le clic du micro, puis avant l'envoi.
+        //
+        // Une bannière déjà là n'est pas une réponse à notre demande — celle
+        // d'un quota « bientôt atteint » reste affichée des jours. Et dans une
+        // discussion, le fil porte déjà une réponse, finie et immobile, qui
+        // passerait sinon pour celle qu'on attend.
+        marquer() {
+          marque = { echecs: new Set([...alertesVisibles(), ...echecsEcrits()]),
+                     reponses: tous(REPONSES).length };
+          return { ok: true };
         },
 
-        // L'erreur que ChatGPT affiche lui-même.
+        // Ce que la page dit d'elle-même, en **un** aller-retour : chaque
+        // tour d'une attente en coûtait deux ou trois, et relisait le texte
+        // entier de la réponse quatre fois par seconde pendant que ChatGPT
+        // l'écrivait — de quoi ralentir la génération même qu'on attendait.
         //
-        // Sans la lire, un échec annoncé en toutes lettres dans la page se
-        // traduisait par une attente muette de plusieurs minutes, la barre
-        // bloquée sur « Transcription… », sans autre issue que de quitter
-        // l'application.
+        // Toujours : la session, la conversation, les boutons. Sur demande
+        // (`demande.texte`, `.reponse`, `.alertes`) : le texte de la zone, où
+        // en est la réponse depuis la marque, et le premier échec apparu
+        // depuis elle. `reperes` : les repères à suivre, vides pour le filet.
         //
-        // `connues` est le relevé fait avant la demande : ce qui y figure
-        // n'est pas une réponse à cette demande-ci, et n'interrompt rien. Une
-        // bannière permanente reste donc muette.
-        //
-        // Un échec **reconnu** — un motif, apparu depuis le relevé — compte
-        // toujours, et `reconnue` le dit. Une alerte nouvelle qu'aucun motif
-        // ne connaît — un plafond atteint à l'instant, formulé dans n'importe
-        // quelle langue — ne compte que si `nouvelles` le demande ; et, quand
-        // `avant` est donné (le nombre de réponses à l'envoi), seulement si
-        // ChatGPT ne répond pas : aucune réponse nouvelle, aucune génération
-        // en cours. Une bannière « limite bientôt atteinte » apparue pendant
-        // que la réponse s'écrit ne dit rien de cette réponse ; la prendre
-        // pour un refus faisait jeter une réponse juste.
-        erreur(connues, nouvelles, avant) {
-          const deja = new Set(connues || []);
-          for (const t of alertesVisibles()) {
-            if (!deja.has(t) && MOTIFS_ECHEC.test(t)) {
-              return { ok: true, message: t, reconnue: true };
-            }
+        // Le point qui avait été manqué : pendant la dictée, ChatGPT retire la
+        // zone de saisie du DOM et la remplace par la barre d'onde. Se fier à
+        // sa seule présence faisait conclure « déconnecté » exactement pendant
+        // qu'on dictait : le micro et l'arrêt comptent aussi (cf.
+        // `RelaisVeille.session`).
+        instantane(reperes, demande) {
+          const r = reperes || {}, d = demande || {};
+          // Par le repère appris, et non par « une zone éditable
+          // quelconque » : une conversation qui contient un document produit
+          // par ChatGPT en offre une seconde, et la page se déclarait alors
+          // « pas en train d'enregistrer » pendant qu'elle enregistrait.
+          const zone = trouver('composeur', r.composeur);
+          const arret = trouver('stop', r.stop);
+          const composeur = !!zone && vu(zone);
+          const etat = {
+            ok: true,
+            conversation: estConversation(location.pathname),
+            authentification: estAuthentification(location) || inviteDeConnexion(),
+            composeur, micro: !!trouver('micro', r.micro), stop: !!arret,
+            // La zone absente *et* l'arrêt présent : la page écoute.
+            enregistrement: !composeur && !!arret,
+          };
+          if (d.texte) etat.texte = zone ? texteDe(zone) : null;
+          if (d.reponse) {
+            const reponses = tous(REPONSES);
+            const nouvelles = Math.max(0, reponses.length - marque.reponses);
+            const derniere = nouvelles ? reponses[reponses.length - 1] : null;
+            const copier = derniere && boutonCopier(r.copierParent, r.copier, r.reponse).bouton;
+            etat.reponse = {
+              nouvelles,
+              enCours: !etat.enregistrement && generationEnCours(zone, r.stop ? arret : null),
+              // `textContent`, qui ne dispose rien : son calme suffit à
+              // juger la fin, et la réponse n'est lue qu'une fois, finie.
+              longueur: derniere ? derniere.textContent.length : 0,
+              // Le bouton du tour, qui n'existe qu'une fois la réponse
+              // finie — pas celui d'une réponse d'avant, qui la précède.
+              copierPret: !!copier
+                && !!(derniere.compareDocumentPosition(copier) & Node.DOCUMENT_POSITION_FOLLOWING),
+            };
           }
-          for (const t of echecsEcrits()) {
-            if (!deja.has(t)) return { ok: true, message: t, reconnue: true };
-          }
-          if (!nouvelles) return { ok: true, message: '' };
-          if (avant >= 0 && (document.querySelectorAll(REPONSES).length > avant
-                             || generationEnCours())) {
-            return { ok: true, message: '' };
-          }
-          for (const t of alertesVisibles()) {
-            if (!deja.has(t)) return { ok: true, message: t, reconnue: false };
-          }
-          return { ok: true, message: '' };
+          if (d.alertes) etat.echec = echecNouveau();
+          return etat;
         },
+
+        // Les règles qui ne regardent pas la page, pour que les tests les
+        // atteignent sans elle.
+        pur: { idEngendre, estConversation, estAuthentification, estEchec, estInvite },
 
         // Réduire la page à sa seule pastille d'enregistrement.
         //
@@ -785,120 +875,6 @@ public enum RelaisScripts {
           return { ok: true };
         },
 
-        // Connecté ou non, et enregistrement en cours ou non.
-        //
-        // Le point qui avait été manqué : pendant la dictée, ChatGPT retire la
-        // zone de saisie du DOM et la remplace par la barre d'onde. Se fier à
-        // sa seule présence faisait donc conclure « déconnecté » exactement
-        // pendant qu'on dictait.
-        //
-        // Le critère est donc élargi : on est dans l'application dès qu'un de
-        // ses éléments est là — zone de saisie, micro, ou bouton d'arrêt —
-        // et qu'on n'est pas sur un écran d'authentification. Un cookie serait
-        // plus direct mais son nom est un détail d'implémentation d'OpenAI,
-        // qui n'a rien promis à personne à son sujet.
-        etat(selMicro, selStop, selComposeur) {
-          // Par le repère appris, et non par « une zone éditable quelconque » :
-          // une conversation qui contient un document produit par ChatGPT en
-          // offre une seconde, et la page se déclarait alors « pas en train
-          // d'enregistrer » pendant qu'elle enregistrait.
-          const zone = trouver('composeur', selComposeur);
-          const composeur = !!zone && vu(zone);
-          const stop = !!trouver('stop', selStop);
-          const micro = !!trouver('micro', selMicro);
-
-          const chemin = location.pathname || '';
-          const auth = /^\/auth\b/.test(chemin)
-            || /^\/(login|log-in)\b/.test(chemin)
-            || location.hostname.startsWith('auth.');
-
-          // La preuve de non-connexion, et non la preuve de connexion.
-          //
-          // Le critère était la présence de la zone de saisie, du micro ou du
-          // bouton d'arrêt. Or ChatGPT affiche une zone de saisie **et** un
-          // micro à qui n'est pas connecté : la page d'accueil déconnectée
-          // satisfaisait donc le test, et l'application sautait droit au
-          // calibrage en annonçant « vous êtes connecté » devant un écran qui
-          // proposait « Se connecter ».
-          //
-          // Un bouton de connexion, lui, ne s'affiche jamais une fois la
-          // session ouverte. C'est une preuve négative, et c'est ce qui la rend
-          // fiable : on ne peut pas la confondre avec un état transitoire.
-          //
-          // Reconnu d'abord à sa structure, qui ne dépend d'aucune langue. Lu
-          // à son libellé, il n'était connu qu'en français et en anglais — et
-          // un compte réglé dans une autre langue passait pour connecté devant
-          // l'écran même qui lui proposait de se connecter. Deux signes : un
-          // lien vers les pages de connexion, celles-là mêmes que `auth`
-          // reconnaît à leur adresse ; ou un élément que la page nomme
-          // connexion ou inscription dans son `data-testid`, écrit pour ses
-          // propres tests et donc jamais traduit. Le libellé reste en repli.
-          //
-          // Les pages de connexion **de ChatGPT** seulement : son propre
-          // domaine, ou son serveur d'authentification. Un lien vers le
-          // `/signup` de n'importe quel site passait pour un bouton de
-          // connexion — et une réponse qui en citait un suffisait à déclarer
-          // déconnectée une session ouverte, à chaque appui.
-          const versConnexion = (a) => {
-            try {
-              const u = new URL(a.href, location.href);
-              if (/log-?out|sign-?out/i.test(u.pathname)) return false;
-              const serveurAuth = /^auth[^.]*\./.test(u.hostname)
-                && /(^|\.)(openai|chatgpt)\.com$/.test(u.hostname);
-              return serveurAuth || (u.origin === location.origin
-                && /^\/(auth\/)?(log-?in|sign-?up)\b/i.test(u.pathname));
-            } catch (e) { return false; }
-          };
-          // Au début du nom seulement : une offre d'abonnement affichée à qui
-          // est connecté peut fort bien contenir « signup » plus loin.
-          const nommeConnexion = (el) =>
-            /^(log-?in|sign-?up)\b/i.test(el.getAttribute('data-testid') || '');
-          // Le libellé, sur les boutons seulement. Un lien de la colonne
-          // latérale porte le titre d'une conversation, écrit par elle
-          // (« Connexion SSH au serveur », « Login page design ») : lu comme
-          // une invite, il déclarait déconnectée une session ouverte, à chaque
-          // appui, tant que ce titre restait à l'écran. Un lien vers la
-          // connexion se reconnaît déjà à son adresse.
-          const invite = /^(se connecter|connexion|log ?in|sign ?up|s'inscrire|inscription)/i;
-          let deconnecte = false;
-          for (const el of document.querySelectorAll('button, a')) {
-            if (!vu(el)) continue;
-            // Rien de ce qu'écrit la conversation : un message peut porter un
-            // lien ou un libellé « Sign up » sans que la page, elle, demande
-            // quoi que ce soit — la même exclusion que `generationEnCours`.
-            if (el.closest('article, [data-message-author-role]')) continue;
-            if ((el.tagName === 'A' && el.hasAttribute('href') && versConnexion(el))
-                || nommeConnexion(el)
-                || (el.tagName === 'BUTTON' && invite.test((el.innerText || '').trim()))) {
-              deconnecte = true;
-              break;
-            }
-          }
-
-          return {
-            ok: true,
-            url: location.href,
-            // La page porte-t-elle une conversation ? C'est ce qui décide, une
-            // fois la dictée finie, s'il faut en ouvrir une neuve pour la
-            // prochaine ou s'il suffit de vider la zone de saisie.
-            //
-            // Dans un projet aussi — `/g/<projet>/c/<id>` —, qui est justement
-            // le point de départ que les réglages recommandent. Ne reconnaître
-            // que `/c/…` y laissait le fil ouvert d'une dictée à l'autre, et le
-            // contexte s'y accumulait.
-            conversation: /^(\/g\/[^/]+)?\/c\/[^/]+/.test(chemin),
-            connecte: !auth && !deconnecte && (composeur || stop || micro),
-            deconnecte,
-            // La zone absente *et* l'arrêt présent : la page écoute.
-            enregistrement: !composeur && stop,
-            composeur,
-            // Sans condition sur la zone de saisie : elle existe aussi pour
-            // qui n'est pas connecté, et l'exiger absente faisait attendre
-            // l'expiration du délai avant de conclure ce qu'on savait déjà.
-            authentification: auth || deconnecte,
-          };
-        },
-
         calibrer(genre) {
           return guetter((ev) => {
             // Un clic hors sujet ne compte pas — on continue d'écouter.
@@ -925,7 +901,7 @@ public enum RelaisScripts {
         // par la page pour ses propres tests et donc jamais traduit, puis les
         // libellés. Seuls restent les éléments visibles, du bon genre, qui
         // n'ouvrent pas de menu, et qui portent un repère où ils sont seuls
-        // (cf. `repereUnique`). Aucun n'est cliqué ici : c'est Swift qui
+        // (cf. `seulA`). Aucun n'est cliqué ici : c'est Swift qui
         // éprouve, un par un, et s'arrête au premier dont l'effet se voit.
         candidats(cible) {
           const genre = GENRE[cible];
@@ -934,7 +910,7 @@ public enum RelaisScripts {
             for (const el of tous(s)) {
               if (!visible(el) || !convient(genre, el)) continue;
               if (genre === 'bouton' && ouvreUnMenu(el)) continue;
-              const sel = repereUnique(el, document, genre);
+              const sel = premierRepere(el, seulA(el, document, genre));
               if (sel && !liste.includes(sel)) liste.push(sel);
             }
           }

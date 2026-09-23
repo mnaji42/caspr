@@ -57,10 +57,6 @@ struct RelaisCalibrationAuto {
         /// Le message d'essai a quitté la zone de texte : il est parti, ou du
         /// moins il ne partira pas deux fois.
         var messageEnvoye = false
-        /// Combien de réponses de ChatGPT la page portait avant l'envoi : ce
-        /// qui distingue la réponse au message d'essai d'une page qui en
-        /// montrerait déjà.
-        var reponsesAvant = 0
     }
 
     /// Un fragment du message d'essai, pour le reconnaître là où la page l'a
@@ -144,7 +140,7 @@ struct RelaisCalibrationAuto {
             // Quinze secondes : la première fois, macOS demande l'accès au
             // micro, et il faut le temps de lire la question.
             let ecoute = try await observer(pendant: 15) {
-                await etat(sel, "", composeur)?["enregistrement"] as? Bool == true
+                await vu(sel, "", composeur)?.enregistrement == true
             }
             if ecoute {
                 issue.preuves.prouve(.micro, sel)
@@ -181,7 +177,7 @@ struct RelaisCalibrationAuto {
             // Trente secondes : la zone revient après la transcription, qui
             // suit la durée parlée — ici, une seconde ou deux.
             let revenue = try await observer(pendant: 30) {
-                await etat(micro, sel, composeur)?["composeur"] as? Bool == true
+                await vu(micro, sel, composeur)?.composeur == true
             }
             if revenue {
                 issue.preuves.prouve(.stop, sel)
@@ -196,7 +192,7 @@ struct RelaisCalibrationAuto {
             // Ce clic n'a pas arrêté l'écoute : un autre candidat le peut
             // encore. Plus d'écoute, en revanche, et il n'y a plus rien à
             // arrêter.
-            guard await etat(micro, "", composeur)?["enregistrement"] as? Bool == true else { break }
+            guard await vu(micro, "", composeur)?.enregistrement == true else { break }
         }
         try await remettreLaPage()
         return nil
@@ -216,8 +212,7 @@ struct RelaisCalibrationAuto {
         }
         // La preuve est l'apparition d'une conversation : elle ne prouve rien
         // sur une page qui en porte déjà une.
-        guard let avant = await etat(micro, stop, composeur),
-              avant["conversation"] as? Bool == false else {
+        guard await vu(micro, stop, composeur)?.conversation == false else {
             issue.preuves.manque(.envoi, "la page de départ est déjà une conversation — "
                                  + "revenez à l'accueil de ChatGPT dans les réglages")
             return false
@@ -227,8 +222,9 @@ struct RelaisCalibrationAuto {
             issue.preuves.manque(.envoi, "aucun bouton d'envoi n'y est seul à son repère")
             return false
         }
-        let releve = await page.sonder { try await self.page.releve() }
-        issue.reponsesAvant = (releve?["reponses"] as? Int) ?? 0
+        // Ce qui distingue la réponse au message d'essai d'une page qui en
+        // montrerait déjà.
+        _ = await page.sonder { try await self.page.marquer() }
         for sel in liste {
             guard await lire(composeur)?.contains(Self.empreinte) == true else {
                 // Parti entre deux candidats : peut-être envoyé, et en tout cas
@@ -242,7 +238,7 @@ struct RelaisCalibrationAuto {
                 continue
             }
             let parti = try await observer(pendant: 15) {
-                await etat(micro, stop, composeur)?["conversation"] as? Bool == true
+                await vu(micro, stop, composeur)?.conversation == true
             }
             if parti {
                 issue.messageEnvoye = true
@@ -265,7 +261,7 @@ struct RelaisCalibrationAuto {
 
     /// « Copier » : le presse-papiers reçoit la réponse, et non la demande.
     private func prouverCopier(_ issue: inout Issue) async throws {
-        guard try await attendreLaReponse(apres: issue.reponsesAvant) else {
+        guard try await attendreLaReponse() else {
             issue.preuves.manque(.copier, "ChatGPT n'a pas répondu au message d'essai en "
                                  + "deux minutes")
             return
@@ -330,23 +326,15 @@ struct RelaisCalibrationAuto {
         }
     }
 
-    /// Attend la réponse au message d'essai : nouvelle, écrite jusqu'au bout,
-    /// immobile depuis deux secondes. Le bouton « copier » n'existe qu'alors.
-    private func attendreLaReponse(apres avant: Int) async throws -> Bool {
-        var precedent = ""
-        var stable = 0
+    /// Attend la réponse au message d'essai : nouvelle depuis la marque,
+    /// écrite jusqu'au bout, immobile depuis deux secondes. Le bouton
+    /// « copier » n'existe qu'alors — celui qu'on éprouve, et pas celui du
+    /// calibrage en place : le filet seul.
+    private func attendreLaReponse() async throws -> Bool {
+        var finie = RelaisVeille.ReponseFinie(seuil: 8)
         return try await observer(pendant: 120) {
-            guard let r = await page.sonder({ try await self.page.etatReponse(avant: avant) }),
-                  r["nouvelle"] as? Bool == true
-            else { stable = 0; return false }
-            let texte = (r["texte"] as? String) ?? ""
-            if r["enCours"] as? Bool != true, !texte.isEmpty, texte == precedent {
-                stable += 1
-            } else {
-                stable = 0
-            }
-            precedent = texte
-            return stable >= 8
+            let vu = await page.sonder { try await self.page.instantane(.reponse, reperes: RelaisSelecteurs()) }
+            return finie.juger(vu?.reponse)
         }
     }
 
@@ -415,8 +403,9 @@ struct RelaisCalibrationAuto {
     /// L'état de la page lu avec les repères en cours d'épreuve, et non avec
     /// le calibrage en place — qu'on est peut-être en train de remplacer
     /// parce qu'il est faux.
-    private func etat(_ micro: String, _ stop: String,
-                      _ composeur: String) async -> [String: Any]? {
-        await page.sonder { try await self.page.etat(micro: micro, stop: stop, composeur: composeur) }
+    private func vu(_ micro: String, _ stop: String, _ composeur: String) async -> RelaisInstantane? {
+        var reperes = RelaisSelecteurs()
+        (reperes.micro, reperes.stop, reperes.composeur) = (micro, stop, composeur)
+        return await page.sonder { try await self.page.instantane(reperes: reperes) }
     }
 }

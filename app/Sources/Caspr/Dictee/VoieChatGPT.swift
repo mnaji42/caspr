@@ -129,16 +129,16 @@ final class VoieChatGPT {
         // s'efface sinon, au lieu de rester sur « ChatGPT se prépare… » devant
         // une dictée qui n'aura pas lieu.
         //
-        // Et la barre de ChatGPT se range avec elle. Ouverte avant l'écoute,
-        // elle restait à flotter au-dessus du travail, sans rapport visible
-        // avec le message d'échec. Pas la grande fenêtre, si elle vient de
-        // s'ouvrir : c'est là qu'on se connecte.
+        // Et ce que l'appui a ouvert de ChatGPT se range avec elle. Ouvert
+        // avant l'écoute, il restait au-dessus du travail, sans rapport
+        // visible avec le message d'échec. Sauf la fenêtre où l'on doit se
+        // connecter, et celle d'une discussion déjà en cours.
         if let courte = (error as? RelaisPage.Erreur)?.raisonCourte {
             overlay.showFailure(courte)
         } else {
             overlay.hide()
         }
-        relais.rangerLaBarre()
+        relais.rangerApresUnDemarrageManque(error)
     }
 
     /// WebKit a tué la page pendant qu'on parlait ; rend le message d'échec.

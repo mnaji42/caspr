@@ -915,16 +915,33 @@ final class Relais: ObservableObject {
     func afficherBarre() { try? pageActive().afficherBarre() }
     func masquerBarre() { page?.cacher() }
 
-    /// Range la barre d'une dictée qui s'achève, sauf si la grande fenêtre est
-    /// ouverte.
+    /// Range ce que l'appui a ouvert, quand le démarrage échoue.
     ///
-    /// La grande fenêtre ne s'ouvre à la fin d'une dictée que pour qu'on y
-    /// fasse quelque chose : se connecter, récupérer un texte, poursuivre une
-    /// discussion. La ranger avec la barre défaisait ce qu'on venait de
-    /// montrer.
-    func rangerLaBarre() {
-        guard let page, !page.estVisible else { return }
+    /// Deux fenêtres restent : celle qui vient de s'ouvrir pour qu'on se
+    /// connecte, et celle d'une discussion en cours. Toute autre grande
+    /// fenêtre a été ouverte par l'appui lui-même (cf. `afficherBarre`) :
+    /// épargnée parce que visible, elle restait devant avec le clavier, et les
+    /// frappes suivantes partaient dans ChatGPT au lieu de l'éditeur.
+    func rangerApresUnDemarrageManque(_ erreur: Error) {
+        guard let page else { return }
+        if case .pasConnecte? = erreur as? RelaisPage.Erreur { return }
+        if enDiscussion, page.estVisible { return }
+        ranger(page)
+    }
+
+    /// Range la page, et rend le premier plan si c'est elle qui le tenait.
+    ///
+    /// La grande fenêtre a pu activer Caspr — une discussion, une
+    /// reconnexion, un module qui s'affiche en page. La ranger sans rendre le
+    /// premier plan le laissait devant sans fenêtre : les frappes suivantes
+    /// s'y perdaient, et la dictée d'après écrivait chez lui. Jugé avant de
+    /// ranger, tant que la fenêtre clé dit d'où l'on vient.
+    private func ranger(_ page: RelaisPage) {
+        let rendreLePremierPlan = premierPlanTenuParLeRelais
         page.cacher()
+        guard rendreLePremierPlan else { return }
+        page.fenetreCleRetiree = false
+        NSApp.hide(nil)
     }
 
     /// Tout arrêter proprement, dans l'ordre — puis préparer la suivante.
@@ -958,19 +975,7 @@ final class Relais: ObservableObject {
             // Une dictée a pu commencer entre-temps et afficher sa barre : ce
             // n'est plus à nous de la ranger.
             guard let self else { return }
-            if occupation == .libre {
-                // La grande fenêtre a pu activer Caspr — une discussion, une
-                // reconnexion. La ranger sans rendre le premier plan le
-                // laissait devant sans fenêtre : les frappes suivantes s'y
-                // perdaient, et la dictée d'après écrivait chez lui. Jugé
-                // avant de ranger, tant que la fenêtre clé dit d'où l'on vient.
-                let rendreLePremierPlan = premierPlanTenuParLeRelais
-                page.cacher()
-                if rendreLePremierPlan {
-                    page.fenetreCleRetiree = false
-                    NSApp.hide(nil)
-                }
-            }
+            if occupation == .libre { ranger(page) }
             await preparer(page)
         }
     }

@@ -3,8 +3,9 @@ import AppKit
 /// Le presse-papiers entier, pour le rendre tel quel.
 ///
 /// Il appartient à l'utilisateur, et Caspr s'en sert pour récupérer une
-/// réponse de ChatGPT — son bouton « copier » ne sait écrire que là : la
-/// calibration automatique l'essaie, et la dictée s'en sert.
+/// réponse de ChatGPT — son bouton « copier » ne sait écrire que là : pendant
+/// une dictée (`RelaisPage.copierReponse`) comme pendant la calibration
+/// automatique, qui l'essaie.
 ///
 /// Tous les éléments et tous leurs types, et non la seule chaîne : une image,
 /// un fichier ou un texte mis en forme qu'on y gardait ne doit pas revenir en

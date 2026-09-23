@@ -574,13 +574,13 @@ extension RelaisPage {
     /// Le bouton, lui, rend la réponse entière, dans la mise en forme voulue
     /// par ChatGPT.
     ///
-    /// Le presse-papiers est rendu tel qu'on l'a trouvé : il appartient à
-    /// l'utilisateur, et une dictée n'a pas à lui faire perdre ce qu'il y
-    /// gardait.
+    /// Le presse-papiers est rendu tel qu'il était juste avant le clic, tous
+    /// types compris : il appartient à l'utilisateur, et une dictée n'a pas à
+    /// lui faire perdre ce qu'il y gardait.
     private func copierReponse(empreinteEnvoyee: String) async throws -> String {
         let presse = NSPasteboard.general
-        let avant = presse.changeCount
-        let sauvegarde = presse.string(forType: .string)
+        var sauvegarde = PressePapiers(presse)
+        var avant = presse.changeCount
 
         // Jusqu'au clic, sans fin. Le refus se guette une fois par seconde,
         // comme ailleurs : à chaque tour, la sonde relisait le texte de
@@ -590,6 +590,16 @@ extension RelaisPage {
         var silences = 0
         let voie = try await veiller({ await refusPendantLAttente(silences: &silences) }) {
             () -> String? in
+            // Le presse-papiers tel qu'il est juste avant ce clic. Relevé au
+            // début de l'attente — désormais sans fin —, il prenait pour la
+            // réponse ce que l'utilisateur copiait entre-temps, l'insérait, et
+            // rendait à la place une chaîne seule : une image ou un texte mis
+            // en forme étaient perdus. Resauvegardé seulement quand il a
+            // changé : le copier quatre fois par seconde coûterait pour rien.
+            if presse.changeCount != avant {
+                sauvegarde = PressePapiers(presse)
+                avant = presse.changeCount
+            }
             let r = try? await appeler(
                 "return window.__relais.copierLaReponse(selParent, selCopier, selReponse);",
                 ["selParent": selecteurs.copierParent,
@@ -631,8 +641,7 @@ extension RelaisPage {
             }
             guard presse.changeCount != avant else { continue }
             let texte = presse.string(forType: .string) ?? ""
-            presse.clearContents()
-            if let sauvegarde { presse.setString(sauvegarde, forType: .string) }
+            sauvegarde.rendre(presse)
             try Task.checkCancellation()
             guard !texte.isEmpty else { throw Erreur.pasDeReponse }
             // Garde-fou : ce qu'on vient de copier ne doit pas être ce qu'on

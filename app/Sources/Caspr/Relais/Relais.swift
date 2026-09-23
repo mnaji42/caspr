@@ -42,7 +42,9 @@ final class Relais: ObservableObject {
     /// Sauf pendant une dictée, dans un sens comme dans l'autre : la voie est
     /// figée à l'appui, et basculer vaut pour la suivante.
     /// - Une dictée ChatGPT va au bout sur la page qu'elle a prise ; c'est la
-    ///   fin du cycle qui la détruit alors (cf. `rendreLaMain`).
+    ///   fin du cycle qui la détruit alors (cf. `rendreLaMain`) — ou, si elle
+    ///   y a laissé un texte à récupérer, la fermeture de la fenêtre ou la
+    ///   dictée macOS suivante (cf. `libererLaPageGardee`).
     /// - Une dictée macOS garde le micro pour elle : la page n'est construite
     ///   qu'une fois le magnétophone arrêté (cf. `macOSRendLeMicro`).
     func suivreLaVoie() {
@@ -87,6 +89,19 @@ final class Relais: ObservableObject {
     /// Une dictée macOS ouvre le micro de Caspr.
     func macOSPrendLeMicro() {
         ecouteMacOS = true
+    }
+
+    /// Détruit, avant que le magnétophone n'écoute, la page que plus rien ne
+    /// réclame.
+    ///
+    /// Celle qu'un échec a gardée sur la voie macOS pour qu'on y récupère son
+    /// texte (cf. `rendreLaMain`) : vivante, elle tient le micro, et la dictée
+    /// macOS n'enregistrerait que du silence. Rappuyer, c'est dire qu'on en a
+    /// fini avec ce texte, comme sur la voie ChatGPT (cf.
+    /// `attendreLaPreparation`).
+    func libererLaPageGardee() async {
+        guard occupation == .libre, !pageVoulue else { return }
+        await libererPage()
     }
 
     /// Le magnétophone est arrêté, quelle qu'en soit l'issue : la page que la
@@ -159,12 +174,17 @@ final class Relais: ObservableObject {
     ///
     /// C'est aussi là que part la page quand on a choisi macOS pendant la
     /// dictée : elle attendait que celle-ci s'achève (cf. `suivreLaVoie`).
+    /// Sauf si la dictée vient d'y laisser son texte, la fenêtre ouverte pour
+    /// qu'on l'y copie (cf. `preparationDifferee`) : la détruire là effaçait
+    /// sous les yeux ce que le message d'échec disait récupérable. Elle part
+    /// alors avec sa fenêtre (cf. `fenetreFermee`), ou à l'appui de la dictée
+    /// macOS suivante (cf. `libererLaPageGardee`).
     func rendreLaMain() {
         guard occupation == .dictee else { return }
         occupation = .libre
         switch Preferences.shared.voie {
         case .chatgpt: break
-        case .apple: if page != nil { quitterLaPage() }
+        case .apple: if page != nil, !preparationDifferee { quitterLaPage() }
         }
     }
 
@@ -488,6 +508,9 @@ final class Relais: ObservableObject {
     private func fenetreFermee() {
         abandonnerCalibration()
         guard preparationDifferee, occupation == .libre else { return }
+        // Gardée sur la voie macOS pour ce seul texte (cf. `rendreLaMain`) :
+        // il n'y a rien à préparer, la page part.
+        guard pageVoulue else { quitterLaPage(); return }
         preparerLaProchaine()
     }
 
@@ -853,16 +876,18 @@ final class Relais: ObservableObject {
     /// `texteLaisseDansLaPage` : l'échec a laissé la transcription dans la
     /// fenêtre, ouverte pour qu'on l'y récupère.
     func apresLivraison(_ module: RelaisModule, texteLaisseDansLaPage: Bool) {
-        rendreLaMain()
         // La page est rendue prête pour la prochaine, pendant qu'on ne s'en
         // sert pas. Sauf si l'on vient d'y laisser un texte à récupérer : la
         // préparer maintenant le détruirait sous les yeux de qui vient le
         // chercher. Elle attend alors qu'on en ait fini.
         //
-        // Avant de quitter la discussion, et non après : c'est ce report qui
-        // dit à la sortie de la discussion de laisser la fenêtre ouverte sur
-        // le texte.
-        preparerLaProchaine(apresEchec: texteLaisseDansLaPage)
+        // Le report avant de rendre la main : c'est lui qui dit à
+        // `rendreLaMain` de garder la page quand on a choisi macOS pendant la
+        // dictée. Et avant de quitter la discussion : c'est encore lui qui dit
+        // à sa sortie de laisser la fenêtre ouverte sur le texte.
+        if texteLaisseDansLaPage { preparerLaProchaine(apresEchec: true) }
+        rendreLaMain()
+        if !texteLaisseDansLaPage { preparerLaProchaine() }
         // Délivrer ailleurs, c'est quitter la discussion.
         //
         // Basculer de « Discuter » vers un module qui écrit au curseur referme

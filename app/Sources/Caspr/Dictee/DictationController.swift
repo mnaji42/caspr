@@ -352,7 +352,7 @@ final class DictationController {
         do {
             switch voie {
             case .apple:
-                try macOS.demarrer()
+                try await macOS.demarrer()
             case .chatgpt:
                 try await chatgpt.demarrer()
             }

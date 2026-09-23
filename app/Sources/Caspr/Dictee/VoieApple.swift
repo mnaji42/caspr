@@ -95,7 +95,10 @@ final class VoieApple {
         Relais.partage.macOSRendLeMicro()
     }
 
-    func demarrer() throws {
+    func demarrer() async throws {
+        // Une page ChatGPT gardée pour qu'on y récupère un texte tient le
+        // micro : elle part avant que le magnétophone n'écoute.
+        await Relais.partage.libererLaPageGardee()
         try recorder.start()
         previewText = ""
     }

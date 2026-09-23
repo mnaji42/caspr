@@ -211,6 +211,10 @@ final class VoieChatGPT {
         let debut = ContinuousClock.now
         // La transcription de ChatGPT a-t-elle été gardée pour le menu ?
         var brutGarde = false
+        // La réponse de ChatGPT, quand elle diffère du brut : le menu ne
+        // garde que ce dernier, et un échec d'insertion doit savoir s'il
+        // reste autre chose à sauver (cf. le `catch` plus bas).
+        var remanie: String?
         do {
             let brut = try await relais.arreterEtLire(secondesDictees: dictee.duree)
             // Rien n'a été dit : on s'arrête là, quel que soit le module.
@@ -278,6 +282,7 @@ final class VoieChatGPT {
             // Pas de texte vide ici : la transformation rend le brut quand elle
             // échoue ou que la réponse est vide, et le brut vide s'est arrêté
             // plus haut.
+            if texte != brut { remanie = texte }
             relais.masquerBarre()
             overlay.hide()
             // Le brut va à l'historique à côté du texte remanié, quand ils
@@ -302,15 +307,30 @@ final class VoieChatGPT {
             // L'abandon a tout défait (cf. `abandonner`).
             return .sansSuite
         } catch let echec as Livraison.EchecDInsertion {
-            // Seule l'écriture a échoué : la page n'y est pour rien, et le
-            // texte n'y est pas à chercher — pas de fenêtre à ouvrir. Le brut
+            // Seule l'écriture a échoué : la page n'y est pour rien. Le brut
             // reste au menu : rien n'a été écrit.
             guard estEnCours() else { return .sansSuite }
             Log.error("échec d'insertion : \(echec.localizedDescription)")
-            overlay.showFailure("Insertion impossible", hint: echec.enHistorique
-                ? "Le texte est dans l'historique, menu de Caspr."
-                : "La transcription brute est dans le menu de Caspr.")
-            return .echec(echec.localizedDescription)
+            // L'historique a gardé le texte, ou il n'y avait que le brut, que
+            // le menu garde : pas de fenêtre à ouvrir, la page est préparée
+            // pour la suivante comme après une réussite.
+            guard !echec.enHistorique, remanie != nil else {
+                overlay.showFailure("Insertion impossible", hint: echec.enHistorique
+                    ? "Le texte est dans l'historique, menu de Caspr."
+                    : "La transcription brute est dans le menu de Caspr.")
+                return .echec(echec.localizedDescription)
+            }
+            // Historique désactivé, texte remanié : la réponse de ChatGPT
+            // n'est plus que dans la page. La préparer pour la suivante l'y
+            // détruisait — ni l'historique ni le menu ne l'avaient. La fenêtre
+            // s'ouvre donc sur elle, et la préparation attend qu'on en ait
+            // fini (cf. `Relais.apresLivraison`).
+            overlay.showFailure("Insertion impossible",
+                                hint: "Le texte est dans la fenêtre de ChatGPT.")
+            relais.ouvrirFenetre()
+            return .echec("\(echec.localizedDescription) — le texte est dans la "
+                          + "fenêtre du relais, la transcription brute dans le menu de Caspr.",
+                          texteLaisseDansLaPage: true)
         } catch {
             guard estEnCours() else { return .sansSuite }
             // Ce qui reste à reprendre : le texte resté dans la fenêtre du

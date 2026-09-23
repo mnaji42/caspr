@@ -53,9 +53,12 @@ struct PreferencesView: View {
     /// vaut pour toute l'application*, *comment on déclenche*, *par où ça
     /// transcrit*, puis ce qui a été dicté.
     ///
-    /// Il y en avait six. Les deux autres ne servaient que l'ancien moteur
-    /// local — l'un le réglait, l'autre le comparait aux moteurs de macOS — et
-    /// sont partis avec lui : la migration du lancement efface leurs réglages.
+    /// Il y en avait six. Les deux autres sont partis avec l'ancien moteur
+    /// local : la Collecte, qui le comparait aux moteurs de macOS, et le
+    /// Lexique. Le Lexique servait surtout à CrisperWhisper, mais la Dictée
+    /// recevait aussi ses mots en `contextualStrings`, avec un effet jamais
+    /// mesuré : il a été retiré par décision produit, et la migration du
+    /// lancement efface ces réglages.
     enum Tab: String, CaseIterable {
         case general, recording, voie, history
 

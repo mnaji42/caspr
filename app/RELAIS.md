@@ -27,7 +27,11 @@ structure des sélecteurs, modules livrés), rangés dans
 | Fichier | Responsabilité |
 |---|---|
 | `Relais.swift` | La façade et le cycle de vie. `apresLivraison` y tient la règle « la fin d'une dictée prépare la suivante ». |
-| `RelaisPage.swift` | La `WKWebView`, ses **deux** fenêtres, le micro, les popups de connexion. |
+| `RelaisPage.swift` | La `WKWebView`, ses **deux** fenêtres, la session, l'appel borné au pont, le micro. Au premier montage de chaque lancement, elle vide le cache disque de WebKit — jamais les cookies ni le stockage de la page, qui portent la session. |
+| `RelaisPage+Dictee.swift` | Ce que la page fait pendant une dictée : écouter, rendre la transcription, envoyer, attendre et copier la réponse, la faire lire, vider la zone pour la suivante. |
+| `RelaisPage+Calibration.swift` | Le message d'essai et les guetteurs de clic, pour les deux calibrations. |
+| `RelaisPage+Navigation.swift` | Les délégués WebKit : l'autorisation du micro, les popups de connexion, les navigations échouées, le processus tué. |
+| `RelaisPage+Erreur.swift` | Ce qui peut échouer, et comment la barre et le menu le disent. |
 | `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
 | `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `Relais` qui enregistre. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
@@ -184,7 +188,7 @@ distingue de la voie macOS, et pourquoi.
   `~/Library/WebKit/<bundle>`, et **dit** dans la liste qu'une session ChatGPT
   est connectée. Sans cette mention, une case nommée « Réglages et historique »
   décidait en silence d'une session ouverte sur un service tiers.
-- **`RecordingOverlay.swift`** — la pastille des modules (`moduleLabels`,
+- **`Dictee/Barre/RecordingOverlay.swift`** — la pastille des modules (`moduleLabels`,
   `onSelectModule`) : le choix se fait au moment de parler, pas dans un écran
   de réglages. L'attente, elle, s'affiche avec sa phase et son chrono dès dix
   secondes, et la sortie par la touche de dictée
@@ -208,7 +212,7 @@ distingue de la voie macOS, et pourquoi.
   parlait, capturée à l'appui : il vaut pour les deux voies, mais c'est pour
   ChatGPT qu'il compte, parce que trente secondes à trois minutes séparent la
   parole de l'insertion.
-- **`Onboarding.swift`** — le choix de la voie, juste après la bienvenue :
+- **`Accueil/`** (`OnboardingView+Screens.swift`) — le choix de la voie, juste après la bienvenue :
   les deux lignes de `CarteVoie`. Choisir ChatGPT y lance la connexion puis
   la calibration, et l'écran du premier essai montre `RelaisSession` au lieu
   du moteur de macOS. La promesse de confidentialité y est dite par voie.

@@ -181,14 +181,19 @@ caspr/
 │   └── Sources/
 │       ├── CasprCore/                 pure logic, under tests
 │       └── Caspr/
-│           ├── DictationController.swift  the cycle: hotkey, state, Escape
-│           ├── VoieApple.swift            macOS: mic, live preview, transcription
-│           ├── VoieChatGPT.swift          ChatGPT: the page listens and answers
-│           ├── Livraison.swift            insert, history, retry
-│           ├── CarteVoie.swift            Settings › Voie: switch paths
-│           ├── Onboarding.swift           the welcome window
-│           ├── RecordingOverlay.swift     the floating bar
-│           └── Relais/                    the ChatGPT page and its calibration
+│           ├── App/          launch, menu bar, logs, permissions, migration
+│           ├── Dictee/       the cycle and where the text lands
+│           │   ├── DictationController.swift  hotkey, state, Escape
+│           │   ├── VoieApple.swift            macOS: mic, live preview, transcription
+│           │   ├── VoieChatGPT.swift          ChatGPT: the page listens and answers
+│           │   ├── Livraison.swift            insert, history, retry
+│           │   └── Barre/                     the floating bar
+│           ├── Apple/        Apple Intelligence, Dictation, their models
+│           ├── Relais/       the ChatGPT page and its calibration
+│           ├── Reglages/     Settings, one file per tab (CarteVoie: switch paths)
+│           ├── Accueil/      the welcome window
+│           ├── MiseAJour/    updates
+│           └── Desinstallation/  the uninstaller
 ├── scripts/
 │   ├── dev-cert.sh      local signing certificate, so TCC grants persist
 │   ├── install.sh       build → sign → /Applications/Caspr.app

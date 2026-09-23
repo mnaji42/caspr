@@ -134,6 +134,51 @@ final class Livraison {
                   + "texte inséré devant")
     }
 
+    // MARK: - Destination
+
+    /// Bascule entre curseur et notes, sans jamais rien redétecter.
+    ///
+    /// Le fichier de notes est mémorisé indépendamment de la destination
+    /// courante : revenir au curseur ne l'oublie pas, et y retourner ne coûte
+    /// qu'un clic. La version précédente relançait la détection à chaque
+    /// bascule, donc pouvait ouvrir un sélecteur au milieu d'une phrase — un
+    /// panneau modal qui active Caspr, déplace le curseur et avale les
+    /// frappes, c'est-à-dire tout ce que la barre flottante évite par
+    /// ailleurs. `selecteurPossible` est donc faux pendant qu'on parle.
+    func choisirLesNotes(_ wantsNotes: Bool, selecteurPossible: Bool) {
+        guard wantsNotes else {
+            Preferences.shared.destination = .caret
+            return
+        }
+        if Preferences.shared.noteFile != nil {
+            Preferences.shared.destination = .notes
+            return
+        }
+        guard selecteurPossible else {
+            NSLog("caspr: aucun fichier de notes mémorisé — en choisir un depuis le menu")
+            return
+        }
+        choisirLeFichierDeNotes()
+    }
+
+    /// Choisit le fichier des notes, et écrit dedans à partir de maintenant.
+    ///
+    /// On tente d'abord le document ouvert devant : dans ce cas il suffit de
+    /// poser le curseur dans le fichier voulu, sans passer par un sélecteur.
+    private func choisirLeFichierDeNotes() {
+        var chosen = TargetWriter.frontmostDocument()
+        if chosen == nil {
+            // Détection impossible : plutôt qu'un sélecteur surgissant sans
+            // raison apparente, on dit pourquoi avant de le proposer.
+            NSLog("caspr: fichier non identifié — sélecteur")
+            chosen = TargetWriter.chooseFile()
+        }
+        guard let chosen else { return }
+        Preferences.shared.noteFile = chosen
+        Preferences.shared.destination = .notes
+        NSLog("caspr: notes dans %@", chosen.path)
+    }
+
     // MARK: - Échec et recours
 
     /// Audio d'une dictée dont la transcription a échoué. Conservé en mémoire

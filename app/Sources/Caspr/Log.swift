@@ -30,4 +30,9 @@ enum Log {
     static func error(_ message: String) {
         logger.error("\(message, privacy: .public)")
     }
+
+    /// Les millisecondes écoulées depuis `debut`, pour les durées du journal.
+    static func ms(depuis debut: ContinuousClock.Instant) -> Int {
+        Int((ContinuousClock.now - debut) / .milliseconds(1))
+    }
 }

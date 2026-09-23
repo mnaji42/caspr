@@ -143,45 +143,49 @@ default**; verbatim is available for interview or note-taking use.
 
 ## Architecture
 
-The speech engine sits behind a socket protocol, so it can be swapped without
-touching the app:
+Two ways to dictate, and they never listen at the same time: either Caspr
+opens the microphone (macOS), or a ChatGPT page does (the relay). They share
+nothing upstream; they meet at delivery:
 
 ```
-┌──────────────────────────┐
-│  Caspr.app  (Swift)      │
-│  hotkey → capture →      │
-│  inject at caret         │
-└───────────┬──────────────┘
-            │  unix socket, length-prefixed frames
-            │  PCM int16 mono 16 kHz
-┌───────────▼──────────────┐
-│  SpeechEngine            │
-│  ├─ CrisperWhisper       │  ← today (PyTorch/MPS)
-│  ├─ Core ML / ANE        │  ← planned
-│  └─ Apple SpeechAnalyzer │  ← fallback, no download
-└──────────────────────────┘
+             hotkey
+               │
+     ┌─────────┴──────────┐
+     │                    │
+┌────▼─────────────┐ ┌────▼──────────────────┐
+│  VoieApple       │ │  VoieChatGPT          │
+│  Caspr's mic →   │ │  a WKWebView drives   │
+│  Apple Intelli-  │ │  chatgpt.com: it      │
+│  gence, or the   │ │  listens, transcribes │
+│  system Dictation│ │  and may rework text  │
+└────┬─────────────┘ └────┬──────────────────┘
+     │   text             │   text
+     └─────────┬──────────┘
+          ┌────▼──────────────────────┐
+          │  Livraison                │
+          │  caret or notes file,     │
+          │  history, rescue options  │
+          └───────────────────────────┘
 ```
 
 ```
 caspr/
-├── engine/          Python transcription service (current backend)
-│   └── caspr_engine/
-│       ├── crisper.py    inference: mel → encoder → greedy decode
-│       ├── prompt.py     CrisperWhisper decoder prompt construction
-│       ├── protocol.py   the app ↔ engine contract
-│       └── server.py     persistent unix-socket service
 ├── app/             Swift menu-bar app (builds to app/build/, gitignored)
-│   └── Sources/Caspr/
-│       ├── DictationController.swift  the capture → transcribe → insert cycle
-│       ├── RecordingOverlay.swift     the floating bar
-│       ├── LivePreview.swift          macOS SpeechAnalyzer, streaming preview
-│       ├── Corpus.swift               archive of dictations, for comparison
-│       └── DictationTarget.swift      caret, or a file detected via AX
+│   ├── RELAIS.md    what the ChatGPT relay learned the hard way
+│   └── Sources/
+│       ├── CasprCore/                 pure logic, under tests
+│       └── Caspr/
+│           ├── DictationController.swift  the cycle: hotkey, state, Escape
+│           ├── VoieApple.swift            macOS: mic, live preview, transcription
+│           ├── VoieChatGPT.swift          ChatGPT: the page listens and answers
+│           ├── Livraison.swift            insert, history, retry
+│           ├── RecordingOverlay.swift     the floating bar
+│           └── Relais/                    the ChatGPT page and its calibration
 ├── scripts/
 │   ├── dev-cert.sh      local signing certificate, so TCC grants persist
 │   ├── install.sh       build → sign → /Applications/Caspr.app
 │   └── package-dmg.sh   .dmg with the Applications shortcut
-└── poc/             benchmarks and experiments behind the numbers above
+└── website/         the landing page
 ```
 
 ### How the prompt actually works

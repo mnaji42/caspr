@@ -113,11 +113,15 @@ distingue de la voie macOS, et pourquoi.
   de réglages. L'attente, elle, s'affiche avec sa phase et son chrono dès dix
   secondes, et la sortie par la touche de dictée
   (`showProcessing(_:progress:)`).
-- **`DictationController.swift`** — l'essentiel : la voie figée à l'appui
-  (`voieDuCycle`), une écoute qui n'ouvre pas le micro de Caspr, et un chemin
-  à part, `finirParChatGPT` : arrêter la page et lire, transformer, ouvrir la
-  discussion ou livrer, laisser le texte dans la page quand ça échoue. Aucun
-  audio à conserver, donc pas de « Réessayer ».
+- **`DictationController.swift`** — le cycle : la voie figée à l'appui
+  (`voieDuCycle`), le numéro qui dit si un cycle est encore le sien, l'état,
+  Échap, et l'abandon par la touche de dictée. Ce qui se passe sur chaque voie
+  vit dans son fichier.
+- **`VoieChatGPT.swift`** — le chemin de la voie ChatGPT : prendre la page,
+  attendre qu'elle écoute sans ouvrir le micro de Caspr, puis arrêter et lire,
+  transformer, ouvrir la discussion ou livrer, laisser le texte dans la page
+  quand ça échoue. Aucun audio à conserver, donc pas de « Réessayer ». Le
+  pendant de `VoieApple.swift`, qui ne partage avec elle que la livraison.
 - **`DicteeEnCours.swift`** — le module et la destination, figés à l'arrêt de
   l'écoute et portés jusqu'à la livraison : `RelaisCatalogue.courant` relit
   les préférences à chaque accès, et l'aller-retour ChatGPT sépare les
@@ -195,7 +199,7 @@ d'abord conformé au protocole des moteurs de macOS, `SpeechEngine`, pour
 hériter de l'insertion, de l'historique et des échecs. Il ne pouvait le faire
 qu'en mentant : il recevait un enregistrement vide par construction, et
 inventait une latence découpée en mel, encodeur et décodeur. Ce protocole a
-disparu. Chaque voie a son chemin, et ils se rejoignent dans `Livraison`, qui
+disparu. Chaque voie a son chemin — `VoieApple`, `VoieChatGPT` —, et ils se rejoignent dans `Livraison`, qui
 ne sait rien de l'un ni de l'autre. Les différences sont écrites là où elles
 se produisent, et ce sont des différences réelles : aucun audio de notre
 côté, donc pas de « Réessayer » ; une page à rendre et à préparer à la fin de

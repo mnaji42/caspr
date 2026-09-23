@@ -1,6 +1,5 @@
 import AppKit
 import WebKit
-import CasprCore
 
 extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
     /// Sans cette réponse, `getUserMedia` est refusé en silence dans une

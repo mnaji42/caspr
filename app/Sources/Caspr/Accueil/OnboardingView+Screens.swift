@@ -1,5 +1,4 @@
 import SwiftUI
-import CasprCore
 
 // Les cinq écrans de l'accueil, dans l'ordre où on les rencontre. Le cadre
 // qui les porte — l'en-tête, le compteur, le pied et ce qui bloque

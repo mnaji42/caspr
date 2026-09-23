@@ -245,17 +245,24 @@ enum Uninstall {
         }
         return found
     }
+    /// Les journaux de l'ancien moteur local. L'application n'y écrit plus —
+    /// son journal passe par `OSLog` —, et la migration retire ce dossier au
+    /// premier lancement d'une version récente ; mais qui désinstalle sans
+    /// l'avoir lancée le retrouverait sans cette ligne.
     private static var logsDirectory: URL {
         home.appending(path: "Library/Logs/Caspr")
     }
     /// Les caches, aux trois endroits où ils atterrissent.
     ///
-    /// `Library/Caches/caspr` est celui que l'application crée elle-même. Les
-    /// deux autres, macOS les fabrique dans son dos, sous l'identifiant de
-    /// bundle : un dossier de cache dès qu'une API système en demande un, et
-    /// `HTTPStorages` à la première requête réseau — c'est-à-dire dès la
-    /// première vérification de mise à jour. Ni l'un ni l'autre n'était retiré,
-    /// et un balayage après désinstallation les retrouvait tous les deux.
+    /// `Library/Caches/caspr`, plus personne ne le crée : l'ancien moteur local
+    /// y ouvrait son socket. Il reste dans la liste pour la même raison que
+    /// les journaux. Les deux autres, macOS les fabrique dans le dos de
+    /// l'application, sous l'identifiant de bundle : un dossier de cache dès
+    /// qu'une API système en demande un — le cache disque de la page ChatGPT
+    /// y vit —, et `HTTPStorages` à la première requête réseau, c'est-à-dire
+    /// dès la première vérification de mise à jour. Ni l'un ni l'autre n'était
+    /// retiré, et un balayage après désinstallation les retrouvait tous les
+    /// deux.
     private static var cacheDirectories: [URL] {
         [home.appending(path: "Library/Caches/caspr"),
          home.appending(path: "Library/Caches/\(bundleIdentifier)"),

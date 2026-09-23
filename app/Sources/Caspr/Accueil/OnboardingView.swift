@@ -1,5 +1,4 @@
 import SwiftUI
-import CasprCore
 
 struct OnboardingView: View {
     let onFinish: () -> Void

@@ -1,7 +1,6 @@
 import AVFoundation
 import Foundation
 import Speech
-import CasprCore
 
 /// Le moteur de reconnaissance de macOS, en transcription complète.
 ///

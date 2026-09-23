@@ -127,7 +127,7 @@ final class RelaisPage: NSObject {
     var selecteurs = RelaisSelecteurs.charger()
     /// Les appels au pont qui attendent leur réponse, pour que `detruire` les
     /// rende : sur une vue détruite, aucun ne reviendrait jamais.
-    var enSuspens: [AppelAnnulable<[String: Any]>] = []
+    var enSuspens: [AppelAnnulable<String?>] = []
     /// La copie du son que la page capte (cf. `RelaisEcho`).
     let echo = RelaisEcho()
 
@@ -278,9 +278,7 @@ final class RelaisPage: NSObject {
         var silences = 0
         for essai in 0..<max(patience, 1) {
             if Task.isCancelled { return .inconnu }
-            if let r = await sonder("return window.__relais.etat(micro, stop, composeur);",
-                                    ["micro": selecteurs.micro, "stop": selecteurs.stop,
-                                     "composeur": selecteurs.composeur]) {
+            if let r = await sonder({ try await self.etat() }) {
                 if r["connecte"] as? Bool == true {
                     surConnexion?(.connecte)
                     return .connecte
@@ -327,8 +325,7 @@ final class RelaisPage: NSObject {
             // qu'on quitte. Un silence, lui, ne conclut rien : la borne s'en
             // charge.
             if !chargementEnCours,
-               let r = await sonder("return window.__relais.etat(micro, stop, composeur);",
-                                    ["micro": "", "stop": "", "composeur": ""]) {
+               let r = await sonder({ try await self.etat(micro: "", stop: "", composeur: "") }) {
                 if r["connecte"] as? Bool == true {
                     surConnexion?(.connecte)
                     return .connecte
@@ -357,81 +354,6 @@ final class RelaisPage: NSObject {
         }
     }
 
-    // MARK: - Appels au pont
-
-    /// Un appel au pont, sur le chemin d'une dictée : **sans délai**.
-    ///
-    /// Il a porté un délai de cinq secondes, qui faisait passer une page lente
-    /// pour une page figée, la rechargeait, et jetait la dictée avec elle.
-    /// ChatGPT met parfois trente secondes, ou plusieurs minutes, à rendre ce
-    /// qu'on lui a dicté longtemps : ce n'est pas au temps de décider qu'on
-    /// renonce (cf. RELAIS.md, sixième règle).
-    ///
-    /// La sortie reste instantanée : l'annulation de la tâche appelante — la
-    /// touche de dictée, la croix — tranche l'attente sur-le-champ, même quand
-    /// l'appel JavaScript ne revient jamais (cf. `AppelAnnulable`).
-    /// `callAsyncJavaScript` ne s'annule pas : on cesse seulement d'attendre
-    /// ici, et l'appel resté en suspens finit dans le vide.
-    ///
-    /// Au repos, où un silence doit pouvoir se constater, c'est `sonder`.
-    @discardableResult
-    func appeler(_ corps: String, _ args: [String: Any] = [:]) async throws -> [String: Any] {
-        // Une tâche déjà annulée ne touche plus à la page : le clic qu'elle
-        // demandait n'est plus voulu par personne.
-        try Task.checkCancellation()
-        // Une page morte qu'on a renoncé à recharger revit dès qu'on s'en
-        // sert : l'appel tombe sur la page qui arrive, et chaque attente sait
-        // déjà patienter devant un chargement.
-        if rechargementRetenu { charger() }
-        let vue: WKWebView = webView
-        let appel = AppelAnnulable<[String: Any]>()
-        enSuspens.append(appel)
-        defer { enSuspens.removeAll { $0 === appel } }
-        Task {
-            do {
-                let brut = try await vue.callAsyncJavaScript(
-                    corps, arguments: args, in: nil, contentWorld: .page)
-                appel.rendre(.success((brut as? [String: Any]) ?? [:]))
-            } catch {
-                appel.rendre(.failure(error))
-            }
-        }
-        return try await appel.attendre()
-    }
-
-    /// Un appel au pont **au repos**, qui renonce au bout de `auPlus`.
-    ///
-    /// `nil` veut dire « pas de réponse » : la page est muette, ou le pont
-    /// n'est pas là. **Au repos seulement** — préparer la page, l'arrêter
-    /// après un abandon, l'étiquette, le diagnostic, la calibration. Un
-    /// silence n'y mène qu'à reconstruire la page au repos (cf.
-    /// `Relais.reconstruireLaPage`) ou à dire « la page ne répond pas » ;
-    /// jamais à faire échouer une dictée, dont les attentes passent par
-    /// `appeler`.
-    func sonder(_ corps: String, _ args: [String: Any] = [:],
-                auPlus: Duration = .seconds(5)) async -> [String: Any]? {
-        return try? await self.auPlus(auPlus) { try await self.appeler(corps, args) }
-    }
-
-    /// Fait courir une opération contre le temps ; `nil` si le temps gagne.
-    ///
-    /// Une erreur de l'opération passe telle quelle — un guetteur de
-    /// calibration dont la page a changé n'a pas « attendu trois minutes ».
-    /// L'opération doit céder à l'annulation, sans quoi le groupe l'attendrait
-    /// quand même : c'est ce qu'`AppelAnnulable` lui garantit.
-    func auPlus<T>(_ duree: Duration,
-                   _ operation: @escaping @MainActor () async throws -> T) async throws -> T? {
-        try await withThrowingTaskGroup(of: Colis<T>?.self) { groupe in
-            groupe.addTask { @MainActor in Colis(valeur: try await operation()) }
-            groupe.addTask {
-                try await Task.sleep(for: duree)
-                return nil
-            }
-            defer { groupe.cancelAll() }
-            return (try await groupe.next() ?? nil)?.valeur
-        }
-    }
-
     /// La page que la dictée a prise est-elle morte depuis l'appui ?
     var morteDepuisLeDepart: Bool { morts != mortsAuDepart }
 
@@ -444,7 +366,7 @@ final class RelaisPage: NSObject {
     /// réponses de ChatGPT elle porte — pour ne compter ensuite que ce qui est
     /// apparu depuis.
     func relever() async -> (alertes: [String], reponses: Int) {
-        let r = try? await appeler("return window.__relais.releve();")
+        let r = try? await releve()
         return ((r?["alertes"] as? [String]) ?? [], (r?["reponses"] as? Int) ?? 0)
     }
 

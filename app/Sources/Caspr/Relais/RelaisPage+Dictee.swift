@@ -47,9 +47,7 @@ extension RelaisPage {
     }
 
     private func etatAuRepos() async -> [String: Any]? {
-        await sonder("return window.__relais.etat(micro, stop, composeur);",
-                     ["micro": selecteurs.micro, "stop": selecteurs.stop,
-                      "composeur": selecteurs.composeur])
+        await sonder { try await self.etat() }
     }
 
     /// Clique le micro. La page commence à écouter.
@@ -85,8 +83,7 @@ extension RelaisPage {
         // récupérable à la main. Mais ChatGPT ajoute la dictée suivante à la
         // suite au lieu de remplacer, si bien que le texte suivant arrivait
         // collé au précédent, et le suivant encore aux deux.
-        _ = try? await appeler("return window.__relais.vider(sel);",
-                               ["sel": selecteurs.composeur])
+        try? await vider(sel: selecteurs.composeur)
         alertesAvant = await relever().alertes
         // L'écho doit être prêt quand la page demandera le micro, au clic.
         echo.armer()
@@ -109,14 +106,15 @@ extension RelaisPage {
     /// dictée en sort.
     ///
     /// Rien n'est demandé pendant un chargement : une zone vue alors est celle
-    /// de la page qu'on quitte.
+    /// de la page qu'on quitte. Une page chargée sans son pont, elle, a dit
+    /// tout ce qu'elle dira (`Erreur.pontAbsent`).
     private func attendreLaSession() async throws {
         while true {
             try Task.checkCancellation()
-            if !chargementEnCours,
-               let r = try? await appeler("return window.__relais.etat(micro, stop, composeur);",
-                                          ["micro": selecteurs.micro, "stop": selecteurs.stop,
-                                           "composeur": selecteurs.composeur]) {
+            var vu: [String: Any]?
+            do { vu = chargementEnCours ? nil : try await etat() }
+            catch Erreur.pontAbsent { throw Erreur.pontAbsent } catch {}
+            if let r = vu {
                 if r["connecte"] as? Bool == true {
                     surConnexion?(.connecte)
                     return
@@ -193,9 +191,7 @@ extension RelaisPage {
         // chose, avec l'utilisateur, qui interrompe l'attente.
         let refus = { await self.erreurAffichee(nouvelles: false) }
         try await veiller(refus) { () -> Bool? in
-            let lu = try? await appeler("return window.__relais.lire(sel);",
-                                        ["sel": selecteurs.composeur])
-            return lu?["ok"] as? Bool == true ? true : nil
+            (try? await lire(sel: selecteurs.composeur)) != nil ? true : nil
         }
 
         // La stabilisation. Une seconde pleine sans changement, et non
@@ -210,11 +206,9 @@ extension RelaisPage {
         return try await veiller(refus) { () -> String? in
             // Un appel qui échoue ne dit rien du texte : le compter comme une
             // zone vide finirait par conclure « rien n'a été dit » devant une
-            // page qui en a.
-            guard let lu = try? await appeler("return window.__relais.lire(sel);",
-                                              ["sel": selecteurs.composeur])
-            else { return nil }
-            let texte = (lu["texte"] as? String) ?? ""
+            // page qui en a. Une zone introuvable, elle, compte comme vide.
+            guard let lu = try? await Optional(lire(sel: selecteurs.composeur)) else { return nil }
+            let texte = lu ?? ""
             defer { precedent = texte }
 
             // La zone est revenue et reste vide : il n'y avait rien à
@@ -283,10 +277,7 @@ extension RelaisPage {
     /// perdue en pleine attente ne rendra jamais rien, et sans ce relevé
     /// l'attente — désormais sans fin — le serait pour de bon.
     private func sessionMontreeFermee() async -> Bool {
-        guard let r = try? await appeler("return window.__relais.etat(micro, stop, composeur);",
-                                         ["micro": selecteurs.micro, "stop": selecteurs.stop,
-                                          "composeur": selecteurs.composeur]),
-              r["authentification"] as? Bool == true
+        guard let r = try? await etat(), r["authentification"] as? Bool == true
         else { return false }
         Log.error("relais : la page montre l'écran de connexion pendant l'attente")
         surConnexion?(.deconnecte)
@@ -313,9 +304,7 @@ extension RelaisPage {
         repeat {
             try Task.checkCancellation()
             try verifierLaPage()
-            let r = try await appeler("return window.__relais.cliquer(cible, sel);",
-                                      ["cible": cible.rawValue, "sel": selecteur])
-            if r["ok"] as? Bool == true {
+            if try await cliquer(cible, sel: selecteur) {
                 if essai > 0 { Log.info("relais : \(cible.rawValue) trouvé après \(essai) essais") }
                 return true
             }
@@ -386,11 +375,9 @@ extension RelaisPage {
     /// qui lui donne son sens. Un délai fixe marcherait jusqu'au jour où la
     /// machine rame ; une relecture, non.
     private func encadrer(_ encadrement: (avant: String, apres: String)) async throws {
-        let r = try await appeler("return window.__relais.encadrer(sel, avant, apres);",
-                                  ["sel": selecteurs.composeur,
-                                   "avant": encadrement.avant,
-                                   "apres": encadrement.apres])
-        guard r["ok"] as? Bool == true else { throw Erreur.introuvable(.composeur) }
+        guard try await encadrer(sel: selecteurs.composeur, avant: encadrement.avant,
+                                 apres: encadrement.apres)
+        else { throw Erreur.introuvable(.composeur) }
         let empreinte = empreinte(encadrement.avant)
         guard !empreinte.isEmpty else { return }
         // Délai de geste : ce qu'on vient d'écrire se relit aussitôt, ou n'a
@@ -400,9 +387,7 @@ extension RelaisPage {
             try Task.checkCancellation()
             try verifierLaPage()
             try? await Task.sleep(for: .milliseconds(250))
-            let lu = try? await appeler("return window.__relais.lire(sel);",
-                                        ["sel": selecteurs.composeur])
-            if let texte = lu?["texte"] as? String, texte.contains(empreinte) { return }
+            if let texte = try? await lire(sel: selecteurs.composeur), texte.contains(empreinte) { return }
         }
         Log.error("relais : la consigne n'a pas tenu dans la zone de saisie")
         throw Erreur.consigneNonPosee
@@ -417,8 +402,7 @@ extension RelaisPage {
     private func cliquerLEnvoi(empreinte: String) async throws {
         (alertesAvant, reponsesAvantEnvoi) = await relever()
         let marque = empreinte.isEmpty
-            ? (try? await appeler("return window.__relais.lire(sel);",
-                                  ["sel": selecteurs.composeur]))?["texte"] as? String ?? ""
+            ? (try? await lire(sel: selecteurs.composeur)) ?? ""
             : empreinte
         // Délai de geste : le bouton d'envoi existe dès que la zone est
         // remplie ; dix secondes sans lui, et il est introuvable.
@@ -445,12 +429,10 @@ extension RelaisPage {
             try Task.checkCancellation()
             try verifierLaPage()
             try? await Task.sleep(for: .milliseconds(250))
-            guard let r = try? await appeler("return window.__relais.depart(sel, avant);",
-                                             ["sel": selecteurs.composeur,
-                                              "avant": reponsesAvantEnvoi])
+            guard let r = try? await depart(sel: selecteurs.composeur, avant: reponsesAvantEnvoi)
             else { continue }
-            if r["repond"] as? Bool == true { return }
-            if let zone = r["zone"] as? String, !marque.isEmpty, !zone.contains(marque) { return }
+            if r.repond { return }
+            if let zone = r.zone, !marque.isEmpty, !zone.contains(marque) { return }
         }
         try Task.checkCancellation()
         // Une alerte apparue depuis le relevé dit pourquoi, mieux que nous.
@@ -486,8 +468,7 @@ extension RelaisPage {
             if Task.isCancelled { return false }
             try? await Task.sleep(for: .milliseconds(250))
             guard !chargementEnCours else { continue }
-            let lu = await sonder("return window.__relais.lire(sel);", ["sel": ""])
-            if lu?["ok"] as? Bool == true { return true }
+            if await sonder({ try await self.lire(sel: "") }) != nil { return true }
         }
         return false
     }
@@ -559,8 +540,7 @@ extension RelaisPage {
                 }
                 if await sessionMontreeFermee() { return .pasConnecte }
             }
-            guard let r = try? await appeler("return window.__relais.etatReponse(avant);",
-                                             ["avant": reponsesAvantEnvoi]),
+            guard let r = try? await etatReponse(avant: reponsesAvantEnvoi),
                   r["nouvelle"] as? Bool == true
             else { stable = 0; continue }
             let texte = (r["texte"] as? String) ?? ""
@@ -589,9 +569,7 @@ extension RelaisPage {
             let fin = Date.now.addingTimeInterval(5)
             repeat {
                 if Task.isCancelled || lectureInterrompue { return false }
-                let r = try? await appeler("return window.__relais.cliquerBouton(parent, bouton);",
-                                           ["parent": parent, "bouton": bouton])
-                if r?["ok"] as? Bool == true { return true }
+                if (try? await cliquerBouton(parent: parent, bouton: bouton)) == true { return true }
                 try? await Task.sleep(for: .milliseconds(300))
             } while Date.now < fin
             return false
@@ -622,14 +600,13 @@ extension RelaisPage {
         let sel = selecteur ?? selecteurs.composeur
         // Le brouillon vit aussi dans le stockage de la page : l'effacer de la
         // zone ne suffit pas, ChatGPT le réinstalle depuis là.
-        _ = await sonder("return window.__relais.oublierBrouillon();")
+        _ = await sonder { try await self.oublierBrouillon() }
         let limite = Date.now.addingTimeInterval(6)
         while Date.now < limite {
             if Task.isCancelled { return false }
-            _ = await sonder("return window.__relais.vider(sel);", ["sel": sel])
+            _ = await sonder { try await self.vider(sel: sel) }
             try? await Task.sleep(for: .milliseconds(500))
-            let lu = await sonder("return window.__relais.lire(sel);", ["sel": sel])
-            if let texte = lu?["texte"] as? String, texte.isEmpty { return true }
+            if await sonder({ try await self.lire(sel: sel) })?.isEmpty == true { return true }
         }
         Log.error("relais : la zone de saisie n'a pas voulu se vider")
         return false
@@ -673,12 +650,8 @@ extension RelaisPage {
                 sauvegarde = PressePapiers(presse)
                 avant = presse.changeCount
             }
-            let r = try? await appeler(
-                "return window.__relais.copierLaReponse(selParent, selCopier, selReponse);",
-                ["selParent": selecteurs.copierParent,
-                 "selCopier": selecteurs.copier,
-                 "selReponse": selecteurs.reponse])
-            return r?["ok"] as? Bool == true ? (r?["voie"] as? String) ?? "?" : nil
+            return try? await copierLaReponse(parent: selecteurs.copierParent,
+                                              copier: selecteurs.copier, reponse: selecteurs.reponse)
         }
         // La voie suivie — la paire, ou le repère sans bloc —, pour que le
         // prochain défaut se lise dans le journal plutôt que dans une capture.
@@ -746,9 +719,7 @@ extension RelaisPage {
         var silences = 0
         return try await veiller({ await refusPendantLAttente(silences: &silences) }) {
             () -> String? in
-            let lu = try? await appeler("return window.__relais.lireReponse(sel);",
-                                        ["sel": selecteurs.reponse])
-            let texte = (lu?["texte"] as? String) ?? ""
+            let texte = (try? await lireReponse(sel: selecteurs.reponse)) ?? ""
             defer { precedent = texte }
             guard !texte.isEmpty, texte == precedent else { stable = 0; return nil }
             stable += 1
@@ -765,8 +736,7 @@ extension RelaisPage {
     /// constaté seulement : la zone est revenue vide. Pendant l'attente d'une
     /// réponse, c'est `refusPendantLAttente` qui décide.
     private func erreurAffichee(nouvelles: Bool) async -> String? {
-        let r = try? await appeler("return window.__relais.erreur(connues, nouvelles, -1);",
-                                   ["connues": alertesAvant, "nouvelles": nouvelles])
+        let r = try? await erreur(connues: alertesAvant, nouvelles: nouvelles, avant: -1)
         let message = (r?["message"] as? String) ?? ""
         return message.isEmpty ? nil : message
     }
@@ -784,9 +754,8 @@ extension RelaisPage {
     /// la réponse met un instant à paraître, et une bannière tombée dans ce
     /// creux passerait sinon pour un refus.
     private func refusPendantLAttente(silences: inout Int) async -> String? {
-        guard let r = try? await appeler(
-            "return window.__relais.erreur(connues, true, avant);",
-            ["connues": alertesAvant, "avant": reponsesAvantEnvoi])
+        guard let r = try? await erreur(connues: alertesAvant, nouvelles: true,
+                                        avant: reponsesAvantEnvoi)
         else { return nil }
         let message = (r["message"] as? String) ?? ""
         guard !message.isEmpty else { silences = 0; return nil }
@@ -824,12 +793,10 @@ extension RelaisPage {
         // la page écoute : son bouton d'arrêt paraît en cinq secondes au plus.
         let finArret = Date.now.addingTimeInterval(ecoute ? 5 : 0)
         repeat {
-            let r = await sonder("return window.__relais.cliquer(cible, sel);",
-                                 ["cible": RelaisCible.stop.rawValue, "sel": selecteurs.stop])
-            if r?["ok"] as? Bool == true { break }
+            if await sonder({ try await self.cliquer(.stop, sel: self.selecteurs.stop) }) == true { break }
             try? await Task.sleep(for: .milliseconds(250))
         } while Date.now < finArret && !Task.isCancelled
         // L'arrêt a pu déposer une transcription dans la zone.
-        _ = await sonder("return window.__relais.vider(sel);", ["sel": selecteurs.composeur])
+        _ = await sonder { try await self.vider(sel: self.selecteurs.composeur) }
     }
 }

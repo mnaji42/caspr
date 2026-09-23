@@ -18,6 +18,10 @@ extension RelaisPage {
         /// La voie est macOS : la page n'existe pas, et rien hors d'une dictée
         /// ChatGPT déjà commencée ne la reconstruit (cf. `Relais.pageActive`).
         case relaisEteint
+        /// La page est chargée, mais le script de Caspr n'y est pas : une
+        /// faute que `swift test` aurait dû arrêter, ou une installation
+        /// abîmée. Rien ne l'y installera, et l'attendre serait sans fin.
+        case pontAbsent
 
         /// Ce que la barre affiche, quand la raison générique mentirait.
         ///
@@ -36,6 +40,7 @@ extension RelaisPage {
             case .envoiSansEffet: return "ChatGPT n'a pas reçu le message"
             case .pageInterrompue: return "La page ChatGPT s'est fermée — dictée perdue"
             case .relaisEteint: return "ChatGPT n'est plus la voie de dictée"
+            case .pontAbsent: return "Caspr est incomplet : réinstallez-le"
             default: return nil
             }
         }
@@ -47,7 +52,7 @@ extension RelaisPage {
         /// envoyait fouiller une fenêtre où rien ne subsistait.
         var laissePeutEtreLeTexte: Bool {
             switch self {
-            case .pageInterrompue, .relaisEteint: false
+            case .pageInterrompue, .relaisEteint, .pontAbsent: false
             default: true
             }
         }
@@ -81,6 +86,9 @@ extension RelaisPage {
             case .relaisEteint:
                 "La dictée passe désormais par macOS : la page ChatGPT est "
                 + "fermée."
+            case .pontAbsent:
+                "Caspr est incomplet : son script n'a pas pu s'installer dans la "
+                + "page ChatGPT. Réinstallez-le."
             }
         }
     }

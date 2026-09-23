@@ -140,8 +140,7 @@ extension RelaisPage {
     func montrer() {
         webView.removeFromSuperview()
         webView.pageZoom = 1
-        Task { _ = await sonder("return window.__relais.compacter(false, sel);",
-                                ["sel": selecteurs.composeur]) }
+        Task { _ = await sonder { try await self.compacter(false, sel: self.selecteurs.composeur) } }
         fenetre.contentView = pileAvecBarre()
         barre.orderOut(nil)
         fenetre.setFrame(Self.enVue, display: true)
@@ -213,8 +212,7 @@ extension RelaisPage {
         // transparente. Elle occupe l'écran sans rien y montrer, et le système
         // n'a plus de raison de la geler.
         webView.pageZoom = compact ? Self.zoomBarre : 1
-        Task { _ = await sonder("return window.__relais.compacter(actif, sel);",
-                                ["actif": compact, "sel": selecteurs.composeur]) }
+        Task { _ = await sonder { try await self.compacter(compact, sel: self.selecteurs.composeur) } }
 
         guard let ecran = NSScreen.main else { return }
         let cadre = ecran.visibleFrame

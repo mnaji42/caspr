@@ -38,11 +38,9 @@ extension RelaisPage {
         var essai = 0
         while Date.now < limite {
             if Task.isCancelled { return false }
-            _ = await sonder("return window.__relais.ecrire(sel, texte);",
-                             ["sel": "", "texte": Self.essai])
+            _ = await sonder { try await self.ecrire(Self.essai, sel: "") }
             try? await Task.sleep(for: .milliseconds(500))
-            let lu = await sonder("return window.__relais.lire(sel);", ["sel": ""])
-            if let texte = lu?["texte"] as? String, !texte.isEmpty {
+            if await sonder({ try await self.lire(sel: "") })?.isEmpty == false {
                 if essai > 0 { Log.info("relais : message d'essai écrit au \(essai + 1)e essai") }
                 return true
             }
@@ -53,22 +51,12 @@ extension RelaisPage {
 
     /// Calibre « Lire à haute voix », menu compris s'il y en a un.
     func calibrerLecture() async throws {
-        let r = try await guetter("return await window.__relais.calibrerAvecMenu();", [:],
-                                  .lecture)
-        guard r["ok"] as? Bool == true else { throw CancellationError() }
-        guard let sel = r["selecteur"] as? String, !sel.isEmpty else {
-            throw Erreur.introuvable(.lecture)
-        }
-        selecteurs.lecture = sel
-        selecteurs.lectureParent = (r["parent"] as? String) ?? ""
-        selecteurs.lectureMenu = (r["menu"] as? String) ?? ""
-        selecteurs.lectureMenuParent = (r["menuParent"] as? String) ?? ""
+        let r = try await guetter(.lecture) { try await self.calibrerAvecMenu() }
+        selecteurs.lecture = r.selecteur
+        selecteurs.lectureParent = r.parent
+        selecteurs.lectureMenu = r.menu
+        selecteurs.lectureMenuParent = r.menuParent
         selecteurs.enregistrer()
-    }
-
-    /// Fait renoncer une calibration qui attend un clic.
-    func abandonnerCalibration() async {
-        _ = await sonder("return window.__relais.abandonnerCalibration();")
     }
 
     /// Attend que la zone de saisie soit là et lisible.
@@ -81,9 +69,8 @@ extension RelaisPage {
             // La navigation d'abord : une zone de saisie trouvée pendant le
             // chargement est celle de la page qu'on est en train de quitter.
             guard !chargementEnCours else { continue }
-            let lu = await sonder("return window.__relais.lire(sel);",
-                                  ["sel": selecteur ?? selecteurs.composeur])
-            if lu?["ok"] as? Bool == true { return true }
+            let sel = selecteur ?? selecteurs.composeur
+            if await sonder({ try await self.lire(sel: sel) }) != nil { return true }
         }
         return false
     }
@@ -95,23 +82,18 @@ extension RelaisPage {
     /// l'enregistrement, donc il faut que le clic sur le micro ait réellement
     /// démarré l'écoute pour pouvoir désigner l'arrêt juste après.
     func calibrer(_ cible: RelaisCible) async throws -> String {
-        let r = try await guetter("return await window.__relais.calibrer(genre);",
-                                  ["genre": cible.genre], cible)
-        guard r["ok"] as? Bool == true else { throw CancellationError() }
-        guard let sel = r["selecteur"] as? String, !sel.isEmpty else {
-            throw Erreur.introuvable(cible)
-        }
-        selecteurs[cible] = sel
+        let r = try await guetter(cible) { try await self.calibrer(genre: cible.genre) }
+        selecteurs[cible] = r.selecteur
         // Le bloc qui porte l'élément, retenu avec lui pour les boutons des
         // barres d'actions : la page en pose une sous chaque message, et seul
         // le couple dit de laquelle il s'agit.
         switch cible {
-        case .copier: selecteurs.copierParent = (r["parent"] as? String) ?? ""
-        case .lecture: selecteurs.lectureParent = (r["parent"] as? String) ?? ""
+        case .copier: selecteurs.copierParent = r.parent
+        case .lecture: selecteurs.lectureParent = r.parent
         default: break
         }
         selecteurs.enregistrer()
-        return sel
+        return r.selecteur
     }
 
     /// Attend le clic qu'un guetteur de calibration espère, trois minutes au
@@ -128,12 +110,17 @@ extension RelaisPage {
     /// La calibration n'est pas une dictée : ce délai-là attend une main, pas
     /// ChatGPT, et il reste. Une erreur de la page — elle a changé sous le
     /// guetteur — passe telle quelle : ce n'est pas trois minutes sans clic.
-    private func guetter(_ corps: String, _ args: [String: Any],
-                         _ cible: RelaisCible) async throws -> [String: Any] {
-        if let r = try await auPlus(.seconds(180), { try await self.appeler(corps, args) }) {
-            return r
+    ///
+    /// Un guetteur abandonné rend `nil` : la calibration s'arrête. Un repère
+    /// vide dit qu'aucun sélecteur ne désigne l'élément cliqué.
+    private func guetter(_ cible: RelaisCible,
+                         _ guetteur: @escaping @MainActor () async throws -> Repere?) async throws -> Repere {
+        guard let issue = try await auPlus(.seconds(180), guetteur) else {
+            await abandonnerCalibration()
+            throw Erreur.calibrationSansClic(cible)
         }
-        _ = await sonder("return window.__relais.abandonnerCalibration();")
-        throw Erreur.calibrationSansClic(cible)
+        guard let r = issue else { throw CancellationError() }
+        guard !r.selecteur.isEmpty else { throw Erreur.introuvable(cible) }
+        return r
     }
 }

@@ -50,11 +50,28 @@ struct RelaisScriptsTests {
     func syntaxe() {
         let ctx = JSGlobalContextCreate(nil)!
         defer { JSGlobalContextRelease(ctx) }
-        for source in [Self.echo, RelaisScripts.relaisEcho(evenement: "evenement")] {
+        for source in [RelaisScripts.pont, Self.echo, RelaisScripts.relaisEcho(evenement: "evenement")] {
             let script = JSStringCreateWithUTF8CString(source)!
             defer { JSStringRelease(script) }
             #expect(JSCheckScriptSyntax(ctx, script, nil, 0, nil))
         }
+    }
+
+    /// Le pont s'installe. Une faute qui ne se voit qu'à l'exécution — un nom
+    /// mal écrit au premier niveau, une constante déclarée deux fois — ne le
+    /// laisserait pas en place, et sans échéance la dictée attendrait sans
+    /// fin une page qui ne répondrait jamais.
+    @Test("Le pont s'installe sur la page, une seule fois")
+    func pontInstalle() {
+        let ctx = JSContext()!
+        ctx.evaluateScript("var window = this, document = {}, location = { hostname: 'chatgpt.com' };")
+        ctx.evaluateScript(RelaisScripts.pont)
+        #expect(ctx.exception == nil)
+        #expect(ctx.evaluateScript("typeof window.__relais === 'object'")!.toBool())
+        // Réinjecté — une navigation dans la même page —, il garde le premier.
+        ctx.evaluateScript("var premier = window.__relais;")
+        ctx.evaluateScript(RelaisScripts.pont)
+        #expect(ctx.evaluateScript("window.__relais === premier")!.toBool())
     }
 
     @Test("La page reçoit la promesse d'origine, et rien d'autre ne change pour elle")

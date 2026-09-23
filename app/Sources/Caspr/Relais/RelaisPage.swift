@@ -183,7 +183,7 @@ final class RelaisPage: NSObject {
         config.mediaTypesRequiringUserActionForPlayback = []
         echo.installer(dans: config.userContentController)
         config.userContentController.addUserScript(
-            WKUserScript(source: Self.pont,
+            WKUserScript(source: RelaisScripts.pont,
                          injectionTime: .atDocumentEnd,
                          forMainFrameOnly: true))
 

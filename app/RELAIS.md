@@ -33,7 +33,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisPage+Calibration.swift` | Le message d'essai et les guetteurs de clic, pour les deux calibrations. |
 | `RelaisPage+Navigation.swift` | Les délégués WebKit : l'autorisation du micro, les popups de connexion, les navigations échouées, le processus tué. |
 | `RelaisPage+Erreur.swift` | Ce qui peut échouer, et comment la barre et le menu le disent. |
-| `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
+| `RelaisScripts.swift` (dans `CasprCore`) | Le JavaScript injecté — le pont (cliquer, lire, vider, calibrer) et l'écho —, en chaînes Swift pour que les tests l'atteignent : une faute de syntaxe casse `swift test` au lieu de laisser la page sans pont. |
 | `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `Relais` qui enregistre. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
 | `RelaisAttente.swift` | La phase en cours d'une dictée et son chrono, que la barre affiche. **Aucune échéance** (cf. la sixième règle). |

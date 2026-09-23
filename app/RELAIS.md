@@ -20,7 +20,7 @@ structure des sélecteurs, modules livrés), rangés dans
 
 | Fichier | Responsabilité |
 |---|---|
-| `Relais.swift` | La façade et le cycle de vie. Contient aussi `RelaisEngine`, l'adaptateur vers `SpeechEngine`. |
+| `Relais.swift` | La façade et le cycle de vie. `apresLivraison` y tient la règle « la fin d'une dictée prépare la suivante ». |
 | `RelaisPage.swift` | La `WKWebView`, ses **deux** fenêtres, le micro, les popups de connexion. |
 | `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
@@ -114,13 +114,19 @@ distingue de la voie macOS, et pourquoi.
   secondes, et la sortie par la touche de dictée
   (`showProcessing(_:progress:)`).
 - **`DictationController.swift`** — l'essentiel : la voie figée à l'appui
-  (`voieDuCycle`), une branche qui n'ouvre pas le micro, une autre qui choisit
-  `RelaisEngine` plutôt que la version de macOS, et les différences de la
-  queue commune — pas d'audio à conserver, la page à rendre et à préparer, la
-  barre de ChatGPT à ranger. Et le retour à l'application où l'on parlait,
-  capturée à l'appui : il vaut pour les deux voies, mais c'est ici qu'il
-  compte, parce que trente secondes à trois minutes séparent la parole de
-  l'insertion.
+  (`voieDuCycle`), une écoute qui n'ouvre pas le micro de Caspr, et un chemin
+  à part, `finirParChatGPT` : arrêter la page et lire, transformer, ouvrir la
+  discussion ou livrer, laisser le texte dans la page quand ça échoue. Aucun
+  audio à conserver, donc pas de « Réessayer ».
+- **`DicteeEnCours.swift`** — le module et la destination, figés à l'arrêt de
+  l'écoute et portés jusqu'à la livraison : `RelaisCatalogue.courant` relit
+  les préférences à chaque accès, et l'aller-retour ChatGPT sépare les
+  lectures de plusieurs minutes.
+- **`Livraison.swift`** — la queue commune aux deux voies : insérer au curseur
+  ou dans les notes, l'historique. Et le retour à l'application où l'on
+  parlait, capturée à l'appui : il vaut pour les deux voies, mais c'est pour
+  ChatGPT qu'il compte, parce que trente secondes à trois minutes séparent la
+  parole de l'insertion.
 - **`SetupRecoveryGuard.swift`** — le socle minimal de la voie ChatGPT : le
   raccourci, et une page connectée et calibrée. Rien sur macOS.
 
@@ -184,11 +190,16 @@ une dictée macOS ne construit la page — ni ne lance la calibration — qu'une
 le magnétophone arrêté (`Relais.ecouteMacOS`) : née plus tôt, elle aurait
 réduit au silence le reste de l'enregistrement.
 
-**Le relais se conforme à `SpeechEngine`.** L'insertion, l'historique, la
-barre et les échecs sont ceux de la voie macOS. Les différences tiennent dans
-une poignée de `switch` sur la voie dans `transcribeAndInject`, et ce sont des
-différences réelles : aucun audio de notre côté, donc pas de « Réessayer » ;
-une page à rendre et à préparer à la fin de chaque dictée.
+**Les deux voies se rejoignent à la livraison, pas en amont.** Le relais s'est
+d'abord conformé au protocole des moteurs de macOS, `SpeechEngine`, pour
+hériter de l'insertion, de l'historique et des échecs. Il ne pouvait le faire
+qu'en mentant : il recevait un enregistrement vide par construction, et
+inventait une latence découpée en mel, encodeur et décodeur. Ce protocole a
+disparu. Chaque voie a son chemin, et ils se rejoignent dans `Livraison`, qui
+ne sait rien de l'un ni de l'autre. Les différences sont écrites là où elles
+se produisent, et ce sont des différences réelles : aucun audio de notre
+côté, donc pas de « Réessayer » ; une page à rendre et à préparer à la fin de
+chaque dictée.
 
 ## Pourquoi une exclusion, et pas un moteur de plus
 

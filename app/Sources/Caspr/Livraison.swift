@@ -160,10 +160,21 @@ final class Livraison {
     /// très bien reparler avant de décider quoi faire de la précédente.
     private var pendingPreview: String?
 
-    /// Garde de quoi reprendre une dictée ratée.
-    func conserver(audio: [Float], apercu: String) {
+    /// Garde de quoi reprendre une dictée ratée, et le dit dans la barre.
+    ///
+    /// Les deux vont ensemble : la barre promet « Réessayer », et c'est cet
+    /// audio qui tient la promesse. Promettre sans garder, c'est ce que faisait
+    /// la voie ChatGPT, qui n'a pas d'audio de ce côté-ci.
+    ///
+    /// Dit là où l'utilisateur regarde. La barre des menus reçoit le détail,
+    /// mais on ne consulte pas un menu qu'on n'a pas de raison d'ouvrir : sans
+    /// ça, un échec se lit comme « je m'y suis mal pris ». `echec` tient en
+    /// une ligne, parce que la barre ne reste que cinq secondes.
+    func conserver(audio: [Float], apercu: String,
+                   echec: String = "Transcription impossible — « Réessayer » dans le menu") {
         pendingAudio = audio
         pendingPreview = apercu
+        overlay.showFailure(echec, hint: Self.rescueHint(preview: apercu))
     }
 
     /// Libère l'audio et l'aperçu conservés : une insertion a réussi, ou
@@ -185,32 +196,6 @@ final class Livraison {
 
     var pendingDuration: TimeInterval {
         Double(pendingAudio?.count ?? 0) / AudioRecorder.targetSampleRate
-    }
-
-    /// Dit l'échec là où l'utilisateur regarde, avec ce qui reste à faire.
-    ///
-    /// La barre des menus reçoit le détail, mais on ne consulte pas un menu
-    /// qu'on n'a pas de raison d'ouvrir : sans ça, un échec se lit comme « je
-    /// m'y suis mal pris ».
-    func montrerEchec(_ error: Error, apercu: String) {
-        overlay.showFailure(Self.shortReason(for: error),
-                            hint: Self.rescueHint(preview: apercu))
-    }
-
-    /// Un message d'échec qui n'est pas une erreur levée — rien d'entendu.
-    func montrerEchec(_ message: String, apercu: String) {
-        overlay.showFailure(message, hint: Self.rescueHint(preview: apercu))
-    }
-
-    /// La raison, en une ligne qui tient dans la barre.
-    ///
-    /// Le message complet part dans le menu ; celui-ci doit se lire d'un coup
-    /// d'œil, pendant les cinq secondes où la barre reste affichée.
-    private static func shortReason(for error: Error) -> String {
-        // Un refus de ChatGPT porte sa raison, un quota par exemple : la barre
-        // la montre au lieu d'un « Réessayer » qui n'existe pas ici.
-        if let courte = (error as? RelaisPage.Erreur)?.raisonCourte { return courte }
-        return "Transcription impossible — « Réessayer » dans le menu"
     }
 
     /// La phrase qui dit que rien n'est perdu, sous le message d'échec.

@@ -262,7 +262,7 @@ enum Uninstall {
          home.appending(path: "Library/Caches/\(bundleIdentifier)"),
          home.appending(path: "Library/HTTPStorages/\(bundleIdentifier)")]
     }
-    /// RELAIS — la session ChatGPT du relais.
+    /// La session ChatGPT du relais.
     ///
     /// WebKit range les cookies d'une `WKWebView` sous l'identifiant de bundle,
     /// hors du bundle lui-même : retirer l'application laissait donc derrière
@@ -300,7 +300,7 @@ enum Uninstall {
         case .settings:
             let entries = TranscriptionHistory.storedCount
             let base = entries > 0 ? "\(entries) transcription(s) récente(s)" : "réglages seuls"
-            // RELAIS — la session est dite, pas seulement retirée.
+            // La session ChatGPT est dite, pas seulement retirée.
             //
             // Elle partait déjà avec les réglages, mais en silence : personne
             // ne devine qu'une case « Réglages et historique » décide aussi
@@ -403,7 +403,7 @@ enum Uninstall {
 
         if items.contains(.settings) {
             report.append(trash(preferencesFile, "réglages et historique"))
-            // RELAIS — la session ChatGPT part avec les réglages.
+            // La session ChatGPT part avec les réglages.
             //
             // L'effacement par l'API de WebKit a déjà eu lieu, avant l'appel
             // (cf. `UninstallWindow`) : le magasin d'une WKWebsiteDataStore n'a

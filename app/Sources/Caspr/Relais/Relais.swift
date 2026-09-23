@@ -513,6 +513,9 @@ final class Relais: ObservableObject {
 
     /// Arrête l'écoute et rend la transcription, en ouvrant l'attente que
     /// la suite de la dictée consommera — la transformation comprise.
+    ///
+    /// L'échéance de toute la suite est fixée ici, sur la durée parlée : la
+    /// transcription de ChatGPT dure à proportion de ce qu'on a dit.
     func arreterEtLire(secondesDictees: Double) async throws -> String {
         let attente = RelaisAttente(secondesDictees: secondesDictees)
         self.attente = attente
@@ -574,19 +577,6 @@ final class Relais: ObservableObject {
         Log.info("relais : session ChatGPT effacée")
     }
 
-    /// Renvoie le texte à ChatGPT et rend ce qu'il répond.
-    ///
-    /// Le mode est lu **ici**, une fois la transcription obtenue, et non au
-    /// début de la dictée. C'est ce que la pastille promet : comme pour
-    /// « Curseur | Notes », le choix qui compte est le dernier fait, y compris
-    /// pendant qu'on parle.
-    ///
-    /// **En cas d'échec, la transcription brute est rendue telle quelle.** Une
-    /// dictée de dix minutes ne doit pas se perdre parce que la seconde passe
-    /// n'a pas abouti : cette application s'interdit partout ailleurs de faire
-    /// tout redire, et ce n'est pas ici qu'elle commencerait. La raison part
-    /// dans le journal, et la conversation reste ouverte dans la fenêtre du
-    /// relais pour qu'on puisse voir ce qui s'est passé.
     /// Une conversation est-elle ouverte, en attente d'une suite ?
     ///
     /// Publiée : la barre des menus et les réglages doivent pouvoir le dire, et
@@ -660,6 +650,19 @@ final class Relais: ObservableObject {
         try? await Task.sleep(for: .milliseconds(180))
     }
 
+    /// Renvoie le texte à ChatGPT et rend ce qu'il répond, quand le module le
+    /// demande.
+    ///
+    /// Le module est celui de la dictée, figé à l'arrêt de l'écoute : c'est
+    /// ce que la pastille promet — comme pour « Curseur | Notes », le choix
+    /// qui compte est le dernier fait, y compris pendant qu'on parle.
+    ///
+    /// **En cas d'échec, la transcription brute est rendue telle quelle.** Une
+    /// dictée de dix minutes ne doit pas se perdre parce que la seconde passe
+    /// n'a pas abouti : cette application s'interdit partout ailleurs de faire
+    /// tout redire, et ce n'est pas ici qu'elle commencerait. La raison part
+    /// dans le journal, et la conversation reste ouverte dans la fenêtre du
+    /// relais pour qu'on puisse voir ce qui s'est passé.
     func transformer(_ brut: String, module: RelaisModule) async throws -> String {
         // Ce que le module exige, et non un drapeau global : c'est lui qui
         // sait de quoi il a besoin, et lui seul.
@@ -756,6 +759,54 @@ final class Relais: ObservableObject {
                 avertissement = "\(module.nom) n'a pas abouti"
             }
             return brut
+        }
+    }
+
+    /// La fin d'une dictée ChatGPT, quelle qu'en soit l'issue — réussite,
+    /// texte vide, échec : rendre la page, et la laisser prête pour la
+    /// suivante.
+    ///
+    /// C'est **la fin d'une dictée qui prépare la suivante**, jamais l'appui
+    /// (cf. `preparerLaProchaine`) : cette méthode est l'endroit où cette
+    /// règle se tient. Un seul appel, à la sortie commune de tous les
+    /// chemins : le faire à chaque chemin serait la promesse d'en oublier un,
+    /// et un oubli condamne la page jusqu'au redémarrage. Une dictée abandonnée
+    /// ne passe pas par ici — l'abandon fait le même travail à sa place (cf.
+    /// `interrompre`).
+    ///
+    /// `module` est celui de la dictée, figé à l'arrêt de l'écoute.
+    /// `texteLaisseDansLaPage` : l'échec a laissé la transcription dans la
+    /// fenêtre, ouverte pour qu'on l'y récupère.
+    func apresLivraison(_ module: RelaisModule, texteLaisseDansLaPage: Bool) {
+        rendreLaMain()
+        // La page est rendue prête pour la prochaine, pendant qu'on ne s'en
+        // sert pas. Sauf si l'on vient d'y laisser un texte à récupérer : la
+        // préparer maintenant le détruirait sous les yeux de qui vient le
+        // chercher. Elle attend alors qu'on en ait fini.
+        //
+        // Avant de quitter la discussion, et non après : c'est ce report qui
+        // dit à la sortie de la discussion de laisser la fenêtre ouverte sur
+        // le texte.
+        preparerLaProchaine(apresEchec: texteLaisseDansLaPage)
+        // Délivrer ailleurs, c'est quitter la discussion.
+        //
+        // Basculer de « Discuter » vers un module qui écrit au curseur referme
+        // la fenêtre : l'état devait suivre. Il ne suivait pas, et Caspr
+        // poursuivait alors un fil que plus personne ne voyait — la dictée
+        // suivante arrivait dans la conversation d'avant.
+        if module.sortieParDefaut != .aucune {
+            terminerDiscussion()
+        }
+        // La barre de ChatGPT se range à la fin de la dictée, quelle qu'en
+        // soit l'issue.
+        //
+        // Seules la réussite et un échec sur deux la rangeaient : un texte
+        // vide la laissait flotter au-dessus du travail, sans rapport avec le
+        // message affiché. Deux exceptions, qui sont ce que la dictée laisse
+        // délibérément à l'écran — la discussion qui continue, et la fenêtre
+        // ouverte pour qu'on y récupère son texte.
+        if !texteLaisseDansLaPage, !enDiscussion {
+            masquerBarre()
         }
     }
 
@@ -1078,53 +1129,5 @@ final class Relais: ObservableObject {
         a.messageText = titre
         a.informativeText = texte
         a.runModal()
-    }
-}
-
-/// Adaptateur vers le protocole des moteurs.
-///
-/// Il ignore `request.samples`, qui est vide par construction : Caspr
-/// n'enregistre pas pendant une dictée relais, puisque le son appartient au
-/// micro ouvert par la page. C'est aussi ce qui rend l'aperçu en direct
-/// impossible ici — il faudrait un second flux, celui-là même qui prive de son
-/// la capture de Caspr.
-///
-/// Se conformer à `SpeechEngine` plutôt qu'inventer un chemin parallèle a une
-/// vertu précise : `transcribeAndInject` n'a rien à savoir du relais, donc
-/// l'insertion, l'historique, les échecs et la barre marchent sans une ligne
-/// de plus.
-@MainActor
-struct RelaisEngine: SpeechEngine {
-    let module: RelaisModule
-    let secondesDictees: Double
-
-    var displayName: String { "ChatGPT (relais)" }
-
-    func isReady() async -> Bool { Relais.partage.estCalibre }
-
-    func transcribe(_ request: TranscriptionRequest) async throws -> TranscriptionResult {
-        let debut = Date()
-        // Les échantillons sont vides par construction : Caspr n'enregistre
-        // pas pendant une dictée relais. La durée vient de l'horloge.
-        let secondes = secondesDictees
-        let texte: String
-        // La page reste ouverte d'une dictée à l'autre. Elle était détruite à
-        // chaque cycle tant que Caspr enregistrait en parallèle — il fallait
-        // bien lui rendre le micro. Les deux modes s'excluant désormais, plus
-        // personne ne le lui dispute, et le raccourci redevient instantané.
-        // L'échéance de toute la suite est fixée ici, sur la durée parlée.
-        texte = try await Relais.partage.arreterEtLire(secondesDictees: secondes)
-        // La seconde passe, quand le module la demande. Elle rend le brut si
-        // elle échoue : rien de ce qui a été dit ne se perd.
-        let rendu = try await Relais.partage.transformer(texte, module: module)
-        let ms = Date().timeIntervalSince(debut) * 1000
-        return TranscriptionResult(
-            text: rendu,
-            windowSeconds: secondes,
-            truncated: false,
-            // Le relais ne distingue ni mel, ni encodeur, ni décodeur : le
-            // contrat prévoit ce cas, et demande de tout mettre dans un poste
-            // plutôt que d'inventer une répartition.
-            latency: .init(melMs: 0, encoderMs: 0, decoderMs: ms, wallMs: ms))
     }
 }

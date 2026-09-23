@@ -10,7 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var modifierKey: ModifierKeyMonitor!
     private var reArmTimer: Timer?
     private var controller: DictationController!
-    /// RELAIS — la discussion s'ouvre et se ferme sans que l'état de la
+    /// La discussion ChatGPT s'ouvre et se ferme sans que l'état de la
     /// dictée change : le menu, qui en porte la sortie, doit suivre quand même.
     private var discussionWatch: AnyCancellable?
 
@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.onStateChange = { [weak self] state in
             self?.render(state)
         }
-        discussionWatch = Relais.partage.$enDiscussion                 // RELAIS —
+        discussionWatch = Relais.partage.$enDiscussion
             .removeDuplicates()
             .dropFirst()
             // L'icône aussi, et pas seulement le menu : c'est elle qui dit
@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let prefs = Preferences.shared
-        Relais.partage.prechauffer()          // RELAIS —
+        Relais.partage.prechauffer()
 
         // Déclencheur principal : Option pressée seule.
         modifierKey = ModifierKeyMonitor(
@@ -316,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .idle:
             // Une mise à jour en attente se voit depuis la barre, sans ouvrir
             // quoi que ce soit — c'est l'endroit où le regard passe déjà.
-            // RELAIS — une discussion ouverte passe avant la mise à jour :
+            // Une discussion ChatGPT ouverte passe avant la mise à jour :
             // elle change ce que fera le prochain appui — il poursuivra le
             // fil. Réglée sur « Rien », ou fenêtre fermée, elle n'a pas d'autre
             // témoin à l'écran, et Échap ne la ferme pas (cf.
@@ -425,7 +425,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dictate.target = self
         menu.addItem(dictate)
 
-        // RELAIS — la sortie de la discussion, quand Échap n'est pas pris.
+        // La sortie de la discussion ChatGPT, quand Échap n'est pas pris.
         //
         // Échap ne ferme la discussion que devant sa fenêtre. Une discussion
         // qui ne fait que parler, ou dont on a fermé la fenêtre, reste ouverte
@@ -674,7 +674,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.retryLast()
     }
 
-    @objc private func endDiscussion() {                             // RELAIS —
+    @objc private func endDiscussion() {
         controller.endDiscussion()
     }
 

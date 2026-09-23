@@ -13,7 +13,7 @@ import CasprCore
 /// et il fonctionne sur toute machine en macOS 26. C'est ce qui en fait le
 /// moteur par défaut.
 @available(macOS 26.0, *)
-final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
+final class AppleSpeechEngine: TranscripteurMacOS {
     enum EngineError: LocalizedError {
         case unavailable
         case localeUnsupported(String)
@@ -26,17 +26,6 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
                 return "macOS ne reconnaît pas la langue « \(code) »."
             }
         }
-    }
-
-    /// Locale réellement retenue, renseignée après la première transcription.
-    private var resolvedLocale: String?
-
-    var displayName: String {
-        get async { "\(EngineChoice.apple.fullLabel) · \(resolvedLocale ?? "—")" }
-    }
-
-    func isReady() async -> Bool {
-        SpeechTranscriber.isAvailable
     }
 
     /// Télécharge le modèle de reconnaissance de cette langue, s'il manque.
@@ -62,16 +51,15 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
         NSLog("caspr: modèle de reconnaissance de macOS installé")
     }
 
-    func transcribe(_ request: TranscriptionRequest) async throws -> TranscriptionResult {
+    func transcribe(_ samples: [Float], language: String) async throws -> String {
         // Pas de garde sur `isAvailable` ici : elle répond faux précisément
         // quand aucun modèle n'est installé, c'est-à-dire dans le cas que
         // `installAssets` est là pour régler. S'y fier interdirait la seule
         // action qui débloque la situation.
         guard let locale = await SpeechTranscriber.supportedLocale(
-            equivalentTo: Locale(identifier: request.language)) else {
-            throw EngineError.localeUnsupported(request.language)
+            equivalentTo: Locale(identifier: language)) else {
+            throw EngineError.localeUnsupported(language)
         }
-        resolvedLocale = locale.identifier
 
         // Sans résultats volatils ni `fastResults` : ici on ne cherche pas la
         // réactivité mais le meilleur texte que ce moteur sache produire.
@@ -89,7 +77,6 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
             throw EngineError.unavailable
         }
 
-        let started = Date()
         let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
 
         let gathered = Task { () -> String in
@@ -103,7 +90,7 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         try await analyzer.start(inputSequence: stream)
 
-        for buffer in Self.buffers(from: request.samples, to: format) {
+        for buffer in Self.buffers(from: samples, to: format) {
             continuation.yield(AnalyzerInput(buffer: buffer))
         }
         continuation.finish()
@@ -114,7 +101,7 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
         // La lecture des résultats échoue quand l'analyseur n'a pas de modèle
         // à faire tourner — le cas d'une machine en macOS 26 sans Apple
         // Intelligence. L'erreur était avalée, la chaîne vide rendue, et
-        // `TranscriptionResult` s'annonçait comme un **succès**. Le contrôleur
+        // la transcription s'annonçait comme un **succès**. Le contrôleur
         // n'avait donc rien d'autre à dire que « Rien n'a été entendu », ce qui
         // désigne le micro alors que la panne est dans le moteur. Mesuré sur la
         // VM : l'aperçu en direct affichait le texte pendant ce temps-là, ce qui
@@ -123,17 +110,7 @@ final class AppleSpeechEngine: SpeechEngine, @unchecked Sendable {
         // Un moteur qui ne peut pas travailler doit le dire. Le silence est
         // réservé au vrai silence : un flux qui se termine sans résultat rend
         // une chaîne vide sans lever, et ce cas-là reste traité comme avant.
-        let text = try await gathered.value
-        let elapsed = Date().timeIntervalSince(started) * 1000
-
-        return TranscriptionResult(
-            text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-            windowSeconds: Double(request.samples.count) / AudioRecorder.targetSampleRate,
-            truncated: false,
-            // Pas de découpage mel/encodeur/décodeur observable ici : seul le
-            // temps mur a un sens.
-            latency: TranscriptionResult.Latency(melMs: 0, encoderMs: 0,
-                                                 decoderMs: 0, wallMs: elapsed))
+        return try await gathered.value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Découpe les échantillons en tampons au format de l'analyseur.

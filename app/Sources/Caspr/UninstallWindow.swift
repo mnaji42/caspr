@@ -165,7 +165,7 @@ private struct UninstallView: View {
                 Button("Annuler", action: onCancel)
                     .keyboardShortcut(.cancelAction)
                 Button("Désinstaller") {
-                    // RELAIS — la session ChatGPT s'efface par l'API de
+                    // La session ChatGPT s'efface par l'API de
                     // WebKit, avant le balayage des fichiers : c'est la seule
                     // voie qu'Apple garantisse, et elle demande d'attendre.
                     Task {

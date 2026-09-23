@@ -52,7 +52,7 @@ final class RecordingOverlay {
         var moduleLabels: [String] = []
         /// Le module en cours, parmi `moduleLabels`.
         var moduleIndex: Int = 0
-        // RELAIS — la destination qu'un module impose, quand il en impose une.
+        // La destination qu'un module du relais impose, quand il en impose une.
         //
         // « Discuter » n'écrit ni au curseur ni dans les notes : proposer les
         // deux laisserait choisir entre deux options sans effet. Une seule
@@ -540,7 +540,7 @@ final class RecordingOverlay {
         layoutTabs(switchable: canSwitch, usesMenu: usesMenu)
         layoutModules(show: showsModules)
 
-        if let imposee = status.destinationImposee {          // RELAIS —
+        if let imposee = status.destinationImposee {
             targetControl.setLabels([imposee])
             targetControl.select(0)
             targetControl.setEnabled(false, at: 0)
@@ -872,7 +872,7 @@ final class RecordingOverlay {
             statusLabel.centerYAnchor.constraint(equalTo: card.centerYAnchor),
             // La carte ne s'élargit plus pour accueillir le message : il faut
             // donc qu'il tienne dedans. Les messages d'échec sont déjà écrits
-            // pour ça (cf. `DictationController.shortReason`), et la troncature
+            // pour ça (cf. `Livraison.conserver`), et la troncature
             // est le filet pour ceux qui viendraient du système.
             statusLabel.widthAnchor.constraint(
                 lessThanOrEqualTo: card.widthAnchor,

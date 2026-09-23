@@ -65,7 +65,7 @@ enum EngineSafetyManager {
             return Language.appleSupports(language) == true
                 && SpeechAssets.shared.state(of: language) == .ready
         case .appleLegacy:
-            // Ce que `LegacySpeechEngine.isReady` exige avant d'écrire : le
+            // Ce que `LegacySpeechEngine.transcribe` exige avant d'écrire : le
             // droit de reconnaissance vocale, et la Dictée allumée — éteinte,
             // le recogniseur accepte la tâche et ne rend jamais rien. Sans
             // eux, la préférer à Apple Intelligence ferait demander un droit

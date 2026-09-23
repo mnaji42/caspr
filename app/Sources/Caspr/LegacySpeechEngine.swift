@@ -30,7 +30,7 @@ import CasprCore
 /// reconnaître hors ligne, ce moteur se déclare indisponible au lieu de
 /// transmettre quoi que ce soit. Un repli qui trahirait la promesse serait
 /// pire que l'absence de repli.
-final class LegacySpeechEngine: SpeechEngine, @unchecked Sendable {
+final class LegacySpeechEngine: TranscripteurMacOS {
     enum EngineError: LocalizedError {
         case unavailable
         case notAuthorised
@@ -58,8 +58,6 @@ final class LegacySpeechEngine: SpeechEngine, @unchecked Sendable {
             }
         }
     }
-
-    private var resolvedLocale: String?
 
     // MARK: - Disponibilité
 
@@ -202,20 +200,9 @@ final class LegacySpeechEngine: SpeechEngine, @unchecked Sendable {
 
     static var isAuthorised: Bool { authorisation == .granted }
 
-    // MARK: - SpeechEngine
+    // MARK: - Transcription
 
-    var displayName: String {
-        get async { "\(EngineChoice.appleLegacy.fullLabel) · \(resolvedLocale ?? "—")" }
-    }
-
-    func isReady() async -> Bool {
-        // La langue est lue sur le fil principal, où vivent les préférences.
-        let language = await MainActor.run { Preferences.shared.language }
-        return Self.isAuthorised && !SystemDictation.isDisabled
-            && Self.isAvailable(for: language)
-    }
-
-    func transcribe(_ request: TranscriptionRequest) async throws -> TranscriptionResult {
+    func transcribe(_ samples: [Float], language: String) async throws -> String {
         // Le premier examiné, parce que c'est celui qu'aucun autre ne révèle :
         // sur un Mac dont la Dictée est éteinte, le recogniseur se déclare
         // disponible, accepte la tâche, et ne rend jamais rien. Ce qui
@@ -224,24 +211,22 @@ final class LegacySpeechEngine: SpeechEngine, @unchecked Sendable {
         guard !SystemDictation.isDisabled else {
             throw EngineError.dictationDisabled
         }
-        guard let recognizer = Self.recognizer(for: request.language) else {
+        guard let recognizer = Self.recognizer(for: language) else {
             throw EngineError.unavailable
         }
         guard recognizer.isAvailable else { throw EngineError.unavailable }
         guard recognizer.supportsOnDeviceRecognition else {
-            throw EngineError.offlineUnsupported(request.language)
+            throw EngineError.offlineUnsupported(language)
         }
         guard await Self.requestAuthorisation() else { throw EngineError.notAuthorised }
-        resolvedLocale = recognizer.locale.identifier
 
-        let started = Date()
         let audio = SFSpeechAudioBufferRecognitionRequest()
         // La ligne qui tient la promesse. Sans elle, l'audio partirait chez
         // Apple — ce que Caspr garantit ne jamais faire.
         audio.requiresOnDeviceRecognition = true
         audio.shouldReportPartialResults = false
 
-        for buffer in Self.buffers(from: request.samples) {
+        for buffer in Self.buffers(from: samples) {
             audio.append(buffer)
         }
         audio.endAudio()
@@ -263,13 +248,7 @@ final class LegacySpeechEngine: SpeechEngine, @unchecked Sendable {
             }
         }
 
-        let elapsed = Date().timeIntervalSince(started) * 1000
-        return TranscriptionResult(
-            text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-            windowSeconds: Double(request.samples.count) / AudioRecorder.targetSampleRate,
-            truncated: false,
-            latency: TranscriptionResult.Latency(melMs: 0, encoderMs: 0,
-                                                 decoderMs: 0, wallMs: elapsed))
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Outils

@@ -30,8 +30,9 @@ struct DicteeEnCours {
     /// L'application où l'on parlait, `nil` quand c'était Caspr lui-même — la
     /// zone d'essai de l'accueil.
     let applicationVisee: NSRunningApplication?
-    /// Le temps parlé, en secondes. Sous ChatGPT, il dimensionne l'attente de
-    /// la transcription, dont la durée suit celle de la parole.
+    /// Le temps parlé, en secondes : le journal le dit à la fin de l'écoute.
+    /// Il ne dimensionne aucune attente de ChatGPT, qui n'a pas de fin (cf.
+    /// RELAIS.md, sixième règle).
     let duree: TimeInterval
 
     /// La réponse reste à l'écran, et rien ne s'écrit nulle part.

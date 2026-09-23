@@ -356,7 +356,7 @@ final class Relais: ObservableObject {
     /// Pas en annulant la tâche de la dictée : elle a encore à ouvrir la
     /// discussion ou à insérer le texte, et une tâche annulée n'insère rien.
     func cesserDAttendreLaLecture() {
-        page?.lectureInterrompue = true
+        page?.cesserDAttendreLaLecture()
     }
 
     /// Ce que la barre affiche pendant l'attente, `nil` avant qu'elle ne
@@ -423,8 +423,8 @@ final class Relais: ObservableObject {
     /// - **sinon** — le cas de « Brut », qui n'envoie rien : il suffit de vider
     ///   la zone de saisie du texte qu'on vient de dicter.
     ///
-    /// Et quand la page ne répond plus du tout, on la recharge, discussion
-    /// comprise : une page figée ne doit pas devenir la panne de la dictée
+    /// Et quand la page ne répond plus du tout, on la reconstruit, discussion
+    /// comprise : une page muette ne doit pas devenir la panne de la dictée
     /// suivante. **Seulement dans ce cas.** Une zone qui refuse de se vider sur une page qui répond
     /// n'est pas une page à jeter — c'est souvent une transcription encore en
     /// cours, qu'un rechargement détruirait ; `demarrer()` vide de toute façon
@@ -433,7 +433,8 @@ final class Relais: ObservableObject {
     /// `apresEchec` remet la préparation à plus tard (cf.
     /// `preparationDifferee`).
     ///
-    /// Chaque étape est bornée, parce que l'appui attend cette tâche avant
+    /// Chaque étape est bornée — c'est le repos, où un silence se constate
+    /// (cf. `RelaisPage.sonder`) —, parce que l'appui attend cette tâche avant
     /// même d'ouvrir l'écoute : une seule attente sans fin ici, et la barre
     /// « chargeait » indéfiniment, avant que rien n'ait été enregistré.
     func preparerLaProchaine(apresEchec: Bool = false) {
@@ -474,20 +475,39 @@ final class Relais: ObservableObject {
             page.charger()
             let prete = await page.attendreComposeurPret(secondes: 30)
             guard !prete, !Task.isCancelled else { return }
-            // La page vient d'être rechargée : il n'y a rien à y perdre, et
-            // un second essai rattrape un chargement resté en route.
-            Log.error("relais : la page rechargée est restée sans zone de saisie — "
-                      + "nouveau rechargement")
-            page.charger()
-            _ = await page.attendreComposeurPret(secondes: 30)
+            // La page vient d'être rechargée : il n'y a rien à y perdre. Un
+            // chargement resté en route trente secondes est un fil bloqué,
+            // qu'un second rechargement n'aurait pas débloqué.
+            Log.error("relais : la page rechargée est restée sans zone de saisie")
+            await reconstruireLaPage()
         case false?:
             await page.viderComposeur()
         case nil:
             guard !Task.isCancelled else { return }
-            Log.error("relais : la page ne répond plus — rechargement au repos")
-            page.charger()
-            _ = await page.attendreComposeurPret(secondes: 30)
+            await reconstruireLaPage()
         }
+    }
+
+    /// Remplace une page muette par une neuve — au repos, depuis la
+    /// préparation.
+    ///
+    /// Recharger ne la réparait pas : sur un fil JavaScript bloqué, `reload()`
+    /// et `load()` n'aboutissent jamais (mesuré). Une vue neuve charge en une
+    /// fraction de seconde, et le stockage de WebKit lui garde la session.
+    ///
+    /// Pas par `libererPage` : elle annule la préparation — la tâche même qui
+    /// appelle. La discussion, elle, ne survit pas : son fil était sur la page
+    /// qu'on jette.
+    private func reconstruireLaPage() async {
+        guard let ancienne = page else { return }
+        Log.error("relais : la page ne répond plus — reconstruite")
+        page = nil
+        enDiscussion = false
+        await ancienne.rendreLeMicro()
+        ancienne.detruire()
+        surAffichageChange?()
+        guard let neuve = try? pageActive() else { return }
+        _ = await neuve.attendreComposeurPret(secondes: 30)
     }
 
     private func lancerPreparation(_ travail: @escaping @MainActor (RelaisPage) async -> Void) {
@@ -579,38 +599,43 @@ final class Relais: ObservableObject {
     /// Appelé quand la page meurt pendant que la dictée écoute.
     var surPageInterrompue: (() -> Void)?
 
-    func demarrer() async throws {
+    /// `patienter` : la page n'est pas prête sur-le-champ — une préparation
+    /// en cours, une session pas encore dite. La barre le dit alors, avec la
+    /// sortie : aucune de ces attentes n'a de fin, et seule la touche de
+    /// dictée les interrompt.
+    ///
+    /// Une page figée au démarrage ne lève plus rien : l'appui l'attend
+    /// jusqu'à la touche, et l'arrêt qui suit la trouve muette — la
+    /// préparation la reconstruit alors pour l'appui suivant (cf.
+    /// `interrompre`).
+    func demarrer(patienter: () -> Void) async throws {
         // La page a été préparée quand la dictée précédente s'est achevée : il
         // n'y a rien à décider ici, seulement à s'assurer que ce travail est
         // fini. Il l'est, sauf si l'on rappuie dans la seconde.
+        if preparationEnCours { patienter() }
+        let avant = page
         try await attendreLaPreparation()
+        // La préparation a reconstruit une page muette : la barre que l'appui
+        // avait ouverte était celle de l'ancienne, et la neuve, rangée hors
+        // champ, verrait ses rendus différés — le bouton d'arrêt avec eux.
+        if let avant, page !== avant { afficherBarre() }
         debut = Date()
         attente = nil
         messageParti = false
         reponseObtenue = false
         avertissement = nil
-        do {
-            try await pageActive().demarrer()
-        } catch RelaisPage.Erreur.pontMuet {
-            // Une page figée au démarrage n'atteint jamais la fin du cycle, où
-            // la préparation a lieu : sans ceci, chaque appui retrouverait la
-            // même page figée. La préparation la recharge au repos, pour le
-            // suivant — en discussion aussi.
-            preparerLaProchaine()
-            throw RelaisPage.Erreur.pontMuet
-        }
+        try await pageActive().demarrer(siLaSessionTarde: patienter)
     }
 
     /// Arrête l'écoute et rend la transcription, en ouvrant l'attente que
-    /// la suite de la dictée consommera — la transformation comprise.
-    ///
-    /// L'échéance de toute la suite est fixée ici, sur la durée parlée : la
-    /// transcription de ChatGPT dure à proportion de ce qu'on a dit.
-    func arreterEtLire(secondesDictees: Double) async throws -> String {
-        let attente = RelaisAttente(secondesDictees: secondesDictees)
+    /// la suite de la dictée partage — la transformation comprise : sa phase
+    /// et son chrono, que la barre affiche. Aucune échéance (cf. RELAIS.md,
+    /// sixième règle).
+    func arreterEtLire() async throws -> String {
+        let attente = RelaisAttente()
         self.attente = attente
-        Log.info("relais : échéance de la dictée dans \(RelaisAttente.duree(attente.budget))")
-        return try await pageActive().arreterEtLire(attente)
+        Log.info("relais : attente ouverte, sans échéance")
+        return try await pageActive().arreterEtLire()
     }
 
     /// Détruit la page, quand on passe à la voie macOS.
@@ -755,7 +780,9 @@ final class Relais: ObservableObject {
     private func seRetirer() async {
         NSApp.hide(nil)
         // Insérer avant que le système ait rendu le premier plan viserait
-        // encore Caspr : on observe qu'il l'a rendu, une seconde au plus.
+        // encore Caspr : on observe qu'il l'a rendu. Délai de geste : le
+        // système rend le premier plan dans l'instant, et une seconde sans
+        // effet dit qu'il ne le rendra pas — l'insertion part alors quand même.
         let echeance = ContinuousClock.now + .seconds(1)
         let nous = NSRunningApplication.current.processIdentifier
         while ContinuousClock.now < echeance,
@@ -797,10 +824,9 @@ final class Relais: ObservableObject {
               module.estUtilisable(RelaisSelecteurs.charger()),
               !brut.isEmpty
         else { return brut }
-        // L'attente ouverte à l'arrêt de l'écoute, et non une patience de
-        // plus : la réponse consomme ce que la transcription a laissé. Chaque
-        // phase repartait de trois minutes au moins, et elles s'empilaient.
-        let attente = self.attente ?? RelaisAttente(secondesDictees: secondesEcoulees)
+        // L'attente ouverte à l'arrêt de l'écoute : la barre y lit la phase,
+        // et le chrono continue d'une phase à l'autre.
+        let attente = self.attente ?? RelaisAttente()
         // Une sortie qui n'écrit nulle part n'a rien à rapatrier : on envoie,
         // et l'on s'arrête là. La réponse s'affichera dans la page, que
         // l'utilisateur a sous les yeux.
@@ -822,7 +848,7 @@ final class Relais: ObservableObject {
             }
             messageParti = true
             Log.info("relais : \(module.identifiant) — envoyé, réponse à l'écran")
-            // Un refus — un quota — ou l'échéance passée se dit dans la
+            // Un refus — un quota —, une session fermée se disent dans la
             // barre : sans quoi on attend une voix qui ne viendra pas, et
             // l'on redemande.
             if module.ditLaReponse, let page = try? pageActive(),
@@ -885,10 +911,10 @@ final class Relais: ObservableObject {
             // Le brut est rendu, mais pas en silence : il s'insère là où l'on
             // attendait un texte remanié, et rien ne distinguait l'un de
             // l'autre. Un quota atteint surtout doit se lire — sans quoi on
-            // relance, et le même refus revient. L'échéance passée aussi :
-            // « n'a pas abouti » ne dit pas qu'on a attendu trois minutes.
+            // relance, et le même refus revient. Une session fermée aussi :
+            // « n'a pas abouti » ne dit pas qu'il faut se reconnecter.
             switch error as? RelaisPage.Erreur {
-            case .refusParChatGPT?, .attenteEpuisee?:
+            case .refusParChatGPT?, .pasConnecte?:
                 avertissement = (error as? RelaisPage.Erreur)?.raisonCourte
             default:
                 avertissement = "\(module.nom) n'a pas abouti"

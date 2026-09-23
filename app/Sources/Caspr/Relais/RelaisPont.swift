@@ -413,7 +413,7 @@ extension RelaisPage {
       // une réponse juste, ou conclure au refus avant même que ChatGPT ait
       // répondu. Reste ce que la page dessine autour du message, où elle pose
       // ses propres avis d'échec. Un échec écrit ailleurs n'est pas deviné :
-      // l'échéance le rattrape.
+      // l'attente continue, et la touche de dictée en sort.
       const MESSAGE = '[data-message-author-role]';
       const echecsEcrits = () => {
         const zones = [];
@@ -577,8 +577,7 @@ extension RelaisPage {
         //
         // Le repère appris, et lui seul. Ne rien trouver veut dire que le
         // bouton n'est **pas encore là** — il n'apparaît qu'une fois la
-        // réponse finie —, et la dictée continue d'observer jusqu'à son
-        // échéance. Un repli sur les libellés cliquait, en pleine génération,
+        // réponse finie —, et la dictée continue d'observer. Un repli sur les libellés cliquait, en pleine génération,
         // le premier « Copier le code » de la réponse : le seul bloc de code
         // s'insérait au curseur à la place du texte, sans que rien ne le dise.
         copierLaReponse(selParent, selCopier, selReponse) {

@@ -38,11 +38,10 @@ extension RelaisPage {
         var essai = 0
         while Date.now < limite {
             if Task.isCancelled { return false }
-            _ = try? await appeler("return window.__relais.ecrire(sel, texte);",
-                                   ["sel": "", "texte": Self.essai])
+            _ = await sonder("return window.__relais.ecrire(sel, texte);",
+                             ["sel": "", "texte": Self.essai])
             try? await Task.sleep(for: .milliseconds(500))
-            let lu = try? await appeler("return window.__relais.lire(sel);",
-                                        ["sel": ""])
+            let lu = await sonder("return window.__relais.lire(sel);", ["sel": ""])
             if let texte = lu?["texte"] as? String, !texte.isEmpty {
                 if essai > 0 { Log.info("relais : message d'essai écrit au \(essai + 1)e essai") }
                 return true
@@ -69,7 +68,7 @@ extension RelaisPage {
 
     /// Fait renoncer une calibration qui attend un clic.
     func abandonnerCalibration() async {
-        _ = try? await appeler("return window.__relais.abandonnerCalibration();")
+        _ = await sonder("return window.__relais.abandonnerCalibration();")
     }
 
     /// Attend que la zone de saisie soit là et lisible.
@@ -82,8 +81,8 @@ extension RelaisPage {
             // La navigation d'abord : une zone de saisie trouvée pendant le
             // chargement est celle de la page qu'on est en train de quitter.
             guard !chargementEnCours else { continue }
-            let lu = try? await appeler("return window.__relais.lire(sel);",
-                                        ["sel": selecteur ?? selecteurs.composeur])
+            let lu = await sonder("return window.__relais.lire(sel);",
+                                  ["sel": selecteur ?? selecteurs.composeur])
             if lu?["ok"] as? Bool == true { return true }
         }
         return false
@@ -125,13 +124,16 @@ extension RelaisPage {
     /// l'échéance, le guetteur est retiré de la page, sans quoi il retiendrait
     /// comme repère le prochain clic de l'utilisateur, n'importe où dans
     /// ChatGPT.
+    ///
+    /// La calibration n'est pas une dictée : ce délai-là attend une main, pas
+    /// ChatGPT, et il reste. Une erreur de la page — elle a changé sous le
+    /// guetteur — passe telle quelle : ce n'est pas trois minutes sans clic.
     private func guetter(_ corps: String, _ args: [String: Any],
                          _ cible: RelaisCible) async throws -> [String: Any] {
-        do {
-            return try await appeler(corps, args, delai: Self.delaiClic)
-        } catch Erreur.pontMuet {
-            _ = try? await appeler("return window.__relais.abandonnerCalibration();")
-            throw Erreur.calibrationSansClic(cible)
+        if let r = try await auPlus(.seconds(180), { try await self.appeler(corps, args) }) {
+            return r
         }
+        _ = await sonder("return window.__relais.abandonnerCalibration();")
+        throw Erreur.calibrationSansClic(cible)
     }
 }

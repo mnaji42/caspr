@@ -27,7 +27,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | Fichier | Responsabilité |
 |---|---|
 | `Relais.swift` | La façade et le cycle de vie. `apresLivraison` y tient la règle « la fin d'une dictée prépare la suivante ». |
-| `RelaisPage.swift` | La `WKWebView`, la session, l'appel borné au pont, le micro. Au premier montage de chaque lancement, elle vide le cache disque de WebKit — jamais les cookies ni le stockage de la page, qui portent la session. |
+| `RelaisPage.swift` | La `WKWebView`, la session, le micro, et deux façons d'appeler le pont : `appeler`, sans délai, que l'annulation tranche sur-le-champ même quand la page ne répond jamais (`AppelAnnulable`, dans `CasprCore`) — le chemin d'une dictée ; `sonder`, borné, **au repos seulement**, dont le silence fait reconstruire la page, jamais échouer une dictée. Au premier montage de chaque lancement, elle vide le cache disque de WebKit — jamais les cookies ni le stockage de la page, qui portent la session. |
 | `RelaisFenetres.swift` | Les **deux** fenêtres, et la vue web qui passe de l'une à l'autre (cf. « Les deux fenêtres » plus bas). |
 | `RelaisPage+Dictee.swift` | Ce que la page fait pendant une dictée : écouter, rendre la transcription, envoyer, attendre et copier la réponse, la faire lire, vider la zone pour la suivante. |
 | `RelaisPage+Calibration.swift` | Le message d'essai et les guetteurs de clic, pour les deux calibrations. |
@@ -36,7 +36,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
 | `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `Relais` qui enregistre. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
-| `RelaisAttente.swift` | L'échéance **unique** d'une dictée, fixée à l'arrêt de l'écoute sur la durée parlée, et la phase en cours que la barre affiche. Toutes les attentes après l'arrêt la consomment ; aucune n'a plus son propre budget. |
+| `RelaisAttente.swift` | La phase en cours d'une dictée et son chrono, que la barre affiche. **Aucune échéance** (cf. la sixième règle). |
 | `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. La carte de session (`RelaisSession`) est aussi celle de l'accueil, et c'est elle qui dit ce que la voie exige pour dicter. |
 | `RelaisModuleCard.swift` | Le réglage d'un module : ses actions, sa sortie, son affichage. |
 | `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
@@ -224,7 +224,7 @@ distingue de la voie macOS, et pourquoi.
   raccourci, et une page connectée et calibrée (`RelaisSession.isValid`).
   Rien sur macOS.
 
-## Cinq règles à ne jamais oublier
+## Six règles à ne jamais oublier
 
 Un repère appris **doit** dire de quel genre il est — zone de saisie, bouton —
 et ce genre sert trois fois : pour retrouver l'élément, pour juger le repère au
@@ -266,6 +266,28 @@ enrichie rend d'un coup illisibles tous les calibrages déjà enregistrés. La
 sanction n'est pas une erreur visible : c'est un réglage effacé chez chaque
 utilisateur à la mise à jour, et un écran qui annonce « configuration
 inachevée » à qui vient de la terminer. C'est arrivé en 0.13.0.
+
+**Aucune attente de ChatGPT ne finit parce que le temps passe.** Sur le
+chemin d'une dictée, une attente ne finit que par un geste de l'utilisateur —
+la touche de dictée, Échap pendant l'écoute — ou par un échec que la page
+**prouve** : une alerte de refus apparue depuis la demande, le processus
+WebKit mort, l'écran d'authentification montré. Le propriétaire, le
+24 septembre 2026 : « Des fois ça prend dix, vingt, trente secondes, parce
+que si je parle plusieurs minutes, ChatGPT prend beaucoup de temps. Donc non,
+il n'y a pas de limite. » Une échéance a existé, sur la durée parlée, et un
+délai de cinq secondes sur chaque appel au pont : ils jetaient des dictées
+qui aboutissaient, sous « ChatGPT n'a pas répondu en 3 min ». En
+contrepartie, la sortie est instantanée — l'annulation tranche l'attente même
+quand un appel JavaScript ne revient jamais —, et la barre dit laquelle dès
+dix secondes. Restent des **délais de geste**, qui prouvent l'effet d'un
+geste de Caspr et non la lenteur de ChatGPT : le bouton micro qui existe dès
+que la page s'est dite connectée, l'arrêt pendant l'écoute, la consigne qui
+se relit dans la zone, le bouton d'envoi, la copie qui atterrit après le
+clic, « Lire à haute voix » sous une réponse finie. Chacun le dit dans un
+commentaire « délai de geste : … ». Dans le doute, pas de délai. Au repos,
+en revanche, un silence se constate (`sonder`) : une page muette y est
+reconstruite — une vue neuve, la session intacte —, parce qu'un rechargement
+ne débloque pas un fil JavaScript figé.
 
 ## Les règles tenues
 

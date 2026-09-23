@@ -175,6 +175,8 @@ final class Livraison {
         if NSApp.isActive { NSApp.yieldActivation(to: application) }
         application.activate(options: [])
 
+        // Délai de geste : l'application demandée passe devant dans
+        // l'instant, et une seconde sans effet dit qu'elle n'y passera pas.
         let echeance = ContinuousClock.now + .seconds(1)
         // Un cinquième de la seconde pour la demande polie : au-delà, elle a
         // été ignorée, et l'on insiste par l'accessibilité — sur la même

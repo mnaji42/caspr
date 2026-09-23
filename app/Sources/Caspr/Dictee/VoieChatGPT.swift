@@ -98,12 +98,19 @@ final class VoieChatGPT {
         // La barre s'ouvre avant l'écoute : on voit ChatGPT démarrer, et la
         // page, enfin à l'écran, cesse d'être différée par le système.
         relais.afficherBarre()
-        // La page se prépare encore : on le dit, plutôt que de laisser l'écran
-        // muet le temps qu'elle soit prête.
-        if relais.preparationEnCours {
-            overlay.showProcessing("ChatGPT se prépare…")
-        }
-        try await relais.demarrer()
+        // La page n'est pas prête sur-le-champ — elle se prépare encore, ou ne
+        // s'est pas dite connectée au premier relevé : on le dit, plutôt que
+        // de laisser l'écran muet. Avec le chrono et la sortie dès dix
+        // secondes, comme les attentes d'après l'arrêt : celle-ci n'a pas de
+        // fin non plus, et seule la touche de dictée l'interrompt.
+        let appui = Date.now
+        let libelle = "ChatGPT se prépare…"
+        try await relais.demarrer(patienter: { [overlay] in
+            overlay.showProcessing(libelle, progress: {
+                .init(label: libelle, elapsed: Date.now.timeIntervalSince(appui),
+                      exitHint: "touche de dictée pour abandonner")
+            })
+        })
         // Interrompu à l'instant où la page commençait à écouter :
         // l'annulation l'emporte, la page est arrêtée par l'appelant.
         try Task.checkCancellation()
@@ -216,7 +223,7 @@ final class VoieChatGPT {
         // reste autre chose à sauver (cf. le `catch` plus bas).
         var remanie: String?
         do {
-            let brut = try await relais.arreterEtLire(secondesDictees: dictee.duree)
+            let brut = try await relais.arreterEtLire()
             // Rien n'a été dit : on s'arrête là, quel que soit le module.
             // Testé après les modules qui n'écrivent nulle part, ce cas ouvrait
             // en silence une discussion où aucun message n'était parti — la
@@ -262,9 +269,8 @@ final class VoieChatGPT {
                 if relais.messageParti { livraison.oublierLeRecours() }
                 // Sauf un refus — un quota, un envoi impossible : sans voix
                 // ni texte à insérer, la barre est le seul endroit où le lire.
-                // L'avertissement se suffit, en une ligne : un titre « n'a pas
-                // répondu » au-dessus de « n'a pas répondu en 3 min » ne
-                // faisait que le répéter.
+                // L'avertissement se suffit, en une ligne : un titre au-dessus
+                // de lui ne ferait que le répéter.
                 let issue: Issue
                 if let avertissement = relais.prendreAvertissement() {
                     // Resté dans la zone, le message a encore son recours.

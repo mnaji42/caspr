@@ -227,7 +227,7 @@ struct RelaisCalibrationAuto {
             issue.preuves.manque(.envoi, "aucun bouton d'envoi n'y est seul à son repère")
             return false
         }
-        let releve = try? await page.appeler("return window.__relais.releve();")
+        let releve = await page.sonder("return window.__relais.releve();")
         issue.reponsesAvant = (releve?["reponses"] as? Int) ?? 0
         for sel in liste {
             guard await lire(composeur)?.contains(Self.empreinte) == true else {
@@ -270,8 +270,8 @@ struct RelaisCalibrationAuto {
                                  + "deux minutes")
             return
         }
-        let r = try? await page.appeler("return window.__relais.candidatsCopier(selReponse);",
-                                        ["selReponse": ancien.reponse])
+        let r = await page.sonder("return window.__relais.candidatsCopier(selReponse);",
+                                  ["selReponse": ancien.reponse])
         let liste = (r?["candidats"] as? [[String: Any]]) ?? []
         guard !liste.isEmpty else {
             issue.preuves.manque(.copier, "aucun bouton « copier » n'est seul sous la réponse")
@@ -338,8 +338,8 @@ struct RelaisCalibrationAuto {
         var precedent = ""
         var stable = 0
         return try await observer(pendant: 120) {
-            guard let r = try? await page.appeler("return window.__relais.etatReponse(avant);",
-                                                  ["avant": avant]),
+            guard let r = await page.sonder("return window.__relais.etatReponse(avant);",
+                                            ["avant": avant]),
                   r["nouvelle"] as? Bool == true
             else { stable = 0; return false }
             let texte = (r["texte"] as? String) ?? ""
@@ -378,7 +378,7 @@ struct RelaisCalibrationAuto {
     private func copier(parent: String, selecteur: String) async -> String? {
         let presse = NSPasteboard.general
         let avant = presse.changeCount
-        let r = try? await page.appeler(
+        let r = await page.sonder(
             "return window.__relais.copierLaReponse(selParent, selCopier, selReponse);",
             ["selParent": parent, "selCopier": selecteur, "selReponse": ancien.reponse])
         if let r, r["ok"] as? Bool != true { return nil }
@@ -395,28 +395,28 @@ struct RelaisCalibrationAuto {
     // MARK: - Appels au pont, avec les repères qu'on éprouve
 
     private func candidats(_ cible: RelaisCible) async -> [String] {
-        let r = try? await page.appeler("return window.__relais.candidats(cible);",
-                                        ["cible": cible.rawValue])
+        let r = await page.sonder("return window.__relais.candidats(cible);",
+                                  ["cible": cible.rawValue])
         return (r?["candidats"] as? [String]) ?? []
     }
 
     /// Le texte de la zone, ou `nil` quand elle est introuvable.
     private func lire(_ composeur: String) async -> String? {
-        guard let r = try? await page.appeler("return window.__relais.lire(sel);",
-                                              ["sel": composeur]),
+        guard let r = await page.sonder("return window.__relais.lire(sel);",
+                                        ["sel": composeur]),
               r["ok"] as? Bool == true else { return nil }
         return (r["texte"] as? String) ?? ""
     }
 
     private func ecrireLEssai(dans composeur: String) async throws {
         try Task.checkCancellation()
-        _ = try? await page.appeler("return window.__relais.ecrire(sel, texte);",
-                                    ["sel": composeur, "texte": RelaisPage.essai])
+        _ = await page.sonder("return window.__relais.ecrire(sel, texte);",
+                              ["sel": composeur, "texte": RelaisPage.essai])
     }
 
     private func cliquer(_ cible: RelaisCible, _ selecteur: String) async -> Bool {
-        let r = try? await page.appeler("return window.__relais.cliquer(cible, sel);",
-                                        ["cible": cible.rawValue, "sel": selecteur])
+        let r = await page.sonder("return window.__relais.cliquer(cible, sel);",
+                                  ["cible": cible.rawValue, "sel": selecteur])
         return r?["ok"] as? Bool == true
     }
 
@@ -425,8 +425,8 @@ struct RelaisCalibrationAuto {
     /// parce qu'il est faux.
     private func etat(_ micro: String, _ stop: String,
                       _ composeur: String) async -> [String: Any]? {
-        try? await page.appeler("return window.__relais.etat(micro, stop, composeur);",
-                                ["micro": micro, "stop": stop, "composeur": composeur])
+        await page.sonder("return window.__relais.etat(micro, stop, composeur);",
+                          ["micro": micro, "stop": stop, "composeur": composeur])
     }
 }
 

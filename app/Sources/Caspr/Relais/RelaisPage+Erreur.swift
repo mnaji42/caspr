@@ -6,12 +6,8 @@ extension RelaisPage {
         case introuvable(RelaisCible)
         case pasConnecte
         case pasDeReponse
-        /// L'échéance de la dictée est passée (cf. `RelaisAttente`).
-        case attenteEpuisee(RelaisAttente.Abandon)
         case consigneNonPosee
         case refusParChatGPT(String)
-        /// Le pont n'a pas répondu dans le délai : la page est figée.
-        case pontMuet
         /// WebKit a fermé la page pendant la dictée ; elle a été rechargée.
         case pageInterrompue
         /// Personne n'a cliqué pendant qu'un guetteur de calibration attendait.
@@ -31,8 +27,9 @@ extension RelaisPage {
             case .refusParChatGPT(let message):
                 let court = message.count > 90 ? String(message.prefix(89)) + "…" : message
                 return "ChatGPT : \(court)"
-            case .attenteEpuisee(let abandon): return abandon.raisonCourte
-            case .pontMuet: return "ChatGPT ne répond plus — page rechargée, réessayez"
+            // Montrée pendant une attente, la page d'authentification est un
+            // échec prouvé : ChatGPT ne rendra rien à une session fermée.
+            case .pasConnecte: return "ChatGPT : session déconnectée"
             case .pageInterrompue: return "La page ChatGPT s'est fermée — dictée perdue"
             case .relaisEteint: return "ChatGPT n'est plus la voie de dictée"
             default: return nil
@@ -43,13 +40,10 @@ extension RelaisPage {
         ///
         /// Non quand la page est morte : celle qu'on ouvrirait pour l'y
         /// chercher est une page neuve et vide, et promettre le contraire
-        /// envoyait fouiller une fenêtre où rien ne subsistait. Ni quand elle
-        /// est figée : la fin du cycle la recharge (cf. `Relais.preparer`),
-        /// comme le message le dit, et la fenêtre ouverte sur elle n'aurait
-        /// montré qu'une page muette, qui écoutait peut-être encore.
+        /// envoyait fouiller une fenêtre où rien ne subsistait.
         var laissePeutEtreLeTexte: Bool {
             switch self {
-            case .pontMuet, .pageInterrompue, .relaisEteint: false
+            case .pageInterrompue, .relaisEteint: false
             default: true
             }
         }
@@ -62,15 +56,10 @@ extension RelaisPage {
                 "Pas connecté à ChatGPT. Ouvrez la fenêtre du relais et connectez-vous."
             case .pasDeReponse:
                 "ChatGPT n'a pas répondu. La transcription brute est dans l'historique."
-            case .attenteEpuisee(let abandon):
-                abandon.explication
             case .consigneNonPosee:
                 "La consigne de reformulation n'a pas pu être ajoutée au texte."
             case .refusParChatGPT(let message):
                 "ChatGPT a affiché une erreur : « \(message) »"
-            case .pontMuet:
-                "La page ChatGPT ne répond plus. Elle est rechargée — réessayez dans "
-                + "un instant."
             case .pageInterrompue:
                 "WebKit a fermé la page ChatGPT pendant la dictée. Elle a été rechargée, "
                 + "mais ce qui avait été dit est perdu."

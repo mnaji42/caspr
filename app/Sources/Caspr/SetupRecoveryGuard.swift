@@ -63,8 +63,9 @@ enum SetupRecoveryGuard {
             // garde l'est. La prendre à l'appui, ce serait décider à l'appui,
             // ce que le relais s'interdit ; et `demarrer` la reprend de toute
             // façon, et devant une session perdue ouvre la fenêtre où l'on se
-            // reconnecte — un meilleur recours que de rouvrir l'accueil.
-            return Relais.partage.saitDicter
+            // reconnecte — un meilleur recours que de rouvrir l'accueil. La
+            // carte que montre l'accueil en juge de la même façon.
+            return RelaisSession.isValid
         }
     }
 

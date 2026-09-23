@@ -96,10 +96,11 @@ struct ReleaseNotesList: View {
 ///
 /// ## La vérification automatique reste désactivée par défaut
 ///
-/// C'est la seule requête réseau que l'application sache faire. Tant qu'elle
-/// n'est pas activée, « rien ne sort de votre Mac » n'a aucune exception à
-/// énoncer — et une exception, même bénigne, oblige à la mentionner partout et
-/// fait douter du reste. Le bouton « Vérifier maintenant », lui, marche
+/// C'est la seule requête réseau que Caspr fasse de lui-même — la voie
+/// ChatGPT parle à ChatGPT, mais par le compte de l'utilisateur. Tant qu'elle
+/// n'est pas activée, la voie macOS n'a aucune exception à énoncer à « rien ne
+/// sort de votre Mac » — et une exception, même bénigne, oblige à la
+/// mentionner partout et fait douter du reste. Le bouton « Vérifier maintenant », lui, marche
 /// toujours : il est déclenché par quelqu'un qui sait ce qu'il demande.
 struct UpdateCard: View {
     @State private var prefs = Preferences.shared

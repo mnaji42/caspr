@@ -27,6 +27,13 @@ import CasprCore
 /// dans l'onglet Général : deux endroits pour un seul réglage, ce sont deux
 /// endroits à tenir d'accord.
 struct CarteVoie: View {
+    /// Montrer, sous les deux lignes, les réglages de la voie retenue.
+    ///
+    /// L'accueil ne les veut pas ici : la voie s'y choisit avant les langues,
+    /// dont dépend le modèle d'Apple Intelligence, et chaque voie se règle à
+    /// l'écran du premier essai.
+    var avecReglages = true
+
     @State private var prefs = Preferences.shared
     @ObservedObject private var relais = Relais.partage
 
@@ -41,13 +48,15 @@ struct CarteVoie: View {
                  + "Dictée.")
         }
 
-        switch prefs.voie {
-        case .apple:
-            SectionLabel("macOS")
-            AppleEngineCard()
-        case .chatgpt:
-            SectionLabel("ChatGPT")
-            RelaisReglages()
+        if avecReglages {
+            switch prefs.voie {
+            case .apple:
+                SectionLabel("macOS")
+                AppleEngineCard()
+            case .chatgpt:
+                SectionLabel("ChatGPT")
+                RelaisReglages()
+            }
         }
     }
 

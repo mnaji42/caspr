@@ -1,23 +1,26 @@
 import AppKit
 import SwiftUI
+import CasprCore
 
 /// L'accueil du premier lancement.
 ///
 /// Caspr ne peut pas se contenter d'apparaître dans la barre de menus. Il lui
-/// faut le micro et l'accessibilité, et le moteur de macOS peut exiger des
-/// modèles qui se téléchargent — des conditions qu'une app sans fenêtre n'a aucun moyen
-/// d'expliquer une fois lancée et invisible. Sans accueil, le premier lancement
-/// se solde par une icône muette et une dictée qui ne fait rien.
+/// faut le micro et l'accessibilité, puis, selon la voie, un modèle de macOS
+/// qui se télécharge ou une page ChatGPT connectée et calibrée — des
+/// conditions qu'une app sans fenêtre n'a aucun moyen d'expliquer une fois
+/// lancée et invisible. Sans accueil, le premier lancement se solde par une
+/// icône muette et une dictée qui ne fait rien.
 ///
-/// ## Quatre étapes, et aucune n'est une page vide
+/// ## Cinq étapes, et aucune n'est une page vide
 ///
 /// Une version précédente en comptait six, dont quatre ne portaient qu'un titre
 /// et deux phrases ; celle d'après en comptait cinq mais réimplémentait les
 /// questions que les Réglages posaient déjà, si bien que les deux avaient
-/// divergé. La cinquième, le moteur de la passe finale, est partie quand la
-/// version de macOS a cessé d'être un choix. Celle-ci n'écrit **aucun** réglage de son côté : chaque étape
-/// instancie les mêmes vues que les Réglages, et sa seule responsabilité est
-/// l'ordre dans lequel on les rencontre.
+/// divergé. L'écran du moteur de la passe finale est parti quand la version de
+/// macOS a cessé d'être un choix ; celui de la voie est venu quand ChatGPT est
+/// devenu la moitié du produit. Celle-ci n'écrit **aucun** réglage de son
+/// côté : chaque étape instancie les mêmes vues que les Réglages, et sa seule
+/// responsabilité est l'ordre dans lequel on les rencontre.
 @MainActor
 final class OnboardingWindowController {
     private var window: NSWindow?
@@ -37,13 +40,13 @@ final class OnboardingWindowController {
         // `weak var` capturé plus bas : la vue met à jour le titre de la
         // fenêtre qui la contient, ce que SwiftUI ne sait pas faire seul.
         var host: NSWindow?
-        let window = NSWindow.caspr(title: Step.resumed.windowTitle) {
+        let window = NSWindow.caspr(title: Step.resumed.windowTitle(Preferences.shared.voie)) {
             OnboardingView(onFinish: { [weak self] in self?.close() },
                            onOpenSettings: { [weak self] in
                                self?.close()
                                self?.openSettings?()
                            },
-                           onStepChange: { step in host?.title = step.windowTitle })
+                           onTitleChange: { title in host?.title = title })
         }
         host = window
         self.window = window
@@ -64,12 +67,8 @@ final class OnboardingWindowController {
 // MARK: - Les étapes
 
 private enum Step: Int, CaseIterable {
-    case welcome, preferences, liveEngine, completion
+    case welcome, voie, preferences, liveEngine, completion
 
-    /// Le titre de la fenêtre, qui **suit l'étape**.
-    ///
-    /// Repris tel quel de `HeaderNav.jsx` : la barre de titre annonce où l'on
-    /// est, elle ne répète pas « Bienvenue » sur les quatre écrans.
     /// L'étape sur laquelle rouvrir.
     ///
     /// Lue à deux endroits — la vue, pour savoir quoi afficher, et la fenêtre,
@@ -96,41 +95,67 @@ private enum Step: Int, CaseIterable {
     /// et rouvrait l'accueil sur la page d'après sans rien dire. Un nom qui
     /// disparaît ne désigne plus rien, et l'on repart du début. Ces noms sont
     /// ceux sous lesquels `LegacyCleanup` traduit l'ancien index : les
-    /// changer, c'est perdre l'étape de qui était en cours de route.
+    /// changer, c'est perdre l'étape de qui était en cours de route. L'écran
+    /// de la voie, venu après, n'a pas d'index à traduire.
     var name: String {
         switch self {
         case .welcome: "welcome"
+        case .voie: "voie"
         case .preferences: "preferences"
         case .liveEngine: "liveEngine"
         case .completion: "completion"
         }
     }
 
-    var windowTitle: String {
+    /// Le titre de la fenêtre, qui **suit l'étape**.
+    ///
+    /// Repris tel quel de `HeaderNav.jsx` : la barre de titre annonce où l'on
+    /// est, elle ne répète pas « Bienvenue » sur tous les écrans.
+    func windowTitle(_ voie: VoieDeDictee) -> String {
         switch self {
         case .welcome: "Bienvenue dans Caspr"
+        case .voie: "Votre Façon de Dicter"
         case .preferences: "Vos Préférences"
-        case .liveEngine: "Moteur & Premier Essai"
+        case .liveEngine:
+            switch voie {
+            case .apple: "Moteur & Premier Essai"
+            case .chatgpt: "ChatGPT & Premier Essai"
+            }
         case .completion: "Tout est prêt !"
         }
     }
 
-    /// L'en-tête de la page. `nil` pour l'accueil et la fin, qui portent le
-    /// leur — `WelcomeCard` et `CompletionView` dans le prototype.
-    var header: (title: String, subtitle: String)? {
+    /// L'en-tête de la page. `nil` pour la fin, qui porte le sien —
+    /// `CompletionView` dans le prototype.
+    ///
+    /// L'écran du premier essai dépend de la voie : c'est lui qui la règle,
+    /// et chacune y demande autre chose.
+    func header(_ voie: VoieDeDictee) -> (title: String, subtitle: String)? {
         switch self {
         case .welcome:
             ("Bienvenue dans Caspr",
-             "La dictée vocale instantanée pensée pour vos mots, votre métier "
-                + "et vos langues mélangées.")
+             "La dictée vocale instantanée pour macOS : vous parlez, le texte "
+                + "s'écrit là où se trouve votre curseur.")
+        case .voie:
+            ("Votre Façon de Dicter",
+             "Deux voies, qui ne partagent ni le micro ni ce qu'elles envoient. "
+                + "Vous pourrez changer à tout moment.")
         case .preferences:
             ("Vos Préférences",
              "Configurez vos langues de travail pour que Caspr s'adapte à "
                 + "vous.")
         case .liveEngine:
-            ("Moteur & Premier Essai",
-             "Le moteur de macOS écrit votre dictée et en montre l'aperçu en "
-                + "direct sous la barre flottante.")
+            switch voie {
+            case .apple:
+                ("Moteur & Premier Essai",
+                 "Le moteur de macOS écrit votre dictée et en montre l'aperçu "
+                    + "en direct sous la barre flottante.")
+            case .chatgpt:
+                ("ChatGPT & Premier Essai",
+                 "La page ChatGPT écoute et transcrit à la place du micro de "
+                    + "Caspr. Elle doit être connectée à votre compte, et "
+                    + "calibrée.")
+            }
         case .completion:
             ("Tout est prêt !",
              "Caspr est configuré et prêt à transcrire votre voix en toute "
@@ -164,9 +189,14 @@ private struct OnboardingView: View {
     /// Le titre à afficher dans la barre de fenêtre. Remonté plutôt que posé
     /// ici : c'est `NSWindow` qui le porte, et le redessiner en SwiftUI
     /// donnerait deux titres à trois pixels d'écart.
-    let onStepChange: (Step) -> Void
+    let onTitleChange: (String) -> Void
 
     @State private var prefs = Preferences.shared
+    /// Observé pour le pied de page : la fin d'une calibration, ou une session
+    /// que la page découvre perdue, change ce que l'écran du premier essai
+    /// exige sous la voie ChatGPT — et rien d'autre ne redessinerait le
+    /// bouton « Continuer ».
+    @ObservedObject private var relais = Relais.partage
     @State private var step: Step
     /// Coché d'avance pendant l'accueil.
     ///
@@ -178,10 +208,10 @@ private struct OnboardingView: View {
     @State private var launchAtLogin = LoginItem.isEnabled || !Preferences.shared.onboarded
 
     init(onFinish: @escaping () -> Void, onOpenSettings: @escaping () -> Void,
-         onStepChange: @escaping (Step) -> Void) {
+         onTitleChange: @escaping (String) -> Void) {
         self.onFinish = onFinish
         self.onOpenSettings = onOpenSettings
-        self.onStepChange = onStepChange
+        self.onTitleChange = onTitleChange
         // Reprend là où on s'était arrêté. Rouvrir sur la page de bienvenue
         // quelqu'un qui était à l'étape des autorisations lui ferait relire ce
         // qu'il vient de lire, et douter d'avoir progressé.
@@ -202,7 +232,7 @@ private struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if let header = step.header {
+                    if let header = step.header(prefs.voie) {
                         if step == .welcome, let logo = Self.logo {
                             HStack(alignment: .top, spacing: 16) {
                                 logo
@@ -247,12 +277,17 @@ private struct OnboardingView: View {
                 .ignoresSafeArea(edges: .top)
         }
         .background(WindowBackground().ignoresSafeArea())
-        .onAppear { onStepChange(step) }
+        .onAppear { onTitleChange(step.windowTitle(prefs.voie)) }
         // Enregistrée en continu : quitter l'application au milieu d'une étape
         // ne doit pas coûter les précédentes.
         .onChange(of: step) { _, now in
             prefs.onboardingScreen = now.name
-            onStepChange(now)
+            onTitleChange(now.windowTitle(prefs.voie))
+        }
+        // La voie peut changer sous l'accueil — depuis le menu de la barre —,
+        // et le titre de l'écran du premier essai la nomme.
+        .onChange(of: prefs.voie) { _, voie in
+            onTitleChange(step.windowTitle(voie))
         }
     }
 
@@ -260,6 +295,7 @@ private struct OnboardingView: View {
     private var content: some View {
         switch step {
         case .welcome: welcomeStep
+        case .voie: voieStep
         case .preferences: preferencesStep
         case .liveEngine: liveEngineStep
         case .completion: completionStep
@@ -268,6 +304,13 @@ private struct OnboardingView: View {
 
     // MARK: 1 — Bienvenue
 
+    /// La promesse de confidentialité est dite **par voie**.
+    ///
+    /// L'accueil annonçait « vos paroles ne quittent jamais votre Mac ». C'est
+    /// vrai de la voie macOS, et faux dès qu'on choisit ChatGPT : la voix y
+    /// passe par le compte de l'utilisateur. Une promesse qui ne vaut que
+    /// pour la moitié du produit, posée avant même qu'on ait choisi, est une
+    /// promesse fausse.
     private var welcomeStep: some View {
         VStack(alignment: .leading, spacing: 0) {
             SectionLabel("Le principe en trois points", followsHeader: true)
@@ -276,26 +319,29 @@ private struct OnboardingView: View {
                 principle(1, "Écrivez au son de votre voix",
                           "Appuyez sur une touche, parlez naturellement dans "
                           + "n'importe quelle application, relâchez. Le texte "
-                          + "s'insère instantanément à votre curseur.")
+                          + "s'insère à votre curseur.")
                 Divider().opacity(0.25)
-                principle(2, "100 % sur votre puce Apple",
-                          "Zéro cloud, zéro compte, zéro connexion Internet "
-                          + "requise. **Vos paroles ne quittent jamais votre "
-                          + "Mac.**")
+                principle(2, "Deux façons de dicter",
+                          "**macOS**, hors ligne et sans compte : vos paroles "
+                          + "restent sur votre Mac. **ChatGPT**, par votre "
+                          + "propre compte : votre voix passe par ChatGPT, dans "
+                          + "une page que Caspr ouvre pour vous.")
                 Divider().opacity(0.25)
-                principle(3, "Rien à installer",
-                          "Caspr s'appuie sur la reconnaissance vocale de "
-                          + "macOS : aucun modèle à héberger, et **0 Mo de "
-                          + "RAM** entre deux dictées.")
+                principle(3, "Aucun serveur Caspr",
+                          "Ni compte Caspr, ni télémétrie. Caspr ne fait que "
+                          + "relier votre voix à votre curseur ; sa seule "
+                          + "requête à lui est la vérification des mises à "
+                          + "jour, si vous l'activez.")
             }
             .padding(.bottom, 12)
 
             SectionLabel("Ce que nous allons configurer")
 
             Card(highlighted: true) {
-                Text(.init("Ce court parcours vous aide à **choisir vos "
-                           + "langues**, **activer les deux accès système "
-                           + "requis** et **faire un premier essai vocal**."))
+                Text(.init("Ce court parcours vous aide à **choisir votre façon "
+                           + "de dicter**, **choisir vos langues**, **activer "
+                           + "les deux accès système requis** et **faire un "
+                           + "premier essai vocal**."))
                     .font(.system(size: 12))
                     .foregroundStyle(Color(hex: 0xCCFBF1))
                     .lineSpacing(2)
@@ -321,7 +367,24 @@ private struct OnboardingView: View {
         }
     }
 
-    // MARK: 2 — Préférences
+    // MARK: 2 — La voie
+
+    /// Tôt, parce que tout ce qui suit en dépend : les autorisations, ce qui
+    /// se télécharge ou se connecte, et même l'écran du premier essai.
+    ///
+    /// Les deux lignes des Réglages, sans les réglages de la voie retenue :
+    /// macOS se règle d'après la langue, choisie à l'écran suivant. Choisir
+    /// ChatGPT lance tout de suite la connexion puis la calibration, comme
+    /// dans les Réglages (cf. `CarteVoie.choisir`) ; l'écran du premier essai
+    /// montre où elles en sont, et de quoi les reprendre.
+    private var voieStep: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel("Qui écoute votre voix", followsHeader: true)
+            CarteVoie(avecReglages: false)
+        }
+    }
+
+    // MARK: 3 — Préférences
 
     private var preferencesStep: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -330,27 +393,39 @@ private struct OnboardingView: View {
         }
     }
 
-    // MARK: 3 — Moteur, déclencheur et essai
+    // MARK: 4 — Moteur, déclencheur et essai
 
-    /// L'ordre du prototype : le moteur **avant** le déclencheur.
+    /// La voie **avant** le déclencheur.
     ///
     /// L'inverse paraissait plus logique — on configure la touche, puis ce
-    /// qu'elle déclenche — mais c'est le moteur qui décide des autorisations à
-    /// demander : sous la Dictée, la reconnaissance vocale s'ajoute aux deux
-    /// autres. Le poser d'abord évite de voir une troisième permission
-    /// apparaître après coup dans une carte qu'on croyait finie.
+    /// qu'elle déclenche — mais c'est la voie qui décide de ce qui reste à
+    /// faire : sous la Dictée, la reconnaissance vocale s'ajoute aux deux
+    /// autorisations ; sous ChatGPT, une connexion et une calibration. Les
+    /// poser d'abord évite de voir une exigence apparaître après coup dans une
+    /// carte qu'on croyait finie.
+    ///
+    /// Sous ChatGPT, rien sur macOS : c'est la page qui écoute, et exiger un
+    /// modèle d'Apple Intelligence qu'elle n'utilisera jamais bloquerait qui
+    /// n'a que ChatGPT (cf. `SetupRecoveryGuard`).
     private var liveEngineStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel("Moteur de reconnaissance", followsHeader: true)
-            AppleEngineCard()
-                .padding(.bottom, 12)
+            switch prefs.voie {
+            case .apple:
+                SectionLabel("Moteur de reconnaissance", followsHeader: true)
+                AppleEngineCard()
+                    .padding(.bottom, 12)
+            case .chatgpt:
+                SectionLabel("Votre compte ChatGPT", followsHeader: true)
+                RelaisSession()
+                    .padding(.bottom, 12)
+            }
 
             SectionLabel("Déclencheur & Zone de test")
             TriggerCard(showTrialSandbox: true)
         }
     }
 
-    // MARK: 4 — Tout est prêt
+    // MARK: 5 — Tout est prêt
 
     private var completionStep: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -364,6 +439,12 @@ private struct OnboardingView: View {
                         + "menus en haut.\n**💡 Astuce :** Maintenir votre "
                         + "touche de dictée (**⌥ Option**) pendant **1 "
                         + "seconde** ouvre directement les Réglages.")
+                    Divider().opacity(0.25)
+                    tip("arrow.left.arrow.right", "Passer de macOS à ChatGPT",
+                        "« Écrire avec ChatGPT », dans le menu de la barre, "
+                        + "change de voie pour la dictée suivante. Un raccourci "
+                        + "peut faire de même : il se choisit dans Réglages › "
+                        + "Dictée.")
                     Divider().opacity(0.25)
                     tip("checkmark.shield", "Filet de sécurité : vous ne perdez jamais rien",
                         "Même si aucune application n'a le focus ou si votre "
@@ -426,7 +507,7 @@ private struct OnboardingView: View {
                 summary("Déclencheur :", prefs.triggerKind == .option
                         ? "Touche \(prefs.triggerSide.label) (Maintenir pour parler)"
                         : "Raccourci clavier (\(prefs.dictateShortcut.label))")
-                summary("Moteur :", engineSummary)
+                summary("Voie :", voieSummary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -445,10 +526,16 @@ private struct OnboardingView: View {
     /// Le récapitulatif est la dernière chose lue avant « Terminer » : il doit
     /// annoncer ce qui va se passer. Lu sur la préférence, il promettait Apple
     /// Intelligence même quand le modèle de la langue n'est pas téléchargé et
-    /// que la Dictée classique prendra le relais.
-    private var engineSummary: String {
-        let version = EngineSafetyManager.effectiveEngine.versionLabel
-        return "macOS Natif · \(version) (0 Mo de RAM, instantané)"
+    /// que la Dictée classique prendra le relais. Et il dit où va la voix :
+    /// c'est la différence entre les deux voies qui compte le plus.
+    private var voieSummary: String {
+        switch prefs.voie {
+        case .apple:
+            let version = EngineSafetyManager.effectiveEngine.versionLabel
+            return "macOS · \(version) (hors ligne, rien ne sort du Mac)"
+        case .chatgpt:
+            return "ChatGPT (votre compte, dans la page de Caspr)"
+        }
     }
 
     private func summary(_ label: String, _ value: String) -> some View {
@@ -503,10 +590,20 @@ private struct OnboardingView: View {
     private var blocker: ComponentValidationError? {
         switch step {
         case .welcome: nil
+        // Rien n'empêche de choisir : ce que la voie exige se règle à l'écran
+        // du premier essai, où l'on voit pourquoi « Continuer » attend.
+        case .voie: nil
         case .preferences: LanguagePicker.validate()
-        // Le déclencheur **et** le moteur : c'est l'étape qui rend Caspr
-        // utilisable, et la dernière qu'exige la garde d'accès.
-        case .liveEngine: TriggerCard.validate() ?? AppleEngineCard.validate()
+        // Le déclencheur **et** ce qu'exige la voie : c'est l'étape qui rend
+        // Caspr utilisable, et la dernière qu'exige la garde d'accès — qui en
+        // juge avec les mêmes composants.
+        case .liveEngine:
+            TriggerCard.validate() ?? {
+                switch prefs.voie {
+                case .apple: AppleEngineCard.validate()
+                case .chatgpt: RelaisSession.validate()
+                }
+            }()
         case .completion: nil
         }
     }

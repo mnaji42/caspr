@@ -66,10 +66,10 @@ final class Preferences {
     /// L'étape d'accueil atteinte, quand il n'a pas été mené à terme.
     ///
     /// Enregistrée en continu, pas seulement à la fermeture : quelqu'un qui
-    /// quitte Caspr au milieu de l'étape 3 — ce qui arrive précisément là,
-    /// puisque c'est l'étape qui envoie dans les Réglages Système accorder
-    /// l'accessibilité — doit revenir là où il était, et non repartir de la
-    /// page de bienvenue qu'il a déjà lue.
+    /// quitte Caspr au milieu de l'étape du déclencheur — ce qui arrive
+    /// précisément là, puisque c'est elle qui envoie dans les Réglages Système
+    /// accorder l'accessibilité — doit revenir là où il était, et non
+    /// repartir de la page de bienvenue qu'il a déjà lue.
     ///
     /// Ne veut plus rien dire une fois `onboarded` vrai, et n'est plus lue.
     ///
@@ -84,10 +84,12 @@ final class Preferences {
     /// Caspr doit-il regarder tout seul s'il existe une version plus récente ?
     ///
     /// **Désactivé par défaut**, et c'est un choix. C'est la seule requête
-    /// réseau que l'application sache faire ; tant qu'on ne l'a pas activée,
-    /// Caspr ne contacte rien ni personne, et la promesse « rien ne sort de
-    /// votre Mac » n'a aucune exception à énoncer. Une exception, même
-    /// bénigne, oblige à la mentionner partout et fait douter du reste.
+    /// réseau que Caspr fasse de lui-même — la page ChatGPT parle à ChatGPT,
+    /// mais c'est le compte de l'utilisateur, sur la voie qu'il a choisie.
+    /// Tant qu'on ne l'a pas activée, la voie macOS ne contacte rien ni
+    /// personne, et sa promesse « rien ne sort de votre Mac » n'a aucune
+    /// exception à énoncer. Une exception, même bénigne, oblige à la
+    /// mentionner partout et fait douter du reste.
     ///
     /// Ce que la requête envoie une fois activée : un GET sur l'API publique
     /// de GitHub, donc une adresse IP et rien d'autre — aucun identifiant,

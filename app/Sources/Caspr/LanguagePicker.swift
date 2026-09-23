@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Le catalogue des langues, avec recherche et puces de sélection.
 ///
-/// La même vue dans l'accueil (écran 2, déployée) et dans les Réglages (repliée
-/// dans un tiroir, cf. `PrimaryLanguageSelector`).
+/// La même vue dans l'accueil (écran des langues, déployée) et dans les
+/// Réglages (repliée dans un tiroir, cf. `PrimaryLanguageSelector`).
 ///
 /// ## Ce qui est montré, et ce qui est grisé
 ///

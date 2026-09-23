@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Un type d'erreur, et non un simple booléen : l'accueil doit pouvoir dire
 /// *pourquoi* « Continuer » est grisé. Un bouton inactif sans explication est la
-/// façon la plus sûre de faire abandonner quelqu'un à l'étape 3.
+/// façon la plus sûre de faire abandonner quelqu'un à l'étape des autorisations.
 enum ComponentValidationError: Equatable, LocalizedError {
     case noLanguageSelected
     /// Les locales dont le modèle Apple Intelligence n'est pas installé.
@@ -18,6 +18,12 @@ enum ComponentValidationError: Equatable, LocalizedError {
     /// Aucune version du moteur de macOS ne fonctionne ici, avec la raison
     /// mesurée — pas déduite d'un numéro de version.
     case noSystemEngine(String)
+    /// La page ChatGPT a montré son écran de connexion : la session est
+    /// perdue, ou n'a jamais été ouverte.
+    case chatgptSignedOut
+    /// La page ChatGPT n'a pas encore été calibrée : Caspr ne sait pas où
+    /// sont ses boutons.
+    case chatgptNotCalibrated
     case notesFileMissing
 
     var errorDescription: String? {
@@ -42,6 +48,10 @@ enum ComponentValidationError: Equatable, LocalizedError {
                 + "Système › Clavier › Dictée."
         case .noSystemEngine(let reason):
             reason
+        case .chatgptSignedOut:
+            "Connectez-vous à ChatGPT : « Se connecter… » ouvre la page."
+        case .chatgptNotCalibrated:
+            "Caspr doit encore apprendre les boutons de la page ChatGPT."
         case .notesFileMissing:
             "Choisissez le fichier dans lequel écrire."
         }

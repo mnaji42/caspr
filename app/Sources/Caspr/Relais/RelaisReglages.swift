@@ -9,11 +9,9 @@ import CasprCore
 /// voie est macOS, la page n'existe pas (cf. `Relais.pageActive`) — des
 /// boutons qui la pilotent n'auraient rien à piloter.
 struct RelaisReglages: View {
-    @State private var calibre = Relais.partage.estCalibre
     @State private var depart = Relais.partage.departPersonnalise
     @State private var modules = RelaisCatalogue.tous
     @State private var selecteurs = RelaisSelecteurs.charger()
-    @ObservedObject private var relais = Relais.partage
 
     var body: some View {
         // Une carte pour la session et ce que Caspr a appris, puis une carte
@@ -21,6 +19,78 @@ struct RelaisReglages: View {
         // escalier, alors que les capacités sont indépendantes — un module
         // peut exiger d'envoyer sans jamais récupérer, donc moins qu'un autre
         // qui venait pourtant avant lui.
+        RelaisSession(surChangement: relire)
+
+        SectionLabel("Modules")
+        ForEach(modules) { module in
+            RelaisModuleCard(module: module, selecteurs: selecteurs,
+                             surChangement: relire)
+        }
+
+        if depart || modules.contains(where: \.demandeUnAllerRetour) {
+            SectionLabel("Point de départ")
+            Card {
+                Row(label: "Conversations créées par Caspr") {
+                    Text(depart ? "dans un projet dédié" : "dans l'historique général")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Style.textSecondary)
+                }
+                Note("Chaque dictée qui envoie ouvre une conversation neuve, sans quoi "
+                     + "la précédente orienterait la suivante. Pour les tenir à "
+                     + "l'écart : créez un projet dans ChatGPT, ouvrez-le dans la "
+                     + "fenêtre du relais, puis adoptez-le.")
+                ButtonRow {
+                    Button("Adopter la page ouverte…") {
+                        Relais.partage.adopterPageDeDepart()
+                        relire()
+                    }
+                    if depart {
+                        Button("Revenir à l'accueil") {
+                            Relais.partage.oublierPageDeDepart()
+                            relire()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Relire l'état à chaque apparition de l'écran.
+    ///
+    /// `@State` ne s'initialise qu'à la création de la vue. Une calibration
+    /// menée depuis un autre chemin — ou avant que cet écran n'existe — la
+    /// laissait donc périmée : les réglages annonçaient « configuration
+    /// inachevée » à quelqu'un qui venait de la terminer.
+    private func relire() {
+        depart = Relais.partage.departPersonnalise
+        modules = RelaisCatalogue.tous
+        selecteurs = RelaisSelecteurs.charger()
+    }
+}
+
+/// La session ChatGPT et ce que Caspr a appris de la page : ce que la voie
+/// exige avant de dicter.
+///
+/// La même carte dans Réglages › Voie et dans l'accueil. Les deux posaient la
+/// même question, et une seconde version aurait fini par dire autre chose —
+/// l'accueil a déjà payé ce genre de divergence (cf. `OnboardingView`).
+struct RelaisSession: View, ValidatingComponent {
+    /// Prévient la vue qui l'entoure qu'une calibration a pu changer ce que la
+    /// page sait faire : les modules en dépendent.
+    var surChangement: () -> Void = {}
+
+    @State private var calibre = Relais.partage.estCalibre
+    @State private var selecteurs = RelaisSelecteurs.charger()
+    @ObservedObject private var relais = Relais.partage
+
+    /// Ce qui manque pour dicter par ChatGPT, lu comme `Relais.saitDicter` :
+    /// une session que la page n'a pas vue perdue, et un calibrage.
+    static func validate() -> ComponentValidationError? {
+        if Relais.partage.sessionVue == .deconnecte { return .chatgptSignedOut }
+        return Relais.partage.estCalibre ? nil : .chatgptNotCalibrated
+    }
+
+    var body: some View {
         Card {
             connexion
             Divider().opacity(0.25)
@@ -70,39 +140,6 @@ struct RelaisReglages: View {
         // inachevée » à qui venait de la terminer. L'occupation, publiée, dit
         // quand la page est rendue.
         .onChange(of: relais.occupation) { _, _ in relire() }
-
-        SectionLabel("Modules")
-        ForEach(modules) { module in
-            RelaisModuleCard(module: module, selecteurs: selecteurs,
-                             surChangement: relire)
-        }
-
-        if depart || modules.contains(where: \.demandeUnAllerRetour) {
-            SectionLabel("Point de départ")
-            Card {
-                Row(label: "Conversations créées par Caspr") {
-                    Text(depart ? "dans un projet dédié" : "dans l'historique général")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Style.textSecondary)
-                }
-                Note("Chaque dictée qui envoie ouvre une conversation neuve, sans quoi "
-                     + "la précédente orienterait la suivante. Pour les tenir à "
-                     + "l'écart : créez un projet dans ChatGPT, ouvrez-le dans la "
-                     + "fenêtre du relais, puis adoptez-le.")
-                ButtonRow {
-                    Button("Adopter la page ouverte…") {
-                        Relais.partage.adopterPageDeDepart()
-                        relire()
-                    }
-                    if depart {
-                        Button("Revenir à l'accueil") {
-                            Relais.partage.oublierPageDeDepart()
-                            relire()
-                        }
-                    }
-                }
-            }
-        }
     }
 
     // MARK: - La session
@@ -119,9 +156,9 @@ struct RelaisReglages: View {
         case .connecte:
             GrantedLine("Connecté à ChatGPT")
         case .deconnecte:
-            Note("**Session ChatGPT perdue.** Les dictées sont refusées tant que "
-                 + "vous ne vous êtes pas reconnecté, dans la fenêtre du relais. "
-                 + "Le calibrage, lui, est conservé.", warning: true)
+            Note("**Pas connecté à ChatGPT.** Les dictées sont refusées tant que "
+                 + "vous ne vous êtes pas connecté, dans la fenêtre du relais. "
+                 + "Un calibrage déjà fait est conservé.", warning: true)
             ButtonRow {
                 Button("Se connecter…") { Relais.partage.ouvrirFenetre() }
             }
@@ -174,17 +211,11 @@ struct RelaisReglages: View {
         }
     }
 
-    /// Relire l'état à chaque apparition de l'écran.
-    ///
-    /// `@State` ne s'initialise qu'à la création de la vue. Une calibration
-    /// menée depuis un autre chemin — ou avant que cet écran n'existe — la
-    /// laissait donc périmée : les réglages annonçaient « configuration
-    /// inachevée » à quelqu'un qui venait de la terminer.
+    /// Relire l'état à chaque apparition, et à chaque fin de calibration.
     private func relire() {
         calibre = Relais.partage.estCalibre
-        depart = Relais.partage.departPersonnalise
-        modules = RelaisCatalogue.tous
         selecteurs = RelaisSelecteurs.charger()
+        surChangement()
     }
 
     /// Ce qui interdit de toucher à la page maintenant, s'il y a quelque

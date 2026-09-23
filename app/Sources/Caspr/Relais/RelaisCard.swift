@@ -63,8 +63,8 @@ struct RelaisCard<Moteurs: View>: View {
                     Button("Diagnostic…") { Relais.partage.diagnostic() }
                     Button("Se déconnecter…") { deconnecter() }
                 }
-                .disabled(relais.occupation != .libre)
-                if let raison = relais.occupation.raison {
+                .disabled(empechement != nil)
+                if let raison = empechement {
                     Note(raison + " Les réglages de la page attendent qu'elle se termine.",
                          warning: true)
                 }
@@ -178,6 +178,15 @@ struct RelaisCard<Moteurs: View>: View {
         return nil
     }
 
+    /// Ce qui interdit de toucher à la page maintenant, s'il y a quelque
+    /// chose : un flux qui la pilote, ou une dictée macOS qui garde le micro
+    /// et devant laquelle la page ne doit pas naître (cf.
+    /// `Relais.ecouteMacOS`).
+    private var empechement: String? {
+        if let raison = relais.occupation.raison { return raison }
+        return relais.ecouteMacOS ? "Une dictée macOS est en cours." : nil
+    }
+
     private static var voieChatGPT: Bool {
         switch Preferences.shared.voie {
         case .chatgpt: true
@@ -187,10 +196,15 @@ struct RelaisCard<Moteurs: View>: View {
 
     /// Vaut pour la dictée suivante : une dictée en cours garde la voie
     /// qu'elle avait à l'appui.
+    ///
+    /// La calibration qui suit l'allumage attend elle aussi la fin d'une
+    /// dictée macOS : elle construirait la page sous le magnétophone. La
+    /// carte dit alors pourquoi ses boutons attendent, et « Apprendre les
+    /// boutons… » se rallume à l'arrêt.
     private func basculer(_ nouveau: Bool) {
         Preferences.shared.voie = nouveau ? .chatgpt : .apple
         actif = nouveau
-        if nouveau, !Relais.partage.estCalibre {
+        if nouveau, !Relais.partage.estCalibre, !Relais.partage.ecouteMacOS {
             Relais.partage.calibrerTout(relire)
         }
     }

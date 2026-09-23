@@ -231,8 +231,9 @@ final class DictationController {
     /// relire en chemin, c'était laisser une bascule en pleine phrase
     /// arrêter par macOS une écoute que ChatGPT avait ouverte — le geste
     /// d'arrêt n'a pas à redire par où l'on était parti. Basculer vaut donc
-    /// pour la dictée suivante, et le relais garde sa page jusqu'à la fin de
-    /// celle-ci (cf. `Relais.suivreLaVoie`).
+    /// pour la dictée suivante, dans les deux sens : le relais garde sa page
+    /// jusqu'à la fin d'une dictée ChatGPT, et n'en construit pas pendant une
+    /// dictée macOS (cf. `Relais.suivreLaVoie`).
     private var voieDuCycle: VoieDeDictee?
 
     /// L'application où l'on parlait, capturée à l'appui ; `nil` quand c'était
@@ -315,7 +316,11 @@ final class DictationController {
         let voie = Preferences.shared.voie
         switch voie {
         case .apple:
-            break
+            // Le micro est à Caspr jusqu'à l'arrêt du magnétophone : passer à
+            // ChatGPT d'ici là ne doit pas faire naître la page, qui le lui
+            // prendrait (cf. `Relais.ecouteMacOS`). Rendu sur chaque chemin
+            // qui arrête d'écouter : arrêt, annulation, démarrage manqué.
+            Relais.partage.macOSPrendLeMicro()
         case .chatgpt:
             // RELAIS — une seule chose à la fois sur la page.
             //
@@ -395,6 +400,7 @@ final class DictationController {
         guard state == .recording else { return }
         recorder.cancel()
         stopPreview()
+        Relais.partage.macOSRendLeMicro()
         overlay.hide()
         Feedback.cancelled()
         voieDuCycle = nil
@@ -439,7 +445,7 @@ final class DictationController {
             if state != .recording {
                 voieDuCycle = nil
                 switch voie {
-                case .apple: break
+                case .apple: Relais.partage.macOSRendLeMicro()
                 case .chatgpt: Relais.partage.rendreLaMain()
                 }
             }
@@ -612,6 +618,9 @@ final class DictationController {
         }
         let samples = recorder.stop()
         stopPreview()
+        // Passé à ChatGPT pendant la dictée, c'est ici que la page se charge :
+        // après la dernière seconde enregistrée, jamais pendant.
+        Relais.partage.macOSRendLeMicro()
         Feedback.recordingStopped()
         overlay.showProcessing()
 

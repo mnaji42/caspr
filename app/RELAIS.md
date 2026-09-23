@@ -179,7 +179,10 @@ dossier seulement.
 **Rien n'existe tant que la voie n'est pas ChatGPT.** La `WKWebView` et la
 session ChatGPT ne sont construites que sur cette voie, et détruites quand on
 choisit macOS — à la fin de la dictée ChatGPT en cours s'il y en a une, qui va
-au bout sur la page qu'elle a prise.
+au bout sur la page qu'elle a prise. Dans l'autre sens, choisir ChatGPT pendant
+une dictée macOS ne construit la page — ni ne lance la calibration — qu'une fois
+le magnétophone arrêté (`Relais.ecouteMacOS`) : née plus tôt, elle aurait
+réduit au silence le reste de l'enregistrement.
 
 **Le relais se conforme à `SpeechEngine`.** L'insertion, l'historique, la
 barre et les échecs sont ceux de la voie macOS. Les différences tiennent dans

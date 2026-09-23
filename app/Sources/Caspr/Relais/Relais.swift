@@ -39,12 +39,16 @@ final class Relais: ObservableObject {
     /// processus tient le micro de la machine, et le magnétophone de Caspr
     /// n'entendrait que du silence tant qu'elle vit.
     ///
-    /// Sauf pendant une dictée ChatGPT : la voie est figée à l'appui, et
-    /// celle-ci va au bout sur la page qu'elle a prise. C'est la fin du cycle
-    /// qui la détruit alors (cf. `rendreLaMain`).
+    /// Sauf pendant une dictée, dans un sens comme dans l'autre : la voie est
+    /// figée à l'appui, et basculer vaut pour la suivante.
+    /// - Une dictée ChatGPT va au bout sur la page qu'elle a prise ; c'est la
+    ///   fin du cycle qui la détruit alors (cf. `rendreLaMain`).
+    /// - Une dictée macOS garde le micro pour elle : la page n'est construite
+    ///   qu'une fois le magnétophone arrêté (cf. `macOSRendLeMicro`).
     func suivreLaVoie() {
         switch Preferences.shared.voie {
         case .chatgpt:
+            guard !ecouteMacOS else { return }
             _ = try? pageActive()
         case .apple:
             guard occupation != .dictee else { return }
@@ -52,15 +56,48 @@ final class Relais: ObservableObject {
         }
     }
 
-    /// La page a-t-elle encore une raison d'exister ?
+    /// La page a-t-elle une raison d'exister ?
     ///
-    /// Sur la voie ChatGPT, toujours. Sur la voie macOS, seulement pour la
-    /// dictée ChatGPT commencée avant qu'on en change : elle va au bout sur la
-    /// page qu'elle a prise.
+    /// Sur la voie ChatGPT, oui — sauf pendant la dictée macOS commencée avant
+    /// qu'on en change, qui garde le micro jusqu'au bout. Sur la voie macOS,
+    /// seulement pour la dictée ChatGPT commencée avant qu'on en change : elle
+    /// va au bout sur la page qu'elle a prise.
     private var pageVoulue: Bool {
         switch Preferences.shared.voie {
-        case .chatgpt: true
+        case .chatgpt: !ecouteMacOS
         case .apple: occupation == .dictee
+        }
+    }
+
+    /// Le magnétophone de Caspr écoute : une dictée macOS est entre l'appui et
+    /// l'arrêt.
+    ///
+    /// Tenu à part de l'occupation, qui dit ce que fait **la page** : une
+    /// dictée macOS ne la pilote pas, elle interdit seulement qu'elle naisse.
+    /// Passer à ChatGPT en pleine dictée macOS construisait la page tout de
+    /// suite, calibration comprise quand il en manquait une — et une page
+    /// ChatGPT qui existe fait tomber la crête de l'enregistrement de 0,072 à
+    /// 0,000 (cf. RELAIS.md) : le reste de la dictée s'enregistrait sur du
+    /// silence.
+    ///
+    /// Publié, pour que la carte grise ce qui construirait la page et dise
+    /// pourquoi.
+    @Published private(set) var ecouteMacOS = false
+
+    /// Une dictée macOS ouvre le micro de Caspr.
+    func macOSPrendLeMicro() {
+        ecouteMacOS = true
+    }
+
+    /// Le magnétophone est arrêté, quelle qu'en soit l'issue : la page que la
+    /// voie réclame peut naître.
+    func macOSRendLeMicro() {
+        guard ecouteMacOS else { return }
+        ecouteMacOS = false
+        switch Preferences.shared.voie {
+        case .chatgpt: suivreLaVoie()
+        // Rien n'a été retenu : la voie macOS ne veut pas de page.
+        case .apple: break
         }
     }
 
@@ -158,7 +195,8 @@ final class Relais: ObservableObject {
     private var page: RelaisPage?
 
     /// La page, construite au besoin — **jamais sur la voie macOS**, hors de la
-    /// dictée ChatGPT qui a commencé avant qu'on la choisisse.
+    /// dictée ChatGPT qui a commencé avant qu'on la choisisse, ni pendant une
+    /// dictée macOS (cf. `pageVoulue`).
     ///
     /// Elle se reconstruisait sans rien demander. Éteindre le relais en pleine
     /// dictée détruisait la page, puis l'étape suivante du cycle en faisait
@@ -840,6 +878,12 @@ final class Relais: ObservableObject {
     /// Le parcours les fait donc apparaître, en écrivant puis en envoyant un
     /// message d'essai.
     func calibrerTout(_ termine: (() -> Void)? = nil) {
+        guard !ecouteMacOS else {
+            Self.alerter("Pas maintenant",
+                         "Une dictée macOS est en cours. Terminez-la avant de calibrer.")
+            termine?()
+            return
+        }
         guard occupation == .libre else {
             Self.alerter("Pas maintenant",
                          (occupation.raison ?? "") + " Terminez-la avant de calibrer.")

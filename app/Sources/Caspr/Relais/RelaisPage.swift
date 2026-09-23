@@ -128,6 +128,8 @@ final class RelaisPage: NSObject {
     /// Les appels au pont qui attendent leur réponse, pour que `detruire` les
     /// rende : sur une vue détruite, aucun ne reviendrait jamais.
     var enSuspens: [AppelAnnulable<[String: Any]>] = []
+    /// La copie du son que la page capte (cf. `RelaisEcho`).
+    let echo = RelaisEcho()
 
     /// Appelé quand l'utilisateur ferme la grande fenêtre.
     ///
@@ -176,12 +178,17 @@ final class RelaisPage: NSObject {
         // redémarrage. Un store non persistant obligerait à se reconnecter à
         // chaque lancement, ce qui condamnerait l'usage.
         config.websiteDataStore = .default()
+        // Sans quoi le contexte audio de l'écho, créé hors d'un geste de
+        // l'utilisateur, peut rester suspendu (mesuré).
+        config.mediaTypesRequiringUserActionForPlayback = []
+        echo.installer(dans: config.userContentController)
         config.userContentController.addUserScript(
             WKUserScript(source: Self.pont,
                          injectionTime: .atDocumentEnd,
                          forMainFrameOnly: true))
 
         webView = WKWebView(frame: Self.enVue, configuration: config)
+        echo.relier(webView)
         webView.uiDelegate = self
         webView.navigationDelegate = self
         // On garde l'agent utilisateur par défaut de WebKit, qui est celui de
@@ -456,6 +463,13 @@ final class RelaisPage: NSObject {
     /// reviendraient jamais (mesuré), et l'attente qui les porte non plus.
     func detruire() {
         rendreLesAppelsEnSuspens(Erreur.pageInterrompue)
+        // Le contrôleur retient son gestionnaire, et la page avec lui ; les
+        // scripts retirés, la page vide qui suit ne les reçoit pas.
+        echo.desarmer()
+        let controleur = webView.configuration.userContentController
+        controleur.removeScriptMessageHandler(forName: RelaisEcho.gestionnaire,
+                                              contentWorld: RelaisEcho.monde)
+        controleur.removeAllUserScripts()
         for annexe in annexes { annexe.close() }
         annexes.removeAll()
         webView.stopLoading()

@@ -120,6 +120,7 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
             return
         }
         morts += 1
+        echo.desarmer()
         // Un appel en suspens sur le processus mort peut ne jamais revenir,
         // et plus aucun délai ne le rattrape : rendu ici, l'attente qui le
         // porte reprend la main et lit la mort au tour suivant.

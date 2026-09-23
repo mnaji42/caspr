@@ -88,11 +88,15 @@ extension RelaisPage {
         _ = try? await appeler("return window.__relais.vider(sel);",
                                ["sel": selecteurs.composeur])
         alertesAvant = await relever().alertes
+        // L'écho doit être prêt quand la page demandera le micro, au clic.
+        echo.armer()
+        var clique = false
+        defer { if !clique { echo.desarmer() } }
         // Délai de geste : le bouton micro existe dès que la page s'est dite
         // connectée ; huit secondes sans lui, et il est introuvable.
-        guard try await cliquerQuandDisponible(.micro, selecteurs.micro, pendant: 8) else {
-            throw Erreur.introuvable(.micro)
-        }
+        clique = try await cliquerQuandDisponible(.micro, selecteurs.micro, pendant: 8)
+        guard clique else { throw Erreur.introuvable(.micro) }
+        echo.ecouter()
     }
 
     /// Attend que la page se dise connectée — **sans fin**.
@@ -174,9 +178,16 @@ extension RelaisPage {
         //
         // Délai de geste : le bouton d'arrêt existe pendant l'écoute ; quinze
         // secondes sans lui, et il est introuvable.
-        guard try await cliquerQuandDisponible(.stop, selecteurs.stop, pendant: 15) else {
-            throw Erreur.introuvable(.stop)
+        //
+        // L'écho se désarme à la sortie du clic, quelle qu'elle soit : une
+        // erreur du pont ne passe pas par `annuler`, et l'écho armé
+        // continuerait d'accumuler le son jusqu'à la dictée suivante.
+        let arrete: Bool
+        do {
+            defer { echo.desarmer() }
+            arrete = try await cliquerQuandDisponible(.stop, selecteurs.stop, pendant: 15)
         }
+        guard arrete else { throw Erreur.introuvable(.stop) }
 
         // La page dit parfois elle-même qu'elle a échoué : c'est la seule
         // chose, avec l'utilisateur, qui interrompe l'attente.
@@ -797,6 +808,7 @@ extension RelaisPage {
     /// préparation qui suit la reconstruit. Tenant le micro, on essaie quand
     /// même l'arrêt — et l'appelant rend le micro de toute façon.
     func annuler(ecouteQuiDemarre: Bool = false) async {
+        echo.desarmer()
         // Délai de geste : après le clic du micro, la page se met à écouter en
         // trois secondes au plus.
         let fin = Date.now.addingTimeInterval(ecouteQuiDemarre ? 3 : 0)

@@ -420,7 +420,8 @@ extension RelaisPage {
         var silences = 0
         while Date.now < limite {
             defer { tour += 1 }
-            if Task.isCancelled || morts != mortsAuDepart { return nil }
+            if Task.isCancelled { return nil }
+            if morteDepuisLeDepart { return .pageInterrompue }
             try? await Task.sleep(for: .milliseconds(250))
             if tour % 4 == 3, let message = await refusPendantLAttente(silences: &silences) {
                 Log.error("relais : ChatGPT a refusé (« \(message) »), lecture abandonnée")

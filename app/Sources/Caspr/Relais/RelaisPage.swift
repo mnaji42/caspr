@@ -403,9 +403,12 @@ final class RelaisPage: NSObject {
         }
     }
 
+    /// La page que la dictée a prise est-elle morte depuis l'appui ?
+    var morteDepuisLeDepart: Bool { morts != mortsAuDepart }
+
     /// Lève `pageInterrompue` si la page que la dictée attend n'existe plus.
     func verifierLaPage() throws {
-        guard morts == mortsAuDepart else { throw Erreur.pageInterrompue }
+        guard !morteDepuisLeDepart else { throw Erreur.pageInterrompue }
     }
 
     /// Ce que la page affiche à cet instant — ses alertes, et combien de

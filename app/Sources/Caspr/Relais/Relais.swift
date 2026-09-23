@@ -618,6 +618,13 @@ final class Relais: ObservableObject {
         // Choisir macOS pendant la dictée condamne la page à sa fin : un fil
         // ouvert dessus n'aurait nulle part où continuer.
         guard voieChatGPT else { return }
+        // La page est morte pendant la dictée : rechargée, elle porte une
+        // conversation vierge, et un fil « ouvert » dessus enverrait la suite
+        // sans son contexte, sans que rien le signale.
+        guard page?.morteDepuisLeDepart != true else {
+            enDiscussion = false
+            return
+        }
         enDiscussion = true
         // La fenêtre ne s'ouvre que si le module l'a demandée. « Rien » veut
         // dire rien, ici comme pendant la dictée : on discute à la voix, la
@@ -739,6 +746,16 @@ final class Relais: ObservableObject {
             if module.ditLaReponse, let page = try? pageActive(),
                let echec = await page.faireLireLaReponse(attente: attente) {
                 avertissement = echec.raisonCourte
+            }
+            // WebKit a tué la page après l'envoi : rechargée, elle porte une
+            // conversation vierge. Le message est parti, mais ni la voix ni
+            // le fil ne sont plus là, et il faut le dire plutôt que finir sur
+            // une réussite muette. La discussion ne s'ouvre pas sur la page
+            // neuve (cf. `entrerEnDiscussion`). « Dictée perdue » serait
+            // faux : ChatGPT a reçu le message.
+            if (try? pageActive())?.morteDepuisLeDepart == true {
+                avertissement = "La page ChatGPT s'est fermée — la réponse est "
+                    + "dans l'historique de ChatGPT"
             }
             // Interrompue, la lecture se tait sans lever, et c'est voulu :
             // le message est parti, l'appui a seulement cessé d'attendre (cf.

@@ -943,8 +943,8 @@ final class Relais: ObservableObject {
     ///
     /// - **La connexion n'est jamais automatisée.** C'est le compte de
     ///   l'utilisateur. Sans session, la fenêtre s'ouvre pour qu'il se
-    ///   connecte, et le parcours s'arrête là — il se relance une fois
-    ///   connecté.
+    ///   connecte, et le parcours l'attend — il reprend dès que la page
+    ///   montre une conversation.
     /// - **Rien n'est enregistré tant que l'aller-retour entier n'est pas
     ///   prouvé.** Le parcours manuel enregistre repère par repère ; un
     ///   automate qui ferait de même et échouerait à mi-chemin détruirait en
@@ -1029,10 +1029,14 @@ final class Relais: ObservableObject {
                 volontairement ses connexions dans une fenêtre embarquée. Une adresse \
                 e-mail et un mot de passe fonctionnent.
 
-                Une fois connecté, relancez « Calibrer automatiquement » dans \
-                Réglages › Voie.
+                La calibration reprendra d'elle-même dès que la conversation \
+                s'affichera. Fermer la fenêtre l'arrête.
                 """)
-            return false
+            // Attendre la connexion plutôt que s'arrêter : c'est le parcours
+            // de qui choisit ChatGPT pour la première fois, à l'accueil comme
+            // dans les réglages, et le renvoyer chercher un bouton une fois
+            // connecté lui faisait croire le travail fini.
+            guard await attendreLaSession(page) else { return false }
         }
         guard !Task.isCancelled, Self.demander("Calibrer automatiquement", """
             Caspr va apprendre seul les boutons de la page, en les essayant sous vos \
@@ -1108,6 +1112,23 @@ final class Relais: ObservableObject {
         page.charger()
         page.cacher()
         NSApp.hide(nil)
+        return false
+    }
+
+    /// Attend qu'on se connecte, jugé comme le parcours automatique juge la
+    /// session : par le filet, pas par un calibrage peut-être faux (cf.
+    /// `connexionObservee`).
+    ///
+    /// Dix minutes, comme le parcours manuel (`attendreConnexion`) : le temps
+    /// de retrouver un mot de passe, ou de créer un compte. Fermer la fenêtre
+    /// annule la calibration, et l'attente avec elle.
+    private func attendreLaSession(_ page: RelaisPage) async -> Bool {
+        let limite = Date.now.addingTimeInterval(600)
+        while Date.now < limite {
+            try? await Task.sleep(for: .seconds(1))
+            guard voieChatGPT, !Task.isCancelled else { return false }
+            if await page.connexionObservee(secondes: 2) == .connecte { return true }
+        }
         return false
     }
 

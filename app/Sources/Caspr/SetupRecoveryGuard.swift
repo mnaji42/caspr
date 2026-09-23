@@ -17,8 +17,8 @@ import AppKit
 ///
 /// - **macOS** : une langue retenue, le micro et l'accessibilité accordés, et
 ///   une version de macOS capable d'écrire dans cette langue.
-/// - **ChatGPT** : le micro et l'accessibilité, et une page calibrée pour
-///   dicter. Rien sur macOS — c'est la page qui écoute, et exiger un modèle
+/// - **ChatGPT** : le micro et l'accessibilité, et une page connectée et
+///   calibrée pour dicter. Rien sur macOS — c'est la page qui écoute, et exiger un modèle
 ///   Apple Intelligence qu'elle n'utilisera jamais rendait Caspr
 ///   inutilisable pour qui n'a que ChatGPT.
 ///
@@ -56,12 +56,12 @@ enum SetupRecoveryGuard {
             // n'ont rien pour travailler.
             return AppleEngineCard.isValid
         case .chatgpt:
-            // Calibré implique connecté une fois : la calibration refuse de
-            // commencer tant que la page n'a pas de session (cf.
-            // `Relais.attendreConnexion`). Une session perdue depuis ne se
-            // mesure qu'en interrogeant la page, ce qu'une garde synchrone ne
-            // peut pas faire ; l'appui le découvre alors, et le dit.
-            return Relais.partage.estCalibre
+            // Connecté et calibré. La connexion est la dernière que la page a
+            // montrée : l'interroger n'est pas synchrone, et une garde l'est.
+            // Une session perdue compte donc dès que la page a affiché
+            // l'écran de connexion, ou qu'on s'est déconnecté ; avant, c'est
+            // l'appui qui la découvre, et le dit.
+            return Relais.partage.saitDicter
         }
     }
 

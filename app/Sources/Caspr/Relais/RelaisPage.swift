@@ -231,6 +231,15 @@ final class RelaisPage: NSObject {
     /// dit.
     var surAffichage: (() -> Void)?
 
+    /// Appelé quand la page a **montré** si la session est ouverte : la zone
+    /// de saisie de l'application, ou l'écran de connexion. Jamais sur un
+    /// silence du pont, ni sur une patience épuisée — une page qui se charge
+    /// n'est pas une session fermée.
+    ///
+    /// La garde de l'accueil lit ce qu'on a vu en dernier : elle est
+    /// synchrone, et interroger la page ne l'est pas.
+    var surConnexion: ((Connexion) -> Void)?
+
     /// Position hors champ de la fenêtre quand le relais travaille en silence.
     ///
     /// La fenêtre reste « devant » du point de vue du serveur de fenêtres,
@@ -524,8 +533,14 @@ final class RelaisPage: NSObject {
                     "return window.__relais.etat(micro, stop, composeur);",
                     ["micro": selecteurs.micro, "stop": selecteurs.stop,
                      "composeur": selecteurs.composeur])
-                if r["connecte"] as? Bool == true { return .connecte }
-                if r["authentification"] as? Bool == true { return .deconnecte }
+                if r["connecte"] as? Bool == true {
+                    surConnexion?(.connecte)
+                    return .connecte
+                }
+                if r["authentification"] as? Bool == true {
+                    surConnexion?(.deconnecte)
+                    return .deconnecte
+                }
             } catch Erreur.pontMuet {
                 return .inconnu
             } catch is CancellationError {

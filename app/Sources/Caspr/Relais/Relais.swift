@@ -174,11 +174,28 @@ final class Relais: ObservableObject {
         neuve.surFermeture = { [weak self] in self?.fenetreFermee() }
         neuve.surMort = { [weak self] in self?.surPageInterrompue?() }
         neuve.surAffichage = { [weak self] in self?.surAffichageChange?() }
+        neuve.surConnexion = { [weak self] in self?.sessionVue = $0 }
         page = neuve
         return neuve
     }
 
     var estCalibre: Bool { RelaisSelecteurs.charger().estCalibre }
+
+    /// La session ChatGPT telle que la page l'a montrée en dernier.
+    ///
+    /// `.inconnu` tant qu'aucune page ne l'a dit depuis le lancement. Ce n'est
+    /// pas une mesure fraîche — seule la page en donne une, et pas sans
+    /// attendre —, c'est la dernière chose **vue** : l'écran de connexion
+    /// d'une session perdue, ou « Se déconnecter ».
+    private(set) var sessionVue: RelaisPage.Connexion = .inconnu
+
+    /// Connecté et calibré, autant qu'on puisse le savoir sans interroger la
+    /// page : ce que la voie ChatGPT exige pour dicter.
+    ///
+    /// Calibré implique connecté une fois — la calibration ne commence pas
+    /// sans session (cf. `attendreConnexion`). Reste la session perdue
+    /// depuis : elle compte dès que la page l'a montrée.
+    var saitDicter: Bool { estCalibre && sessionVue != .deconnecte }
 
     /// Où doit atterrir ce que le module courant produit.
     ///
@@ -520,6 +537,7 @@ final class Relais: ObservableObject {
         let types = WKWebsiteDataStore.allWebsiteDataTypes()
         await WKWebsiteDataStore.default().removeData(ofTypes: types,
                                                       modifiedSince: .distantPast)
+        sessionVue = .deconnecte
         Log.info("relais : session ChatGPT effacée")
     }
 

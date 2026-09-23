@@ -1172,7 +1172,7 @@ final class Relais: ObservableObject {
                 ouverte derrière ce message.
 
                 Vérifiez votre connexion à Internet. Une fois la conversation affichée, \
-                relancez « Calibrer automatiquement » dans Réglages › Voie.
+                relancez « Calibrer automatiquement » \(Self.ouRelancer).
                 """)
             return false
         case .deconnecte:
@@ -1185,8 +1185,8 @@ final class Relais: ObservableObject {
                 volontairement ses connexions dans une fenêtre embarquée. Une adresse \
                 e-mail et un mot de passe fonctionnent.
 
-                La calibration reprendra d'elle-même dès que la conversation \
-                s'affichera. Fermer la fenêtre l'arrête.
+                La calibration reprendra d'elle-même si la conversation s'affiche \
+                dans les dix minutes. Fermer la fenêtre l'arrête.
                 """)
             // Attendre la connexion plutôt que s'arrêter : c'est le parcours
             // de qui choisit ChatGPT pour la première fois, à l'accueil comme
@@ -1285,7 +1285,27 @@ final class Relais: ObservableObject {
             guard voieChatGPT, !Task.isCancelled else { return false }
             if await page.connexionObservee(secondes: 2) == .connecte { return true }
         }
+        // L'alerte a promis une reprise : s'arrêter sans le dire laissait
+        // attendre, connecté, une suite qui ne viendrait plus. La fenêtre part
+        // avec l'attente, comme aux autres sorties du parcours — sans quoi
+        // l'accueil, qui revient à la fin d'une calibration, la recouvrait.
+        Self.alerter("Toujours pas connecté", """
+            Caspr a attendu dix minutes sans voir de conversation ChatGPT, et a \
+            arrêté d'attendre. Une fois connecté, relancez « Calibrer \
+            automatiquement » \(Self.ouRelancer).
+            """)
+        page.cacher()
         return false
+    }
+
+    /// Où relancer une calibration. Pendant l'accueil, les Réglages ne
+    /// s'ouvrent pas — la garde ramène l'accueil à leur place (cf.
+    /// `SetupRecoveryGuard`) — : renvoyer vers eux envoyait chercher un bouton
+    /// derrière une porte fermée. La même carte les porte dans l'accueil.
+    private static var ouRelancer: String {
+        SetupRecoveryGuard.shouldIntercept
+            ? "à l'étape du premier essai de l'accueil, sous « Votre compte ChatGPT »"
+            : "dans Réglages › Voie"
     }
 
     /// Ce que le parcours a trouvé et ce qui lui manque, repère par repère.
@@ -1484,7 +1504,8 @@ final class Relais: ObservableObject {
             l'application. Une adresse e-mail et un mot de passe fonctionnent — un \
             compte dédié convient très bien.
 
-            La suite démarrera toute seule dès que la conversation s'affichera.
+            La suite démarrera toute seule si la conversation s'affiche dans les \
+            dix minutes.
             """)
         // Dix minutes d'horloge, et non six cents tours : un tour dont l'appel
         // attend son délai en dure six.
@@ -1494,6 +1515,13 @@ final class Relais: ObservableObject {
             guard voieChatGPT, !Task.isCancelled else { return false }
             if await page.etatConnexion(patience: 1) == .connecte { return true }
         }
+        // Même promesse, même fin que `attendreLaSession`.
+        Self.alerter("Toujours pas connecté", """
+            Caspr a attendu dix minutes sans voir de conversation ChatGPT, et a \
+            arrêté d'attendre. Une fois connecté, relancez la calibration \
+            \(Self.ouRelancer).
+            """)
+        page.cacher()
         return false
     }
 

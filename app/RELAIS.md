@@ -146,7 +146,8 @@ Ce que l'automate s'interdit, et pourquoi :
 
 - **Se connecter.** C'est le compte de l'utilisateur : sans session, la
   fenêtre s'ouvre, et le parcours attend qu'il s'y connecte — dix minutes au
-  plus, fermer la fenêtre l'arrête — avant de demander, comme toujours, la
+  plus, au bout desquelles il le dit ; fermer la fenêtre l'arrête en
+  silence — avant de demander, comme toujours, la
   permission d'envoyer le message d'essai. « Sans session » veut dire que la
   page l'a **dit** (un bouton de connexion, une page d'authentification), vu
   par le filet et non par le calibrage peut-être faux, après l'avoir laissée

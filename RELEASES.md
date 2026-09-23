@@ -48,7 +48,7 @@ Une puce par changement, du point de vue de quelqu'un qui utilise Caspr — pas 
 point de vue du dépôt.
 
 ```markdown
-- Supprimer un modèle CrisperWhisper ne change plus la version de macOS retenue.
+- La calibration automatique ne touche plus à un calibrage qui marche.
 - Les nouveautés de chaque version s'affichent dans la fenêtre de mise à jour.
 - L'icône de l'application apparaît enfin dans la fenêtre d'installation.
 ```

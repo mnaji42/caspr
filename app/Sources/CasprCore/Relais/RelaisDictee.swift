@@ -166,6 +166,8 @@ public final class RelaisDictee {
     /// transcription en train d'aboutir. Le seul signal fiable est le retour
     /// de la zone, et il signifie exactement ce qu'on attend.
     public func arreterEtLire() async throws -> String {
+        // Un cycle abandonné ne touche plus à la page.
+        try Task.checkCancellation()
         // L'écho se désarme à la sortie du clic, quelle qu'elle soit : une
         // erreur du pont ne passe pas par l'abandon, et l'écho armé
         // continuerait d'accumuler le son jusqu'à la dictée suivante.
@@ -211,6 +213,7 @@ public final class RelaisDictee {
     ///
     /// `brut` signe le message quand il n'y a pas de consigne.
     public func envoyer(avant: String, apres: String, brut: String) async throws {
+        try Task.checkCancellation()
         empreinte = RelaisVeille.empreinte(avant)
         if !avant.isEmpty || !apres.isEmpty {
             guard try await AppelAnnulable.appeler({ try await self.page.encadrer(avant: avant, apres: apres) })
@@ -505,7 +508,12 @@ public final class RelaisDictee {
                     journal("relais : ChatGPT a refusé (« \(message) »)", true)
                     throw RelaisErreur.refusParChatGPT(message)
                 }
-                if let valeur = try await juger(vu) { return valeur }
+                if let valeur = try await juger(vu) {
+                    // Un geste qui a demandé plusieurs essais : le prochain
+                    // défaut se lira dans le journal plutôt que dans une capture.
+                    if let delai, tour > 1 { journal("relais : \(delai) au \(tour)e relevé", false) }
+                    return valeur
+                }
             }
             if let delai, horloge.maintenant - debut >= delai.duree { throw delai.erreur }
             try await horloge.dormir(.milliseconds(250))

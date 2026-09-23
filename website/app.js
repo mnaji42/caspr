@@ -24,10 +24,10 @@
      place du plus long, et un écart trop grand creuserait un vide sous le
      titre. Ils disent ce que Caspr écrit — pas des slogans. */
   const PHRASES = LANG === 'en'
-    ? ['at the speed of your thoughts', 'your jargon, untranslated',
-       'the words of your trade', 'what you actually meant']
-    : ['à la vitesse de votre pensée', 'votre franglais sans traduire',
-       'les mots de votre métier', 'ce que vous vouliez dire'];
+    ? ['at the speed of your thoughts', 'right where your caret is',
+       'into your daily notes', 'offline, or through ChatGPT']
+    : ['à la vitesse de votre pensée', 'là où est votre curseur',
+       'dans vos notes du jour', 'hors ligne ou par ChatGPT'];
 
   const typed = document.getElementById('typed');
   const ghost = document.querySelector('.typing-ghost');
@@ -162,16 +162,15 @@
       image: '08-attendre-quelque-seconde-onboarding-souvre.png',
       title: t('Caspr s\'ouvre', 'Caspr opens'),
       text: t(
-        'Après quelques secondes, l\'accueil s\'affiche et vous guide pour les deux autorisations nécessaires : le micro et l\'accessibilité.',
-        'After a few seconds the welcome screen appears and walks you through the two permissions needed: microphone and accessibility.'
+        'Après quelques secondes, l\'accueil s\'affiche : il vous fait choisir votre voie, macOS ou ChatGPT, puis vous guide pour les deux autorisations nécessaires, le micro et l\'accessibilité.',
+        'After a few seconds the welcome screen appears: it has you choose your path, macOS or ChatGPT, then walks you through the two permissions needed, microphone and accessibility.'
       )
     }
   ];
 
-  /* L'URL stable que produit scripts/package-dmg.sh. Elle sert de repli : la
-     version réellement publiée est relue plus bas dans la réponse de GitHub,
-     parce qu'une release antérieure au changement de nom porte encore
-     Sofler.dmg et ferait échouer le téléchargement. */
+  /* L'URL stable que produit scripts/package-dmg.sh. Elle sert de repli : le
+     lien réellement publié est relu plus bas dans la réponse de GitHub, qui
+     seule sait quelle image est attachée à la dernière version. */
   const DMG_FALLBACK = 'https://github.com/mnaji42/caspr/releases/latest/download/Caspr.dmg';
   let dmgUrl = DMG_FALLBACK;
 

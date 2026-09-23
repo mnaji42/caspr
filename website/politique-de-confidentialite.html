@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Politique de confidentialité — Caspr</title>
-<meta name="description" content="Ce que Caspr fait de votre voix et de vos textes : rien ne quitte votre Mac.">
+<meta name="description" content="Ce que Caspr fait de votre voix et de vos textes, voie par voie : avec macOS, rien ne quitte votre Mac ; avec ChatGPT, votre voix passe par votre propre compte.">
 <meta name="theme-color" content="#0b0e14">
 <meta name="color-scheme" content="dark">
 <link rel="canonical" href="https://caspr.lyriastudio.fr/politique-de-confidentialite.html">
@@ -12,10 +12,10 @@
 <link rel="alternate" hreflang="en" href="https://caspr.lyriastudio.fr/privacy.html">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Politique de confidentialité — Caspr">
-<meta property="og:description" content="Ce que Caspr fait de votre voix et de vos textes : rien ne quitte votre Mac.">
+<meta property="og:description" content="Ce que Caspr fait de votre voix et de vos textes, voie par voie : avec macOS, rien ne quitte votre Mac ; avec ChatGPT, votre voix passe par votre propre compte.">
 <meta property="og:url" content="https://caspr.lyriastudio.fr/politique-de-confidentialite.html">
 <link rel="icon" type="image/svg+xml" href="images/caspr-app-icon.svg">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -35,45 +35,56 @@
 <main id="main">
   <article class="container legal">
     <h1>Politique de confidentialité</h1>
-    <p class="legal-date">Dernière mise à jour : 20 août 2026</p>
+    <p class="legal-date">Dernière mise à jour : 23 septembre 2026</p>
 
     <section>
       <h2>Le principe</h2>
-      <p>Vos paroles vous appartiennent. Caspr est construit de sorte qu'aucun enregistrement ni aucun texte ne quitte votre Mac — non pas par engagement, mais parce qu'il n'existe aucun serveur vers lequel les envoyer.</p>
+      <p>Vos paroles vous appartiennent. Caspr n'a aucun serveur : il n'existe nulle part chez nous où envoyer un enregistrement ou un texte. Ce qui quitte votre Mac, et vers où, dépend de la voie de dictée que vous choisissez — et vous pouvez en changer à tout moment.</p>
     </section>
 
     <section>
-      <h2>1. Le traitement audio reste sur la machine</h2>
-      <p>Quand vous dictez :</p>
+      <h2>1. La voie macOS : rien ne quitte la machine</h2>
+      <p>Quand vous dictez par macOS :</p>
       <ul>
         <li>Le flux capté par le microphone est traité <strong>dans la mémoire vive de votre Mac</strong>.</li>
-        <li>Les moteurs de transcription — reconnaissance vocale de macOS, ou modèle local CrisperWhisper — s'exécutent sur le processeur et le GPU de votre machine.</li>
+        <li>La reconnaissance vocale de macOS — Apple Intelligence, ou la Dictée du système — s'exécute sur votre machine, hors ligne.</li>
         <li><strong>Aucun octet d'audio n'est transmis sur Internet.</strong></li>
       </ul>
     </section>
 
     <section>
-      <h2>2. Ni télémétrie, ni traçage</h2>
-      <p>L'application :</p>
+      <h2>2. La voie ChatGPT : votre compte, chez OpenAI</h2>
+      <p>Quand vous dictez par ChatGPT :</p>
       <ul>
-        <li>ne demande la création d'aucun compte ;</li>
-        <li>n'intègre aucun outil de mesure d'audience, de traçage publicitaire ou de SDK tiers ;</li>
-        <li>n'émet qu'une seule requête réseau, facultative : la vérification des mises à jour auprès de GitHub, qui se désactive dans les réglages.</li>
+        <li>Caspr ouvre le site chatgpt.com dans une page web intégrée à l'application, connectée à <strong>votre propre compte ChatGPT</strong>. C'est cette page qui capte le micro.</li>
+        <li>Votre voix est transmise à <strong>OpenAI</strong>, qui la transcrit — exactement comme si vous utilisiez chatgpt.com dans un navigateur. Les textes qu'un module envoie à ChatGPT, pour les réorganiser ou poser une question, le sont aussi, et ces conversations apparaissent dans votre historique ChatGPT.</li>
+        <li>Ce traitement relève de la <a href="https://openai.com/policies/privacy-policy/" rel="noopener">politique de confidentialité d'OpenAI</a> et des réglages de votre compte, pas de Caspr. Caspr n'en reçoit aucune copie sur un serveur : il n'en a pas.</li>
+        <li>La session — cookies et stockage de la page — reste sur votre Mac, dans l'espace que macOS réserve à l'application. « Se déconnecter », dans les réglages, et le désinstalleur l'effacent.</li>
       </ul>
     </section>
 
     <section>
-      <h2>3. La collecte locale, si vous l'activez</h2>
-      <p>Caspr propose une collecte locale, destinée à mesurer la fidélité des moteurs sur de la parole réelle. Elle est <strong>désactivée par défaut</strong>. Une fois activée, les fichiers audio et les textes sont conservés <strong>sur votre seul disque</strong>, dans <code>~/Library/Application Support/Caspr/corpus</code>. Ils restent sous votre contrôle et ne sont jamais téléversés. La barre d'enregistrement rappelle en permanence que la collecte est active, et permet de l'arrêter.</p>
+      <h2>3. Ni télémétrie, ni traçage</h2>
+      <p>L'application :</p>
+      <ul>
+        <li>ne demande la création d'aucun compte Caspr ;</li>
+        <li>n'intègre aucun outil de mesure d'audience, de traçage publicitaire ou de SDK tiers ;</li>
+        <li>ne fait qu'une seule requête réseau de son propre chef : la vérification des mises à jour auprès de GitHub. La vérification automatique est désactivée par défaut ; « Vérifier maintenant » la lance à la demande, et l'installation d'une mise à jour télécharge l'image disque depuis GitHub.</li>
+      </ul>
     </section>
 
     <section>
-      <h2>4. Le site</h2>
+      <h2>4. Ce qui reste sur votre Mac</h2>
+      <p>Vos réglages et l'historique des dernières transcriptions sont conservés dans les préférences de l'application ; le fichier de notes, si vous en désignez un, est à vous. Rien de tout cela n'est téléversé, quelle que soit la voie. Les versions antérieures à la 0.15 proposaient une collecte locale des dictées : elle n'existe plus, et ses fichiers sont mis à la corbeille au premier lancement de la nouvelle version.</p>
+    </section>
+
+    <section>
+      <h2>5. Le site</h2>
       <p>Ce site n'emploie ni cookie de mesure d'audience, ni traceur, ni police distante. Il interroge l'interface publique de GitHub pour afficher le numéro de la dernière version publiée.</p>
     </section>
 
     <section>
-      <h2>5. Contact</h2>
+      <h2>6. Contact</h2>
       <p>Pour toute question : <a href="mailto:contact@lyriastudio.fr">contact@lyriastudio.fr</a>.</p>
     </section>
 

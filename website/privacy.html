@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy policy — Caspr</title>
-<meta name="description" content="What Caspr does with your voice and text: nothing leaves your Mac.">
+<meta name="description" content="What Caspr does with your voice and text, path by path: with macOS nothing leaves your Mac; with ChatGPT your voice goes through your own account.">
 <meta name="theme-color" content="#0b0e14">
 <meta name="color-scheme" content="dark">
 <link rel="canonical" href="https://caspr.lyriastudio.fr/privacy.html">
@@ -12,10 +12,10 @@
 <link rel="alternate" hreflang="en" href="https://caspr.lyriastudio.fr/privacy.html">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Privacy policy — Caspr">
-<meta property="og:description" content="What Caspr does with your voice and text: nothing leaves your Mac.">
+<meta property="og:description" content="What Caspr does with your voice and text, path by path: with macOS nothing leaves your Mac; with ChatGPT your voice goes through your own account.">
 <meta property="og:url" content="https://caspr.lyriastudio.fr/privacy.html">
 <link rel="icon" type="image/svg+xml" href="images/caspr-app-icon.svg">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -35,45 +35,56 @@
 <main id="main">
   <article class="container legal">
     <h1>Privacy policy</h1>
-    <p class="legal-date">Last updated: 20 August 2026</p>
+    <p class="legal-date">Last updated: 23 September 2026</p>
 
     <section>
       <h2>The principle</h2>
-      <p>Your words are yours. Caspr is built so that no recording and no text leaves your Mac — not as a pledge, but because there is no server to send them to.</p>
+      <p>Your words are yours. Caspr has no server: there is nowhere on our side to send a recording or a text to. What leaves your Mac, and where it goes, depends on the dictation path you choose — and you can switch at any time.</p>
     </section>
 
     <section>
-      <h2>1. Audio processing stays on the machine</h2>
-      <p>When you dictate:</p>
+      <h2>1. The macOS path: nothing leaves the machine</h2>
+      <p>When you dictate through macOS:</p>
       <ul>
         <li>The microphone stream is processed <strong>in your Mac's memory</strong>.</li>
-        <li>The transcription engines — the macOS recogniser, or the local CrisperWhisper model — run on your machine's CPU and GPU.</li>
+        <li>macOS speech recognition — Apple Intelligence, or system Dictation — runs on your machine, offline.</li>
         <li><strong>No byte of audio is sent over the internet.</strong></li>
       </ul>
     </section>
 
     <section>
-      <h2>2. No telemetry, no tracking</h2>
-      <p>The app:</p>
+      <h2>2. The ChatGPT path: your account, at OpenAI</h2>
+      <p>When you dictate through ChatGPT:</p>
       <ul>
-        <li>requires no account;</li>
-        <li>includes no analytics, advertising tracker or third-party SDK;</li>
-        <li>makes a single optional network request: the update check against GitHub, which can be switched off in settings.</li>
+        <li>Caspr opens the chatgpt.com website in a web page built into the app, signed in to <strong>your own ChatGPT account</strong>. That page is what captures the microphone.</li>
+        <li>Your voice is sent to <strong>OpenAI</strong>, which transcribes it — exactly as if you used chatgpt.com in a browser. Text a module sends to ChatGPT, to reorganise it or to ask a question, is sent too, and those conversations appear in your ChatGPT history.</li>
+        <li>That processing falls under <a href="https://openai.com/policies/privacy-policy/" rel="noopener">OpenAI's privacy policy</a> and your account settings, not Caspr's. Caspr receives no copy of it on a server: it has none.</li>
+        <li>The session — cookies and page storage — stays on your Mac, in the space macOS reserves for the app. "Se déconnecter" in the settings, and the uninstaller, erase it.</li>
       </ul>
     </section>
 
     <section>
-      <h2>3. Local collection, if you turn it on</h2>
-      <p>Caspr offers local collection, meant to measure how faithful the engines are on real speech. It is <strong>off by default</strong>. Once enabled, audio files and text are kept <strong>on your disk only</strong>, under <code>~/Library/Application Support/Caspr/corpus</code>. They stay under your control and are never uploaded. The recording bar states at all times that collection is on, and lets you stop it.</p>
+      <h2>3. No telemetry, no tracking</h2>
+      <p>The app:</p>
+      <ul>
+        <li>requires no Caspr account;</li>
+        <li>includes no analytics, advertising tracker or third-party SDK;</li>
+        <li>makes a single network request of its own: the update check against GitHub. The automatic check is off by default; "Vérifier maintenant" runs it on demand, and installing an update downloads the disk image from GitHub.</li>
+      </ul>
     </section>
 
     <section>
-      <h2>4. This site</h2>
+      <h2>4. What stays on your Mac</h2>
+      <p>Your settings and the history of recent transcriptions are kept in the app's preferences; the notes file, if you choose one, is yours. None of it is uploaded, whichever path you use. Versions before 0.15 offered local collection of dictations: it no longer exists, and its files are moved to the Trash when the new version first launches.</p>
+    </section>
+
+    <section>
+      <h2>5. This site</h2>
       <p>This site uses no analytics cookie, no tracker and no remote font. It queries GitHub's public interface to display the latest published version number.</p>
     </section>
 
     <section>
-      <h2>5. Contact</h2>
+      <h2>6. Contact</h2>
       <p>For any question: <a href="mailto:contact@lyriastudio.fr">contact@lyriastudio.fr</a>.</p>
     </section>
 

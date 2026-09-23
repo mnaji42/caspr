@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <base href="/">
-<title>Caspr — local, offline dictation for macOS</title>
-<meta name="description" content="Caspr turns speech into text on your own Mac, with no cloud and no account. It cleans up the way people actually talk, and writes the words of your trade without translating them.">
+<title>Caspr — dictation for macOS, offline or through ChatGPT</title>
+<meta name="description" content="Caspr writes your voice wherever your caret is. Two paths: macOS, offline and with no account, or ChatGPT, through your own account. Free, open source, no server.">
 <meta name="theme-color" content="#0b0e14">
 <meta name="color-scheme" content="dark">
 
@@ -19,15 +19,15 @@
 <meta property="og:locale" content="en_US">
 <meta property="og:locale:alternate" content="fr_FR">
 <meta property="og:url" content="https://caspr.lyriastudio.fr/en">
-<meta property="og:title" content="Caspr — local, offline dictation for macOS">
-<meta property="og:description" content="Speak naturally. Caspr writes at the speed of your thoughts, and never leaves your Mac: no cloud, no account, no telemetry.">
+<meta property="og:title" content="Caspr — dictation for macOS, offline or through ChatGPT">
+<meta property="og:description" content="Speak, and Caspr writes at your caret. With macOS nothing leaves your Mac; with ChatGPT your voice goes through your own account. Caspr has no server.">
 <meta property="og:image" content="https://caspr.lyriastudio.fr/images/og-preview-en.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Caspr — local dictation for macOS">
+<meta property="og:image:alt" content="Caspr — dictation for macOS">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Caspr — local, offline dictation for macOS">
-<meta name="twitter:description" content="Speak naturally. Caspr writes at the speed of your thoughts.">
+<meta name="twitter:title" content="Caspr — dictation for macOS, offline or through ChatGPT">
+<meta name="twitter:description" content="Speak, and Caspr writes at your caret — offline with macOS, or with ChatGPT through your account.">
 <meta name="twitter:image" content="https://caspr.lyriastudio.fr/images/og-preview-en.png">
 
 <link rel="icon" type="image/svg+xml" href="images/caspr-app-icon.svg">
@@ -35,7 +35,7 @@
 
 <!-- Aucune police distante : le site emploie la police système de macOS, comme
      l'application. Une requête réseau de moins, et zéro décalage au chargement. -->
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 
 <script type="application/ld+json">
 {
@@ -46,9 +46,9 @@
       "@id": "https://caspr.lyriastudio.fr/#app",
       "name": "Caspr",
       "applicationCategory": "UtilitiesApplication",
-      "applicationSubCategory": "Dictée vocale",
+      "applicationSubCategory": "Dictation",
       "operatingSystem": "macOS 14 or later",
-      "description": "Local dictation app for macOS: it removes the hesitations of real speech and keeps the vocabulary of your trade. Transcription runs on the machine, with no remote service.",
+      "description": "Menu-bar dictation app for macOS. Two paths: macOS speech recognition, offline and with no account, or ChatGPT, through the user's own account in an embedded web page. The app has no server.",
       "url": "https://caspr.lyriastudio.fr/",
       "downloadUrl": "https://github.com/mnaji42/caspr/releases/latest",
       "softwareHelp": "https://github.com/mnaji42/caspr#install",
@@ -56,12 +56,12 @@
       "isAccessibleForFree": true,
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
       "featureList": [
-        "Fully local transcription, no network connection required",
-        "A personal lexicon for the vocabulary of your trade",
-        "Speech mixing two languages within a single sentence",
+        "Offline dictation with macOS speech recognition",
+        "Dictation through ChatGPT, with your own account",
+        "ChatGPT modules: raw text, reorganise, ask a question",
         "Text inserted at the caret of the active app",
         "Dictations appended to a dated Markdown file",
-        "The macOS engines or CrisperWhisper, your choice"
+        "Switch between paths from the menu or a shortcut"
       ],
       "author": { "@id": "https://lyriastudio.fr/#org" }
     },
@@ -88,7 +88,7 @@
           "name": "Which Mac do I need?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Caspr needs macOS 14 or later. With the macOS engines it runs on any machine where system dictation works, Intel Macs included: Dictation has existed since macOS 10.15, and Apple Intelligence adds to it from macOS 26 on the Macs that support it. Only CrisperWhisper requires an Apple Silicon chip, with about 1.6 GB of weights to download and 3 GB resident in memory."
+            "text": "Caspr needs macOS 14 or later, Intel Macs included. On the macOS path it uses Apple Intelligence from macOS 26 when the machine can write your language, and system Dictation otherwise. The ChatGPT path needs a ChatGPT account and an internet connection."
           }
         },
         {
@@ -96,7 +96,7 @@
           "name": "Does my voice or text leave my machine?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Transcription runs on your machine with every engine. There is no account, no server and no telemetry. Turn off Wi-Fi and Caspr behaves identically. The only network request the app makes is the update check against GitHub, and it can be switched off in settings."
+            "text": "It depends on the path you choose. With macOS, no: transcription runs on your machine and nothing is sent. With ChatGPT, yes: your voice goes through your own ChatGPT account, to OpenAI, just as on chatgpt.com. Caspr itself has no server, no account and no telemetry; its only request of its own is the update check against GitHub, and the automatic one is off by default."
           }
         },
         {
@@ -109,10 +109,10 @@
         },
         {
           "@type": "Question",
-          "name": "Does Caspr understand the vocabulary of my trade?",
+          "name": "What does the ChatGPT path add?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "That is the reason the project exists. CrisperWhisper accepts a lexicon that biases decoding toward the terms you supply, whatever the field. Measured on real speech mixing French and English, 32 of 34 technical terms survive with a lexicon, against 29 of 34 without, and with no regression on plain sentences."
+            "text": "Often better transcription, and modules: the raw text, a reorganised version of what you said, or a question ChatGPT answers in its page. Caspr drives ChatGPT's web interface, not an API: if OpenAI redesigns it, the path can stop working until a new calibration, which Caspr runs on its own."
           }
         },
         {
@@ -120,7 +120,7 @@
           "name": "What is the licence?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Caspr's own code is MIT, as is CrisperWhisper's inference code. The CrisperWhisper 2.0 model weights are not: they fall under a Nyra Health non-commercial research licence. Caspr therefore does not bundle those weights and never downloads them silently: the licence is shown before any download, and the choice is yours."
+            "text": "Caspr's code is MIT licensed, public on GitHub. The ChatGPT path uses your own account, under OpenAI's terms; Caspr is not affiliated with OpenAI."
           }
         },
         {
@@ -128,7 +128,7 @@
           "name": "Can I uninstall cleanly?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. The app ships an uninstaller that removes the Python environment, the model weights, the caches and the preferences. It only offers to remove what is actually installed."
+            "text": "Yes. The app ships an uninstaller that moves the preferences, the history, the ChatGPT session if there is one, the logs and the permissions to the Trash. It only offers what is actually there."
           }
         }
       ]
@@ -148,12 +148,11 @@
     </a>
 
     <nav class="site-nav" aria-label="Site sections">
+      <a class="nav-link" href="#paths">Two paths</a>
       <a class="nav-link" href="#dictation">Dictation</a>
-      <a class="nav-link" href="#vocabulary">Vocabulary</a>
       <a class="nav-link" href="#bar">The bar</a>
       <a class="nav-link" href="#notes">Notes</a>
-      <a class="nav-link" href="#engines">Engines</a>
-      <a class="nav-link" href="#numbers">Measurements</a>
+      <a class="nav-link" href="#local">Privacy</a>
       <a class="nav-link" href="#questions">Questions</a>
     </nav>
 
@@ -197,10 +196,10 @@
         </h1>
 
         <p class="hero-lead">
-          A dictation app for macOS that takes out your hesitations and keeps your
-          words — the ones from your trade, the ones borrowed from another language.
-          Fast, free, open source, and entirely on your Mac: no cloud, no account,
-          no telemetry.
+          A menu-bar dictation app for macOS: you speak, and the text is written
+          at your caret or into your notes. Two paths to choose from — macOS,
+          offline and with no account, or ChatGPT, through your own account.
+          Free, open source, and with no server.
         </p>
 
         <div class="hero-actions">
@@ -221,7 +220,7 @@
         <p class="hero-req">
           <span>macOS 14 or later, Intel Macs included</span>
           <span>·</span>
-          <span><a href="#engines">Requirements by engine</a></span>
+          <span><a href="#paths">Requirements by path</a></span>
         </p>
       </div>
 
@@ -237,12 +236,12 @@
         <div class="stage-doc">
           <p># Board meeting, 20 August</p>
           <p>- budget holds, the roadmap slips by a month</p>
-          <p class="doc-live">- confirm the <span class="term term--ok">churn</span> before the next <span class="term term--ok">board</span><span class="caret" aria-hidden="true"></span></p>
+          <p class="doc-live">- confirm the churn before the next board<span class="caret" aria-hidden="true"></span></p>
         </div>
 
         <!-- La barre ne prend jamais le focus dans l'application : elle est donc
              purement descriptive ici, sans élément interactif. -->
-        <div class="overlay" role="img" aria-label="The Caspr bar during a recording: timer at 42 seconds, microphone in standard mode, collection off, a preview of what is being heard, and below the card French selected on the left and the caret as destination on the right.">
+        <div class="overlay" role="img" aria-label="The Caspr bar during a recording on the macOS path: timer at 42 seconds, microphone in standard mode, a preview of what is being heard, and below the card French selected on the left and the caret as destination on the right.">
           <div class="bar" aria-hidden="true">
             <div class="bar-row">
               <span class="rec-dot"></span>
@@ -252,7 +251,6 @@
               </span>
               <span class="bar-right">
                 <span class="bar-status">Standard</span>
-                <span class="chip-collect" data-on="false">Collecting</span>
               </span>
             </div>
             <p class="bar-preview">confirm the churn before the next bored</p>
@@ -273,36 +271,124 @@
 
       <p class="stage-note">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4m0-4h.01"/></svg>
-        <span>The bar's preview comes from the macOS engine, not from CrisperWhisper: it has no lexicon, hence “bored” where the inserted text will write <span class="term term--ok">board</span>. It answers “is the mic hearing me”, not “will the transcription be right”.</span>
+        <span>On the macOS path, the preview shows what is being heard as you speak, in a quick draft — hence “bored”, which the final text may still correct. It answers “is the mic hearing me”, not “will the transcription be right”. The ChatGPT path has no preview: its page holds the microphone.</span>
       </p>
 
       <p class="perks">
-        <span class="perk"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg><span><b>100% local</b> — nothing leaves your Mac</span></span>
-        <span class="perk"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg><span><b>425 ms</b> for 13 seconds of speech</span></span>
+        <span class="perk"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg><span><b>Offline</b> with macOS — nothing leaves your Mac</span></span>
+        <span class="perk"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg><span><b>ChatGPT</b> through your own account</span></span>
         <span class="perk"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg><span><b>Open source</b> — MIT licensed code</span></span>
-        <span class="perk"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg><span><b>No account</b>, no subscription</span></span>
+        <span class="perk"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg><span><b>No Caspr server</b>, no subscription</span></span>
       </p>
     </div>
   </section>
 
   <!-- ===================================================================
-       Avant / après. Le problème que tout le monde a : on ne parle pas
-       comme on écrit.
+       Les deux voies. Une seule décision : qui écoute le micro.
        =================================================================== -->
-  <section class="section section--raised" id="dictation" aria-labelledby="dictation-title">
+  <section class="section section--raised" id="paths" aria-labelledby="paths-title">
     <div class="container">
       <div class="section-head">
-        <h2 id="dictation-title">You don't speak the way you write</h2>
+        <h2 id="paths-title">Two paths. You choose who listens.</h2>
         <p class="lead">
-          We hesitate, we backtrack, we start the sentence again. Ordinary
-          dictation writes all of it down, every “er” included, and then you reread
-          it to clean it up. Caspr writes what you meant.
+          They cannot both listen at once: one holds the microphone, the other
+          stays quiet. You pick one when you install, and switch with one click —
+          from the menu, the settings or a shortcut.
+        </p>
+      </div>
+
+      <div class="specs">
+        <table>
+          <caption class="sr-only">What Caspr's two paths, macOS and ChatGPT, do and what each one needs</caption>
+          <thead>
+            <tr>
+              <th scope="col"><span class="sr-only">Criterion</span></th>
+              <th scope="col">
+                <span class="col-name">macOS</span>
+                <span class="col-note">The system's speech recognition</span>
+              </th>
+              <th scope="col">
+                <span class="col-name">ChatGPT</span>
+                <span class="col-note">Through your own account</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Where your voice goes</th>
+              <td data-col="macOS">Nowhere: <strong>it never leaves your Mac</strong></td>
+              <td data-col="ChatGPT">To OpenAI, <strong>through your ChatGPT account</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">Account</th>
+              <td data-col="macOS">None</td>
+              <td data-col="ChatGPT">A ChatGPT account, with email and password</td>
+            </tr>
+            <tr>
+              <th scope="row">Internet connection</th>
+              <td data-col="macOS">Not needed</td>
+              <td data-col="ChatGPT">Required</td>
+            </tr>
+            <tr>
+              <th scope="row">Live preview</th>
+              <td data-col="macOS">Yes, under the bar</td>
+              <td data-col="ChatGPT">No: the ChatGPT page holds the microphone</td>
+            </tr>
+            <tr>
+              <th scope="row">What it adds</th>
+              <td data-col="macOS">Instant transcription</td>
+              <td data-col="ChatGPT"><strong>Modules</strong>: raw text, reorganise, ask a question</td>
+            </tr>
+            <tr>
+              <th scope="row">Setup</th>
+              <td data-col="macOS">A language model, downloaded by macOS</td>
+              <td data-col="ChatGPT">Sign in, then an automatic calibration</td>
+            </tr>
+            <tr>
+              <th scope="row">What can break it</th>
+              <td data-col="macOS">Hardly anything: it is a system interface</td>
+              <td data-col="ChatGPT">A redesign of the ChatGPT website</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="source-note">
+        On the macOS side, Caspr picks the best recogniser your machine can run, without
+        asking you: <strong>Apple Intelligence</strong>, from macOS 26, and system
+        <strong>Dictation</strong> as a fallback when Apple Intelligence cannot write your
+        language — never by choice: measured on 129 real dictations, it lost close to 44% of
+        the words. Availability is measured on the machine, never inferred from a version
+        number.
+      </p>
+
+      <p class="source-note">
+        On the ChatGPT side, Caspr opens chatgpt.com in a page it hosts, with your session,
+        and clicks its buttons for you. It is not an API: if OpenAI redesigns the page, the
+        path can stop working. Caspr then relearns the buttons by itself, trying them in
+        front of you — a single test message, announced before it is sent.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       Avant / après. On ne parle pas comme on écrit — et le module
+       Réorganiser le rattrape.
+       =================================================================== -->
+  <section class="section" id="dictation" aria-labelledby="dictation-title">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="dictation-title">Say it any old way. Get it back in order.</h2>
+        <p class="lead">
+          We hesitate, we backtrack, we start the sentence again. On the ChatGPT path,
+          the <strong>Réorganiser</strong> (reorganise) module sends your dictation back to
+          ChatGPT and writes its reply at your caret: what you meant, in order.
         </p>
       </div>
 
       <div class="versus">
         <div class="versus-card">
-          <p class="versus-label">Ordinary dictation</p>
+          <p class="versus-label">What you say</p>
           <p class="versus-quote">
             “So <span class="filler">er</span> hang on, we'll
             <span class="filler">we'll</span> push the meeting to Thursday
@@ -310,91 +396,28 @@
             <span class="filler">er</span> and let Sarah know”
           </p>
           <p class="versus-note">
-            You reread it, you cut, you punctuate. The time dictation saved goes
-            straight back into fixing it.
+            Ordinary dictation writes all of it down, every “er” included. The time
+            speaking saved goes straight back into fixing it.
           </p>
         </div>
 
         <div class="versus-card versus-card--after">
-          <p class="versus-label">With Caspr</p>
+          <p class="versus-label">With Réorganiser</p>
           <p class="versus-quote">
             “We'll push the meeting to Friday morning, and let Sarah know.”
           </p>
           <p class="versus-note">
-            Hesitations, restarts and false starts are removed; punctuation and
-            capitals are inferred from the meaning.
+            Hesitations, restarts and false starts are removed; punctuation follows the
+            meaning.
           </p>
         </div>
       </div>
 
       <p class="source-note">
-        The “clean text” mode comes from CrisperWhisper, and it is the default.
-        “Word for word” does the opposite and writes exactly what was said,
-        hesitations included — useful for interviews. The macOS engines return a
-        single text, with no cleanup pass.
-      </p>
-    </div>
-  </section>
-
-  <!-- ===================================================================
-       Le vocabulaire de métier — le différenciateur.
-       =================================================================== -->
-  <section class="section section--raised" id="vocabulary" aria-labelledby="vocabulary-title">
-    <div class="container">
-      <div class="section-head">
-        <h2 id="vocabulary-title">And the words other engines mangle</h2>
-        <p class="lead">
-          Plenty of trades borrow their vocabulary from another language. A French
-          trader says “le <i lang="fr">spread</i> s'est écarté sur le forward”, a
-          researcher “le peer review a retoqué le protocole”, a developer “les
-          dependencies dans le useEffect”. Speech models force one language per
-          segment, so in French mode those words get absorbed phonetically.
-        </p>
-      </div>
-
-      <div class="compare">
-        <table>
-          <caption class="sr-only">How three technical terms are transcribed by Whisper-family models in French mode and by Caspr</caption>
-          <thead>
-            <tr>
-              <th scope="col">What you say</th>
-              <th scope="col">Speech recognition, French mode</th>
-              <th scope="col">Caspr, with a lexicon</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row"><span class="term">useEffect</span></th>
-              <td><span class="compare-out"><span class="term term--bad">use effect</span></span></td>
-              <td><span class="compare-out"><span class="term term--ok">useEffect</span></span></td>
-            </tr>
-            <tr>
-              <th scope="row"><span class="term">dependencies</span></th>
-              <td><span class="compare-out"><span class="term term--bad">dépendances</span></span></td>
-              <td><span class="compare-out"><span class="term term--ok">dependencies</span></span></td>
-            </tr>
-            <tr>
-              <th scope="row"><span class="term">React</span></th>
-              <td><span class="compare-out"><span class="term term--bad">react</span></span></td>
-              <td><span class="compare-out"><span class="term term--ok">React</span></span></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p class="measure">
-        <span>Measured on real speech mixing French and English:</span>
-        <span class="accent"><b>32 of 34 terms</b> preserved with a lexicon</span>
-        <span>against <b>29 of 34</b> without</span>
-        <span>— and no regression on plain sentences.</span>
-      </p>
-
-      <p class="source-note">
-        The mechanism is called vocabulary conditioning: the engine accepts a list of
-        terms that biases decoding. Yours goes into settings — client names, molecules,
-        tickers, in-house jargon — and the transcription stops translating them. The three
-        examples above come from the test corpus; the mechanism itself knows no particular
-        field.
+        The instruction is spoken, not configured: “translate this into English” or “make
+        it a list”, said in the dictation, is enough. If reorganising fails, the raw
+        transcription is written instead: a dictation is never lost. On the macOS path,
+        the text is written as it was recognised, with no second pass.
       </p>
     </div>
   </section>
@@ -402,7 +425,7 @@
   <!-- ===================================================================
        La barre — ce qui reste modifiable pendant qu'on parle.
        =================================================================== -->
-  <section class="section" id="bar" aria-labelledby="bar-title">
+  <section class="section section--raised" id="bar" aria-labelledby="bar-title">
     <div class="container">
       <div class="section-head">
         <h2 id="bar-title">You change your mind mid-sentence. The bar keeps up.</h2>
@@ -417,14 +440,6 @@
       <dl class="controls">
         <div class="control">
           <dt>
-            <span class="control-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h13"/></svg></span>
-            <span class="control-name">Mode</span>
-          </dt>
-          <dd>Clean text, or word for word. The first removes hesitations and false starts, the second writes exactly what was said.</dd>
-        </div>
-
-        <div class="control">
-          <dt>
             <span class="control-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M8 8H6a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2m8-8h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/></svg></span>
             <span class="control-name">Destination</span>
           </dt>
@@ -433,27 +448,35 @@
 
         <div class="control">
           <dt>
-            <span class="control-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
-            <span class="control-name">Live preview</span>
+            <span class="control-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h13"/></svg></span>
+            <span class="control-name">Module</span>
           </dt>
-          <dd>What is being heard, as you say it. It answers “is the mic hearing me”, not “will the text be right”.</dd>
+          <dd>On the ChatGPT path: Brut, Réorganiser or Discuter — raw, reorganise, discuss. Raw writes the transcription as it is; discuss asks a question and keeps the page open for the answer.</dd>
         </div>
 
         <div class="control">
           <dt>
-            <span class="control-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18v3H3zM5 10v9h14v-9M10 14h4"/></svg></span>
-            <span class="control-name">Collection</span>
+            <span class="control-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            <span class="control-name">Live preview</span>
           </dt>
-          <dd>Off by default. Once enabled it archives dictations on your disk so engines can be measured — and nothing leaves the machine.</dd>
+          <dd>On the macOS path: what is being heard, as you say it. It answers “is the mic hearing me”, not “will the text be right”.</dd>
+        </div>
+
+        <div class="control">
+          <dt>
+            <span class="control-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14m0 0-4-4m4 4-4 4M20 16H6m0 0 4-4m-4 4 4 4"/></svg></span>
+            <span class="control-name">Path</span>
+          </dt>
+          <dd>macOS or ChatGPT, from the menu bar menu or a shortcut. While ChatGPT is the path, the ghost in the menu bar wears a sparkle.</dd>
         </div>
       </dl>
 
       <div class="rule">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
         <p>
-          Mode and destination are read <strong>when the recording ends</strong>, never when
-          it starts. Pressing <strong>Notes</strong> halfway through a sentence sends that
-          dictation to the file, and the reverse works too. That is what makes the bar
+          Destination and module are read <strong>when the recording ends</strong>, never
+          when it starts. Pressing <strong>Notes</strong> halfway through a sentence sends
+          that dictation to the file, and the reverse works too. That is what makes the bar
           useful rather than decorative — and it never takes focus, so the text lands where
           your caret already is.
         </p>
@@ -464,7 +487,7 @@
   <!-- ===================================================================
        Les notes.
        =================================================================== -->
-  <section class="section section--raised" id="notes" aria-labelledby="notes-title">
+  <section class="section" id="notes" aria-labelledby="notes-title">
     <div class="container">
       <div class="section-head">
         <h2 id="notes-title">Speak now, sort it out later</h2>
@@ -499,165 +522,32 @@
   </section>
 
   <!-- ===================================================================
-       Les moteurs. Deux familles, trois moteurs — mais une seule décision.
-       =================================================================== -->
-  <section class="section" id="engines" aria-labelledby="engines-title">
-    <div class="container">
-      <div class="section-head">
-        <h2 id="engines-title">The choice comes down to one question</h2>
-        <p class="lead">
-          macOS, or CrisperWhisper. The first is already there and asks for nothing.
-          The second knows your lexicon, but it has requirements.
-        </p>
-      </div>
-
-      <div class="specs">
-        <table>
-          <caption class="sr-only">Requirements compared for the macOS engines and the CrisperWhisper engine</caption>
-          <thead>
-            <tr>
-              <th scope="col"><span class="sr-only">Criterion</span></th>
-              <th scope="col">
-                <span class="col-name">macOS</span>
-                <span class="col-note">The system's speech recognition</span>
-              </th>
-              <th scope="col">
-                <span class="col-name">CrisperWhisper</span>
-                <span class="col-note">The engine that knows your lexicon</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">macOS version</th>
-              <td data-col="macOS"><strong>14</strong> or later, same as the app</td>
-              <td data-col="CrisperWhisper"><strong>14</strong> or later</td>
-            </tr>
-            <tr>
-              <th scope="row">Machine</th>
-              <td data-col="macOS">Any machine where system dictation works — <strong>Intel Macs included</strong></td>
-              <td data-col="CrisperWhisper"><strong>Apple Silicon</strong> (M1 and up)</td>
-            </tr>
-            <tr>
-              <th scope="row">To download</th>
-              <td data-col="macOS">Nothing, or the language models from System Settings</td>
-              <td data-col="CrisperWhisper">About <strong>1.6 GB</strong> of weights</td>
-            </tr>
-            <tr>
-              <th scope="row">Memory</th>
-              <td data-col="macOS">Negligible</td>
-              <td data-col="CrisperWhisper">About <strong>3 GB</strong> resident</td>
-            </tr>
-            <tr>
-              <th scope="row">Setup</th>
-              <td data-col="macOS">None, it is the default</td>
-              <td data-col="CrisperWhisper">One script, from the app</td>
-            </tr>
-            <tr>
-              <th scope="row">Trade vocabulary</th>
-              <td data-col="macOS">No — it will write “use effect”</td>
-              <td data-col="CrisperWhisper"><strong>Yes</strong>, by conditioning the decoder</td>
-            </tr>
-            <tr>
-              <th scope="row">Modes</th>
-              <td data-col="macOS">A single rendering</td>
-              <td data-col="CrisperWhisper">Clean text, or word for word</td>
-            </tr>
-            <tr>
-              <th scope="row">Licence</th>
-              <td data-col="macOS">Ships with macOS</td>
-              <td data-col="CrisperWhisper">
-                Weights are <strong>non-commercial research</strong>
-                <span class="flag">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
-                  Read before installing
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p class="source-note">
-        On the macOS side there are in fact two versions, and Caspr picks the best one your
-        machine can run without asking you: system <strong>Dictation</strong>, present
-        since macOS 10.15 and all the way down to Intel Macs, and
-        <strong>Apple Intelligence</strong>, introduced with macOS 26 and finer on long
-        passages. Availability is measured on the machine, never inferred from a version
-        number.
-      </p>
-
-      <p class="source-note">
-        CrisperWhisper 2.0's weights fall under a Nyra Health non-commercial research licence.
-        Caspr does not bundle them and never downloads them silently: the licence is shown
-        before any download, and the choice is yours.
-        <a href="https://huggingface.co/nyralabs/CrisperWhisper2.0_turbo/blob/main/LICENSE.md" rel="noopener">Read the licence</a>.
-      </p>
-    </div>
-  </section>
-
-  <!-- ===================================================================
-       Les mesures.
-       =================================================================== -->
-  <section class="section section--raised" id="numbers" aria-labelledby="numbers-title">
-    <div class="container">
-      <div class="section-head">
-        <h2 id="numbers-title">What was measured</h2>
-        <p class="lead">
-          On real voice recordings rather than synthetic speech. The scripts that reproduce
-          these numbers are in the repository.
-        </p>
-      </div>
-
-      <div class="metrics">
-        <div class="metric">
-          <span class="metric-value">425 ms</span>
-          <span class="metric-label">Full round trip for 13 seconds of speech, model kept warm</span>
-        </div>
-        <div class="metric">
-          <span class="metric-value">4–5×</span>
-          <span class="metric-label">Faster than the reference Python pipeline, for byte-identical text</span>
-        </div>
-        <div class="metric">
-          <span class="metric-value">94%</span>
-          <span class="metric-label">Of technical terms preserved with a lexicon, against 85% without</span>
-        </div>
-        <div class="metric">
-          <span class="metric-value">0</span>
-          <span class="metric-label">Bytes sent over the network during a transcription, with any engine</span>
-        </div>
-      </div>
-
-      <p class="source-note">
-        Measured on a MacBook Pro M4 Pro, 48 GB, macOS 26.6. Two things explain the gap with
-        the reference pipeline: it costs roughly 1.5 seconds of overhead per transcription,
-        and Whisper always encodes 30 seconds even when you spoke for 5 — shrinking that
-        window to 15 seconds removes nearly half the encoder time without changing a letter
-        of the output. Below 15 seconds the model leaves its training distribution, and
-        Caspr does not go there.
-      </p>
-    </div>
-  </section>
-
-  <!-- ===================================================================
        Confidentialité et code source.
        =================================================================== -->
-  <section class="section" id="local" aria-labelledby="local-title">
+  <section class="section section--raised" id="local" aria-labelledby="local-title">
     <div class="container">
       <div class="section-head">
-        <h2 id="local-title">Local by construction, open source on principle</h2>
+        <h2 id="local-title">No server, and all the code to read</h2>
         <p class="lead">
-          Privacy is not a promise Caspr asks you to take on trust, it is a consequence of
-          how it is built: there is no server to send anything to. And you don't have to
-          take my word for it — the whole codebase is public, MIT licensed, yours to read
-          and to build.
+          Caspr has no server: there is nowhere on our side to send anything to. What
+          leaves your Mac, and where it goes, depends only on the path you choose. And
+          you don't have to take my word for it — the whole codebase is public, MIT
+          licensed, yours to read and to build.
         </p>
       </div>
 
       <ul class="facts">
         <li>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg>
-          <span><strong>Free and open source.</strong> The Swift app and the Python engine are MIT licensed, on GitHub. Nothing held back, no subscription, no account.</span>
+          <span><strong>macOS path: offline for real.</strong> Turn off Wi-Fi and dictation behaves identically, and nothing is sent.</span>
+        </li>
+        <li>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg>
+          <span><strong>ChatGPT path: your account, not ours.</strong> Your voice goes through ChatGPT, in a page Caspr opens with your session, just as on chatgpt.com — under your OpenAI account's terms.</span>
+        </li>
+        <li>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg>
+          <span><strong>Free and open source.</strong> MIT licensed Swift code, on GitHub. Nothing held back, no subscription, no Caspr account.</span>
         </li>
         <li>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg>
@@ -665,15 +555,11 @@
         </li>
         <li>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg>
-          <span><strong>Offline for real.</strong> Turn off Wi-Fi and dictation behaves identically.</span>
+          <span><strong>One request of its own, optional.</strong> The update check queries GitHub; the automatic one is off by default.</span>
         </li>
         <li>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg>
-          <span><strong>One optional request.</strong> The update check queries GitHub, and switches off in settings.</span>
-        </li>
-        <li>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 7"/></svg>
-          <span><strong>An uninstaller that uninstalls.</strong> The Python environment, the weights, the caches and the preferences go with it — and only what is actually there.</span>
+          <span><strong>An uninstaller that uninstalls.</strong> Preferences, history, the ChatGPT session, logs and permissions go to the Trash — and only what is actually there.</span>
         </li>
       </ul>
 
@@ -689,7 +575,7 @@
   <!-- ===================================================================
        Questions.
        =================================================================== -->
-  <section class="section section--raised" id="questions" aria-labelledby="questions-title">
+  <section class="section" id="questions" aria-labelledby="questions-title">
     <div class="container">
       <div class="section-head">
         <h2 id="questions-title">Questions</h2>
@@ -704,8 +590,8 @@
             </button>
           </h3>
           <div class="faq-a" id="q1"><div>
-            <p>Caspr needs <strong>macOS 14 or later</strong>. With the macOS engines it works anywhere system dictation works, <strong>Intel Macs included</strong>: Dictation has existed since macOS 10.15, and Apple Intelligence adds to it from macOS 26 on the Macs that support it.</p>
-            <p>Only <strong>CrisperWhisper</strong> requires an Apple Silicon chip (M1 and up), because it runs on Metal — with about 1.6 GB of weights to download and 3 GB resident in memory while in use.</p>
+            <p>Caspr needs <strong>macOS 14 or later</strong>, <strong>Intel Macs included</strong>. On the macOS path it uses Apple Intelligence from macOS 26 when the machine can write your language, and system Dictation otherwise.</p>
+            <p>The <strong>ChatGPT</strong> path needs a ChatGPT account and an internet connection: the ChatGPT page is what listens and transcribes.</p>
           </div></div>
         </div>
 
@@ -717,8 +603,8 @@
             </button>
           </h3>
           <div class="faq-a" id="q2"><div>
-            <p>No. Transcription runs on your machine with every engine. There is no account, no server and no telemetry. Turn off Wi-Fi and Caspr behaves identically.</p>
-            <p>The only network request the app makes is the update check against GitHub, and it switches off in settings.</p>
+            <p>It depends on the path. <strong>With macOS, no</strong>: transcription runs on your machine and nothing is sent — turn off Wi-Fi and it behaves identically. <strong>With ChatGPT, yes</strong>: your voice goes through your own ChatGPT account, to OpenAI, just as on chatgpt.com.</p>
+            <p>Caspr itself has no server, no account and no telemetry. Its only request of its own is the update check against GitHub, and the automatic one is off by default.</p>
           </div></div>
         </div>
 
@@ -738,13 +624,13 @@
         <div class="faq-item">
           <h3>
             <button type="button" class="faq-q" aria-expanded="false" aria-controls="q4">
-              <span>Does Caspr understand the vocabulary of my trade?</span>
+              <span>What does the ChatGPT path add?</span>
               <svg class="faq-sign" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             </button>
           </h3>
           <div class="faq-a" id="q4"><div>
-            <p>That is the reason the project exists. CrisperWhisper accepts a lexicon that biases decoding toward the terms you supply: client names, molecules, tickers, in-house acronyms, the jargon of the profession. The mechanism knows no particular field.</p>
-            <p>Measured on real speech mixing French and English, <strong>32 of 34 terms</strong> survive with a lexicon, against 29 of 34 without — with no regression on plain sentences. The macOS engines have no such mechanism.</p>
+            <p>Often better transcription, and <strong>modules</strong>: the raw text, a reorganised version of what you said, or a question ChatGPT answers in its page.</p>
+            <p>Caspr drives ChatGPT's <strong>web interface</strong>, not an API. If OpenAI redesigns it, the path can stop working until a new calibration, which Caspr runs on its own by trying the page's buttons. The macOS path depends on no one.</p>
           </div></div>
         </div>
 
@@ -756,8 +642,8 @@
             </button>
           </h3>
           <div class="faq-a" id="q5"><div>
-            <p>Caspr's own code is MIT, as is CrisperWhisper's inference code. <strong>The model weights are not</strong>: they fall under a Nyra Health non-commercial research licence.</p>
-            <p>Caspr therefore does not bundle those weights and never downloads them silently. The licence is shown before any download and the choice is yours. Under a strict reading, dictating work email may itself count as commercial use — this is a summary, not legal advice.</p>
+            <p>Caspr's code is under the <strong>MIT licence</strong>, public on GitHub: you can read it, build it and change it.</p>
+            <p>The ChatGPT path uses your own account, under OpenAI's terms. Caspr is not affiliated with OpenAI.</p>
           </div></div>
         </div>
 
@@ -769,7 +655,7 @@
             </button>
           </h3>
           <div class="faq-a" id="q6"><div>
-            <p>Yes. The app ships an uninstaller that removes the Python environment, the model weights, the caches and the preferences — and it only offers to remove what is actually installed.</p>
+            <p>Yes. The app ships an uninstaller that moves the preferences, the history, the ChatGPT session if there is one, the logs and the permissions to the Trash — and it only offers what is actually there.</p>
           </div></div>
         </div>
       </div>
@@ -781,10 +667,10 @@
        =================================================================== -->
   <section class="section final" aria-labelledby="final-title">
     <div class="container">
-      <h2 id="final-title">Try it on a sentence you would not have dared dictate</h2>
+      <h2 id="final-title">Try it on the next sentence you were about to type</h2>
       <p class="lead">
-        The one with two borrowed words in the middle, a proper noun and a hesitation.
-        That is the case Caspr was written for.
+        One key, your voice, and the text arrives at your caret. You choose the path
+        when you install, and switch with one click.
       </p>
       <div class="final-actions">
         <button type="button" class="btn btn--primary btn--lg js-download">
@@ -795,7 +681,7 @@
           See all releases
         </a>
       </div>
-      <p class="final-note">Free and open source · macOS 14 or later · no account</p>
+      <p class="final-note">Free and open source · macOS 14 or later · no Caspr account</p>
     </div>
   </section>
 
@@ -807,7 +693,7 @@
       <div class="footer-brand">
         <div class="footer-brand-top">
           <img src="images/caspr-logo-stacked.svg" alt="Caspr" width="84" height="84">
-          <p>Local dictation for macOS. Fast, private, open source. No cloud, no subscription.</p>
+          <p>Dictation for macOS. Offline with macOS, or through your ChatGPT account. Open source, no server, no subscription.</p>
         </div>
         <a class="footer-studio" href="https://lyriastudio.fr" rel="noopener">
           A project by <b>Lyria Studio</b>
@@ -818,12 +704,11 @@
       <nav class="footer-col" aria-labelledby="foot-product">
         <h2 id="foot-product">Product</h2>
         <ul>
+          <li><a href="#paths">Two paths</a></li>
           <li><a href="#dictation">Dictation</a></li>
-          <li><a href="#vocabulary">Vocabulary</a></li>
           <li><a href="#bar">The bar</a></li>
           <li><a href="#notes">Notes</a></li>
-          <li><a href="#engines">Engines</a></li>
-          <li><a href="#numbers">Measurements</a></li>
+          <li><a href="#local">Privacy</a></li>
         </ul>
       </nav>
 
@@ -906,6 +791,6 @@
   </div>
 </div>
 
-<script src="app.js?v=6" defer></script>
+<script src="app.js?v=7" defer></script>
 </body>
 </html>

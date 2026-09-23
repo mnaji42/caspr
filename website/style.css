@@ -15,7 +15,6 @@
   --accent-border: rgba(0, 229, 204, 0.35);   /* Style.accentBorder */
   --accent-glow: rgba(0, 229, 204, 0.30);     /* Style.accentGlow */
   --on-accent: #042f2e;                       /* Style.onAccent — 9:1 sur l'accent */
-  --collecting: #fb923c;                      /* Style.collecting */
   --warning: #f59e0b;                         /* Style.warning */
   --danger: #f87171;                          /* Style.danger */
 
@@ -259,20 +258,6 @@ p { max-width: 68ch; text-wrap: pretty; }
 .typing-out { text-align: left; }
 .typing-out { color: var(--accent); }
 
-/* Le terme technique, écrit comme l'application l'écrit. */
-.term {
-  font-family: var(--font-mono);
-  font-size: 0.92em;
-  padding: 0.12em 0.4em;
-  background: var(--inner);
-  border: 1px solid var(--stroke);
-  border-radius: 6px;
-  color: var(--text-1);
-  white-space: nowrap;
-}
-.term--ok { color: var(--accent); border-color: var(--accent-border); background: var(--accent-dim); }
-.term--bad { color: var(--danger); border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.1); }
-
 kbd {
   display: inline-block;
   font-family: var(--font-ui);
@@ -398,7 +383,6 @@ kbd {
 .hero-copy { max-width: 50rem; margin-inline: auto; text-align: center; }
 
 .hero h1 { margin-bottom: var(--s-6); }
-.hero h1 .term { font-size: 0.78em; padding: 0.1em 0.3em; }
 
 .hero-lead {
   font-size: var(--t-lead);
@@ -545,29 +529,6 @@ kbd {
 /* Le mode micro : du texte, sans cadre. */
 .bar-status { font-size: 12px; font-weight: 500; color: var(--text-2); white-space: nowrap; }
 
-/* La collecte. Éteinte : contour et texte discrets. Allumée : ambre plein et
-   texte blanc — c'est le seul réglage qui écrit sur le disque, il ne doit pas
-   se confondre avec un choix de mode. */
-.chip-collect {
-  height: 17px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: var(--text-3);
-  white-space: nowrap;
-}
-.chip-collect[data-on="true"] {
-  background: rgba(251, 146, 60, 0.9);
-  border-color: transparent;
-  color: #fff;
-}
-
 .bar-preview {
   margin-top: 9px;
   font-size: 13px;
@@ -703,64 +664,6 @@ kbd {
 }
 
 /* =============================================================================
-   Le problème du franglais — la table de comparaison
-   ============================================================================= */
-
-.compare {
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-card);
-  /* Sur petit écran la table est plus large que l'écran. `hidden` la rognait,
-     et la troisième colonne — celle qui porte le propos — disparaissait. Elle
-     défile désormais dans son propre cadre. */
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.compare table { width: 100%; min-width: 34rem; border-collapse: collapse; }
-
-.compare th, .compare td {
-  padding: var(--s-4) var(--s-5);
-  text-align: left;
-  border-bottom: 1px solid var(--stroke);
-  font-size: var(--t-small);
-  vertical-align: middle;
-}
-.compare tbody tr:last-child th,
-.compare tbody tr:last-child td { border-bottom: none; }
-
-.compare thead th {
-  background: var(--inner);
-  font-size: var(--t-micro);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-3);
-  text-transform: uppercase;
-}
-.compare thead th:last-child { color: var(--accent); }
-
-.compare tbody th { font-weight: 500; color: var(--text-2); }
-.compare td:last-child { background: rgba(0, 229, 204, 0.04); }
-
-.compare-out { display: flex; align-items: center; gap: var(--s-2); }
-
-/* La ligne de mesure, sous la table. */
-.measure {
-  display: block;
-  max-width: 62rem;
-  text-align: center;
-  line-height: 1.7;
-  margin: var(--s-6) auto 0;
-  padding: var(--s-4) var(--s-5);
-  background: var(--card);
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-card);
-  font-size: var(--t-small);
-  color: var(--text-2);
-}
-.measure b { color: var(--text-1); font-variant-numeric: tabular-nums; }
-.measure .accent { color: var(--accent); }
-
-/* =============================================================================
    Pendant que vous parlez — les commandes de la barre
    ============================================================================= */
 
@@ -853,7 +756,7 @@ kbd {
 .notefile-body li:last-child .notefile-text { color: var(--text-1); }
 
 /* =============================================================================
-   Les moteurs — tableau de prérequis
+   Les deux voies — tableau comparé
    ============================================================================= */
 
 .specs {
@@ -881,41 +784,6 @@ kbd {
 .specs tbody th { font-weight: 500; color: var(--text-3); width: 34%; }
 .specs td { color: var(--text-2); }
 .specs td strong { color: var(--text-1); font-weight: 600; }
-
-.specs .flag {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
-  margin-top: var(--s-2);
-  font-size: var(--t-micro);
-  color: var(--warning);
-}
-
-/* =============================================================================
-   Mesures — les chiffres de latence
-   ============================================================================= */
-
-.metrics {
-  display: grid;
-  gap: var(--s-4);
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-}
-
-.metric {
-  padding: var(--s-5);
-  background: var(--card);
-  border: 1px solid var(--stroke);
-  border-radius: var(--r-card);
-}
-.metric-value {
-  display: block;
-  font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.1rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-.metric-label { display: block; margin-top: var(--s-2); font-size: var(--t-small); color: var(--text-2); line-height: 1.5; }
 
 .source-note {
   max-width: 66ch;
@@ -1247,8 +1115,6 @@ body[data-modal-open="true"] { overflow: hidden; }
     color: var(--text-3);
     font-weight: 500;
   }
-  .compare th, .compare td { padding: var(--s-3); font-size: var(--t-micro); }
-  .compare table { min-width: 30rem; }
 }
 
 /* =============================================================================

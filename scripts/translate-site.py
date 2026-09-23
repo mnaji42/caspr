@@ -14,66 +14,66 @@ PAIRS = [
 ('<html lang="fr">', '<html lang="en">'),
 ('<meta name="viewport" content="width=device-width, initial-scale=1">',
  '<meta name="viewport" content="width=device-width, initial-scale=1">\n<base href="/">'),
-("<title>Caspr — dictée vocale locale et hors-ligne pour macOS</title>",
- "<title>Caspr — local, offline dictation for macOS</title>"),
-("Caspr transcrit votre voix sur votre Mac, sans cloud ni compte. Il écrit les mots de votre métier — franglais, acronymes, noms propres — sans essayer de les traduire.",
- "Caspr turns speech into text on your own Mac, with no cloud and no account. It cleans up the way people actually talk, and writes the words of your trade without translating them."),
+("<title>Caspr — dictée vocale pour macOS, hors ligne ou par ChatGPT</title>",
+ "<title>Caspr — dictation for macOS, offline or through ChatGPT</title>"),
+("Caspr écrit votre voix là où se trouve votre curseur. Deux voies : macOS, hors ligne et sans compte, ou ChatGPT, par votre propre compte. Gratuit, open source, sans serveur.",
+ "Caspr writes your voice wherever your caret is. Two paths: macOS, offline and with no account, or ChatGPT, through your own account. Free, open source, no server."),
 ('<link rel="canonical" href="https://caspr.lyriastudio.fr/">',
  '<link rel="canonical" href="https://caspr.lyriastudio.fr/en">'),
 ('<meta property="og:locale" content="fr_FR">', '<meta property="og:locale" content="en_US">'),
 ('<meta property="og:locale:alternate" content="en_US">', '<meta property="og:locale:alternate" content="fr_FR">'),
 ('<meta property="og:url" content="https://caspr.lyriastudio.fr/">',
  '<meta property="og:url" content="https://caspr.lyriastudio.fr/en">'),
-("Caspr — dictée vocale locale et hors-ligne pour macOS", "Caspr — local, offline dictation for macOS"),
-("Parlez naturellement. Caspr écrit les mots de votre métier sans les traduire. Tout tourne sur votre Mac : pas de cloud, pas de compte, pas de télémétrie.",
- "Speak naturally. Caspr writes at the speed of your thoughts, and never leaves your Mac: no cloud, no account, no telemetry."),
-("Parlez naturellement. Caspr écrit les mots de votre métier sans les traduire.",
- "Speak naturally. Caspr writes at the speed of your thoughts."),
+("Caspr — dictée vocale pour macOS, hors ligne ou par ChatGPT", "Caspr — dictation for macOS, offline or through ChatGPT"),
+("Parlez, Caspr écrit à votre curseur. Avec macOS, rien ne quitte votre Mac ; avec ChatGPT, votre voix passe par votre propre compte. Caspr n'a aucun serveur.",
+ "Speak, and Caspr writes at your caret. With macOS nothing leaves your Mac; with ChatGPT your voice goes through your own account. Caspr has no server."),
+("Parlez, Caspr écrit à votre curseur — avec macOS hors ligne, ou avec ChatGPT par votre compte.",
+ "Speak, and Caspr writes at your caret — offline with macOS, or with ChatGPT through your account."),
+("Caspr — dictée vocale pour macOS", "Caspr — dictation for macOS"),
 ("https://caspr.lyriastudio.fr/images/og-preview.png", "https://caspr.lyriastudio.fr/images/og-preview-en.png"),
-("Caspr — dictée vocale locale pour macOS", "Caspr — local dictation for macOS"),
 ('"inLanguage": "fr-FR"', '"inLanguage": "en"'),
 ('"@id": "https://caspr.lyriastudio.fr/#site"', '"@id": "https://caspr.lyriastudio.fr/#site-en"'),
 ('"@id": "https://caspr.lyriastudio.fr/#faq"', '"@id": "https://caspr.lyriastudio.fr/en#faq"'),
 ('"url": "https://caspr.lyriastudio.fr/",\n      "name": "Caspr"',
  '"url": "https://caspr.lyriastudio.fr/en",\n      "name": "Caspr"'),
 ('"operatingSystem": "macOS 14 ou plus récent"', '"operatingSystem": "macOS 14 or later"'),
-("Application de dictée vocale locale pour macOS, conçue pour la parole mêlant plusieurs langues et le vocabulaire de métier. La transcription s'exécute sur la machine, sans service distant.",
- "Local dictation app for macOS: it removes the hesitations of real speech and keeps the vocabulary of your trade. Transcription runs on the machine, with no remote service."),
-("Transcription entièrement locale, sans connexion réseau", "Fully local transcription, no network connection required"),
-("Lexique personnel pour le vocabulaire de métier", "A personal lexicon for the vocabulary of your trade"),
-("Parole mêlant français et anglais dans une même phrase", "Speech mixing two languages within a single sentence"),
+('"applicationSubCategory": "Dictée vocale"', '"applicationSubCategory": "Dictation"'),
+("Application de dictée vocale pour macOS, dans la barre des menus. Deux voies : la reconnaissance vocale de macOS, hors ligne et sans compte, ou ChatGPT, par le compte de l'utilisateur dans une page web embarquée. L'application n'a aucun serveur.",
+ "Menu-bar dictation app for macOS. Two paths: macOS speech recognition, offline and with no account, or ChatGPT, through the user's own account in an embedded web page. The app has no server."),
+("Dictée hors ligne avec la reconnaissance vocale de macOS", "Offline dictation with macOS speech recognition"),
+("Dictée par ChatGPT, avec votre propre compte", "Dictation through ChatGPT, with your own account"),
+("Modules ChatGPT : texte brut, réorganisation, question", "ChatGPT modules: raw text, reorganise, ask a question"),
 ("Insertion du texte au curseur de l'application active", "Text inserted at the caret of the active app"),
 ("Accumulation des dictées dans un fichier Markdown daté", "Dictations appended to a dated Markdown file"),
-("Moteurs de macOS ou CrisperWhisper, au choix", "The macOS engines or CrisperWhisper, your choice"),
+("Passage d'une voie à l'autre depuis le menu ou un raccourci", "Switch between paths from the menu or a shortcut"),
 ('"name": "De quel Mac ai-je besoin ?"', '"name": "Which Mac do I need?"'),
-("Caspr demande macOS 14 ou plus récent. Avec les moteurs de macOS, il fonctionne sur toute machine où la dictée du système fonctionne, Mac Intel compris : la Dictée existe depuis macOS 10.15, et Apple Intelligence s'y ajoute à partir de macOS 26 sur les Mac qui en disposent. Seul CrisperWhisper impose une puce Apple Silicon, avec environ 1,6 Go de poids à télécharger et 3 Go de mémoire résidente.",
- "Caspr needs macOS 14 or later. With the macOS engines it runs on any machine where system dictation works, Intel Macs included: Dictation has existed since macOS 10.15, and Apple Intelligence adds to it from macOS 26 on the Macs that support it. Only CrisperWhisper requires an Apple Silicon chip, with about 1.6 GB of weights to download and 3 GB resident in memory."),
+("Caspr demande macOS 14 ou plus récent, Mac Intel compris. Par la voie macOS, il prend Apple Intelligence à partir de macOS 26 quand la machine sait écrire votre langue, et la Dictée du système sinon. Par la voie ChatGPT, il faut un compte ChatGPT et une connexion à Internet.",
+ "Caspr needs macOS 14 or later, Intel Macs included. On the macOS path it uses Apple Intelligence from macOS 26 when the machine can write your language, and system Dictation otherwise. The ChatGPT path needs a ChatGPT account and an internet connection."),
 ('"name": "Ma voix ou mes textes partent-ils sur un serveur ?"', '"name": "Does my voice or text leave my machine?"'),
-("Non. La transcription s'exécute sur votre machine, avec tous les moteurs. Il n'y a ni compte, ni serveur, ni télémétrie. Coupez le Wi-Fi et Caspr fonctionne à l'identique. La seule requête réseau que fait l'application est la vérification des mises à jour sur GitHub, et elle se désactive dans les réglages.",
- "No. Transcription runs on your machine with every engine. There is no account, no server and no telemetry. Turn off Wi-Fi and Caspr behaves identically. The only network request the app makes is the update check against GitHub, and it can be switched off in settings."),
+("Cela dépend de la voie que vous choisissez. Avec macOS, non : la transcription s'exécute sur votre machine et rien n'est envoyé. Avec ChatGPT, oui : votre voix passe par votre propre compte ChatGPT, chez OpenAI, comme sur chatgpt.com. Caspr, lui, n'a ni serveur, ni compte, ni télémétrie ; sa seule requête à lui est la vérification des mises à jour sur GitHub, et l'automatique est désactivée par défaut.",
+ "It depends on the path you choose. With macOS, no: transcription runs on your machine and nothing is sent. With ChatGPT, yes: your voice goes through your own ChatGPT account, to OpenAI, just as on chatgpt.com. Caspr itself has no server, no account and no telemetry; its only request of its own is the update check against GitHub, and the automatic one is off by default."),
 ('"name": "Pourquoi macOS refuse-t-il d\'ouvrir l\'application la première fois ?"',
  '"name": "Why does macOS refuse to open the app the first time?"'),
 ("Parce que l'application n'est pas notariée par Apple, ce qui suppose un compte développeur payant. Caspr est signé de façon ad hoc. macOS affiche donc un avertissement au premier lancement, et l'autorisation se donne une fois dans Réglages Système, rubrique Confidentialité et sécurité. Le guide d'installation détaille chaque étape.",
  "Because the app is not notarised by Apple, which requires a paid developer account. Caspr is ad-hoc signed, so macOS warns on first launch. You grant permission once in System Settings, under Privacy & Security. The install guide walks through every step."),
-('"name": "Caspr comprend-il le vocabulaire de mon métier ?"', '"name": "Does Caspr understand the vocabulary of my trade?"'),
-("C'est la raison d'être du projet. CrisperWhisper accepte un lexique qui oriente le décodage vers les termes que vous lui donnez, quel que soit le domaine. Mesuré sur de la parole réelle mêlant français et anglais, 32 termes techniques sur 34 sont préservés avec lexique, contre 29 sur 34 sans, et sans régression sur les phrases en français simple.",
- "That is the reason the project exists. CrisperWhisper accepts a lexicon that biases decoding toward the terms you supply, whatever the field. Measured on real speech mixing French and English, 32 of 34 technical terms survive with a lexicon, against 29 of 34 without, and with no regression on plain sentences."),
+('"name": "Qu\'apporte la voie ChatGPT ?"', '"name": "What does the ChatGPT path add?"'),
+("Une transcription souvent meilleure, et des modules : le texte brut, une réorganisation de ce que vous avez dit, ou une question à laquelle ChatGPT répond dans sa page. Caspr pilote l'interface web de ChatGPT, pas une API : si OpenAI la remanie, la voie peut cesser de fonctionner jusqu'à une nouvelle calibration, que Caspr mène seul.",
+ "Often better transcription, and modules: the raw text, a reorganised version of what you said, or a question ChatGPT answers in its page. Caspr drives ChatGPT's web interface, not an API: if OpenAI redesigns it, the path can stop working until a new calibration, which Caspr runs on its own."),
 ('"name": "Quelle est la licence de Caspr ?"', '"name": "What is the licence?"'),
-("Le code de Caspr est sous licence MIT, tout comme le code d'inférence de CrisperWhisper. Les poids du modèle CrisperWhisper 2.0 relèvent en revanche d'une licence de recherche non commerciale de Nyra Health. Caspr n'embarque donc pas ces poids et ne les télécharge jamais en silence : la licence est présentée avant tout téléchargement, et le choix vous revient.",
- "Caspr's own code is MIT, as is CrisperWhisper's inference code. The CrisperWhisper 2.0 model weights are not: they fall under a Nyra Health non-commercial research licence. Caspr therefore does not bundle those weights and never downloads them silently: the licence is shown before any download, and the choice is yours."),
+("Le code de Caspr est sous licence MIT, public sur GitHub. La voie ChatGPT utilise votre propre compte, selon les conditions d'OpenAI ; Caspr n'est pas affilié à OpenAI.",
+ "Caspr's code is MIT licensed, public on GitHub. The ChatGPT path uses your own account, under OpenAI's terms; Caspr is not affiliated with OpenAI."),
 ('"name": "Puis-je désinstaller proprement ?"', '"name": "Can I uninstall cleanly?"'),
-("Oui. L'application inclut un désinstallateur qui retire l'environnement Python, les poids du modèle, les caches et les préférences. Il ne propose de supprimer que ce qui est effectivement installé.",
- "Yes. The app ships an uninstaller that removes the Python environment, the model weights, the caches and the preferences. It only offers to remove what is actually installed."),
+("Oui. L'application inclut un désinstallateur qui met à la corbeille les préférences, l'historique, la session ChatGPT s'il y en a une, les journaux et les autorisations. Il ne propose que ce qui est effectivement présent.",
+ "Yes. The app ships an uninstaller that moves the preferences, the history, the ChatGPT session if there is one, the logs and the permissions to the Trash. It only offers what is actually there."),
 # ---- chrome ----------------------------------------------------------------
 ("Passer au contenu", "Skip to content"),
 ('href="/" aria-label="Caspr, retour à l\'accueil"', 'href="/en" aria-label="Caspr, back to home"'),
 ('aria-label="Sections du site"', 'aria-label="Site sections"'),
+('href="#voies">Deux voies</a>', 'href="#paths">Two paths</a>'),
 ('href="#dictee">La dictée</a>', 'href="#dictation">Dictation</a>'),
-('href="#vocabulaire">Le vocabulaire</a>', 'href="#vocabulary">Vocabulary</a>'),
 ('href="#barre">La barre</a>', 'href="#bar">The bar</a>'),
 ('href="#notes">Les notes</a>', 'href="#notes">Notes</a>'),
-('href="#moteurs">Les moteurs</a>', 'href="#engines">Engines</a>'),
-('href="#mesures">Les mesures</a>', 'href="#numbers">Measurements</a>'),
+('href="#local">Confidentialité</a>', 'href="#local">Privacy</a>'),
 ('<a href="/" aria-current="true" lang="fr">FR</a>\n        <a href="/en" hreflang="en" lang="en">EN</a>',
  '<a href="/" hreflang="fr" lang="fr">FR</a>\n        <a href="/en" aria-current="true" lang="en">EN</a>'),
 ("Voir Caspr sur ", "View Caspr on "),
@@ -81,49 +81,111 @@ PAIRS = [
 # ---- hero ------------------------------------------------------------------
 ("Parlez naturellement.\n          <span class=\"hero-sub\">Caspr écrit",
  "Speak naturally.\n          <span class=\"hero-sub\">Caspr writes"),
-(">votre franglais sans traduire</span>", ">at the speed of your thoughts</span>"),
-("""          Une dictée pour macOS qui retire vos hésitations et garde vos mots —
-          ceux du métier, ceux qu'on emprunte à l'anglais. Rapide, gratuite,
-          open source, et entièrement sur votre Mac : pas de cloud, pas de compte,
-          pas de télémétrie.""",
- """          A dictation app for macOS that takes out your hesitations and keeps your
-          words — the ones from your trade, the ones borrowed from another language.
-          Fast, free, open source, and entirely on your Mac: no cloud, no account,
-          no telemetry."""),
+(">à la vitesse de votre pensée</span>", ">at the speed of your thoughts</span>"),
+("""          Une dictée pour macOS, dans la barre des menus : vous parlez, le texte
+          s'écrit à votre curseur ou dans vos notes. Deux voies au choix — macOS,
+          hors ligne et sans compte, ou ChatGPT, par votre propre compte.
+          Gratuite, open source, et sans serveur.""",
+ """          A menu-bar dictation app for macOS: you speak, and the text is written
+          at your caret or into your notes. Two paths to choose from — macOS,
+          offline and with no account, or ChatGPT, through your own account.
+          Free, open source, and with no server."""),
 ("Télécharger pour macOS", "Download for macOS"),
 ("Lire le code source", "Read the source"),
 ("Gratuit, sous licence MIT, sur GitHub.", "Free, MIT licensed, on GitHub."),
 ("macOS 14 ou plus récent, Mac Intel compris", "macOS 14 or later, Intel Macs included"),
-("Détail par moteur", "Requirements by engine"),
+("Détail par voie", "Requirements by path"),
 # ---- scène -----------------------------------------------------------------
 ("compte-rendu.md", "meeting-notes.md"),
 ("# Comité du 20 août", "# Board meeting, 20 August"),
 ("- le budget tient, la roadmap glisse d'un mois", "- budget holds, the roadmap slips by a month"),
-('- valider le <span class="term term--ok">churn</span> avant le prochain <span class="term term--ok">board</span>',
- '- confirm the <span class="term term--ok">churn</span> before the next <span class="term term--ok">board</span>'),
-('aria-label="La barre de Caspr pendant un enregistrement : minuteur à 42 secondes, micro en mode standard, collecte éteinte, l\'aperçu de ce qui est entendu, et sous la carte le français sélectionné à gauche, le curseur comme destination à droite."',
- 'aria-label="The Caspr bar during a recording: timer at 42 seconds, microphone in standard mode, collection off, a preview of what is being heard, and below the card French selected on the left and the caret as destination on the right."'),
-(">Collecte</span>", ">Collecting</span>"),
+("- valider le churn avant le prochain board", "- confirm the churn before the next board"),
+('aria-label="La barre de Caspr pendant un enregistrement sur la voie macOS : minuteur à 42 secondes, micro en mode standard, l\'aperçu de ce qui est entendu, et sous la carte le français sélectionné à gauche, le curseur comme destination à droite."',
+ 'aria-label="The Caspr bar during a recording on the macOS path: timer at 42 seconds, microphone in standard mode, a preview of what is being heard, and below the card French selected on the left and the caret as destination on the right."'),
 ("valider le churn avant le prochain bord", "confirm the churn before the next bored"),
 (">Curseur</span>", ">Caret</span>"),
-("L'aperçu de la barre vient du moteur de macOS, pas de CrisperWhisper : il n'a pas votre lexique, d'où le «&nbsp;bord&nbsp;» à la place de <span class=\"term term--ok\">board</span>. Il répond à «&nbsp;le micro m'entend-il&nbsp;», pas à «&nbsp;la transcription sera-t-elle juste&nbsp;».",
- "The bar's preview comes from the macOS engine, not from CrisperWhisper: it has no lexicon, hence “bored” where the inserted text will write <span class=\"term term--ok\">board</span>. It answers “is the mic hearing me”, not “will the transcription be right”."),
+("Sur la voie macOS, l'aperçu montre ce qui est entendu pendant que vous parlez, en version rapide — d'où le «&nbsp;bord&nbsp;» que le texte final peut encore corriger. Il répond à «&nbsp;le micro m'entend-il&nbsp;», pas à «&nbsp;la transcription sera-t-elle juste&nbsp;». La voie ChatGPT n'a pas d'aperçu : c'est sa page qui tient le micro.",
+ "On the macOS path, the preview shows what is being heard as you speak, in a quick draft — hence “bored”, which the final text may still correct. It answers “is the mic hearing me”, not “will the transcription be right”. The ChatGPT path has no preview: its page holds the microphone."),
 # ---- atouts ----------------------------------------------------------------
-("<b>100 % local</b> — rien ne sort de votre Mac", "<b>100% local</b> — nothing leaves your Mac"),
-("<b>425 ms</b> pour 13 secondes de parole", "<b>425 ms</b> for 13 seconds of speech"),
+("<b>Hors ligne</b> avec macOS — rien ne sort de votre Mac", "<b>Offline</b> with macOS — nothing leaves your Mac"),
+("<b>ChatGPT</b> par votre propre compte", "<b>ChatGPT</b> through your own account"),
 ("<b>Open source</b> — code sous licence MIT", "<b>Open source</b> — MIT licensed code"),
-("<b>Sans compte</b> ni abonnement", "<b>No account</b>, no subscription"),
+("<b>Aucun serveur</b> Caspr, aucun abonnement", "<b>No Caspr server</b>, no subscription"),
+# ---- deux voies ------------------------------------------------------------
+('id="voies" aria-labelledby="voies-titre"', 'id="paths" aria-labelledby="paths-title"'),
+('<h2 id="voies-titre">Deux voies. Vous choisissez qui écoute.</h2>',
+ '<h2 id="paths-title">Two paths. You choose who listens.</h2>'),
+("""          Les deux ne peuvent pas écouter en même temps : l'une tient le micro,
+          l'autre se tait. Vous en retenez une à l'installation, et vous en changez
+          d'un clic — depuis le menu, les réglages ou un raccourci.""",
+ """          They cannot both listen at once: one holds the microphone, the other
+          stays quiet. You pick one when you install, and switch with one click —
+          from the menu, the settings or a shortcut."""),
+("Ce que font les deux voies de Caspr, macOS et ChatGPT, et ce que chacune demande",
+ "What Caspr's two paths, macOS and ChatGPT, do and what each one needs"),
+('<span class="col-note">Par votre propre compte</span>', '<span class="col-note">Through your own account</span>'),
+('<th scope="row">Où va votre voix</th>', '<th scope="row">Where your voice goes</th>'),
+('<td data-col="macOS">Nulle part : <strong>elle ne quitte pas votre Mac</strong></td>',
+ '<td data-col="macOS">Nowhere: <strong>it never leaves your Mac</strong></td>'),
+('<td data-col="ChatGPT">Chez OpenAI, <strong>par votre compte ChatGPT</strong></td>',
+ '<td data-col="ChatGPT">To OpenAI, <strong>through your ChatGPT account</strong></td>'),
+('<th scope="row">Compte</th>', '<th scope="row">Account</th>'),
+('<td data-col="macOS">Aucun</td>', '<td data-col="macOS">None</td>'),
+('<td data-col="ChatGPT">Un compte ChatGPT, par adresse et mot de passe</td>',
+ '<td data-col="ChatGPT">A ChatGPT account, with email and password</td>'),
+('<th scope="row">Connexion à Internet</th>', '<th scope="row">Internet connection</th>'),
+('<td data-col="macOS">Inutile</td>', '<td data-col="macOS">Not needed</td>'),
+('<td data-col="ChatGPT">Indispensable</td>', '<td data-col="ChatGPT">Required</td>'),
+('<th scope="row">Aperçu en direct</th>', '<th scope="row">Live preview</th>'),
+('<td data-col="macOS">Oui, sous la barre</td>', '<td data-col="macOS">Yes, under the bar</td>'),
+('<td data-col="ChatGPT">Non : la page ChatGPT tient le micro</td>',
+ '<td data-col="ChatGPT">No: the ChatGPT page holds the microphone</td>'),
+('<th scope="row">Ce qu\'elle ajoute</th>', '<th scope="row">What it adds</th>'),
+('<td data-col="macOS">Une transcription instantanée</td>', '<td data-col="macOS">Instant transcription</td>'),
+('<td data-col="ChatGPT">Des <strong>modules</strong> : texte brut, réorganisation, question</td>',
+ '<td data-col="ChatGPT"><strong>Modules</strong>: raw text, reorganise, ask a question</td>'),
+('<th scope="row">Mise en route</th>', '<th scope="row">Setup</th>'),
+('<td data-col="macOS">Un modèle de langue, que macOS télécharge</td>',
+ '<td data-col="macOS">A language model, downloaded by macOS</td>'),
+('<td data-col="ChatGPT">Se connecter, puis une calibration automatique</td>',
+ '<td data-col="ChatGPT">Sign in, then an automatic calibration</td>'),
+('<th scope="row">Ce qui peut la casser</th>', '<th scope="row">What can break it</th>'),
+('<td data-col="macOS">Presque rien : c\'est une interface du système</td>',
+ '<td data-col="macOS">Hardly anything: it is a system interface</td>'),
+('<td data-col="ChatGPT">Un remaniement du site de ChatGPT</td>',
+ '<td data-col="ChatGPT">A redesign of the ChatGPT website</td>'),
+("""        Côté macOS, Caspr prend la meilleure reconnaissance que votre machine sait faire
+        tourner, sans rien vous demander : <strong>Apple Intelligence</strong>, à partir de
+        macOS 26, et la <strong>Dictée</strong> du système en repli, quand Apple Intelligence
+        ne sait pas écrire votre langue — jamais par choix : mesurée sur 129 dictées réelles,
+        elle perdait près de 44&nbsp;% des mots. La disponibilité est mesurée sur la machine,
+        jamais déduite d'un numéro de version.""",
+ """        On the macOS side, Caspr picks the best recogniser your machine can run, without
+        asking you: <strong>Apple Intelligence</strong>, from macOS 26, and system
+        <strong>Dictation</strong> as a fallback when Apple Intelligence cannot write your
+        language — never by choice: measured on 129 real dictations, it lost close to 44% of
+        the words. Availability is measured on the machine, never inferred from a version
+        number."""),
+("""        Côté ChatGPT, Caspr ouvre chatgpt.com dans une page qu'il héberge, avec votre
+        session, et en clique les boutons à votre place. Ce n'est pas une API : si OpenAI
+        remanie la page, la voie peut cesser de fonctionner. Caspr réapprend alors les
+        boutons seul, en les essayant sous vos yeux — un seul message d'essai, annoncé
+        avant de partir.""",
+ """        On the ChatGPT side, Caspr opens chatgpt.com in a page it hosts, with your session,
+        and clicks its buttons for you. It is not an API: if OpenAI redesigns the page, the
+        path can stop working. Caspr then relearns the buttons by itself, trying them in
+        front of you — a single test message, announced before it is sent."""),
 # ---- avant / après ---------------------------------------------------------
 ('id="dictee" aria-labelledby="dictee-titre"', 'id="dictation" aria-labelledby="dictation-title"'),
-('<h2 id="dictee-titre">Vous ne parlez pas comme vous écrivez</h2>',
- '<h2 id="dictation-title">You don\'t speak the way you write</h2>'),
-("""          On hésite, on se reprend, on repart en arrière. Une dictée classique
-          écrit tout, «&nbsp;euh&nbsp;» compris, et vous relisez pour nettoyer.
-          Caspr rend ce que vous vouliez dire.""",
- """          We hesitate, we backtrack, we start the sentence again. Ordinary
-          dictation writes all of it down, every “er” included, and then you reread
-          it to clean it up. Caspr writes what you meant."""),
-("Une dictée classique", "Ordinary dictation"),
+('<h2 id="dictee-titre">Dites-le en vrac. Recevez-le en ordre.</h2>',
+ '<h2 id="dictation-title">Say it any old way. Get it back in order.</h2>'),
+("""          On hésite, on se reprend, on repart en arrière. Sur la voie ChatGPT, le
+          module <strong>Réorganiser</strong> renvoie votre dictée à ChatGPT et écrit sa
+          réponse à votre curseur : ce que vous vouliez dire, dans l'ordre.""",
+ """          We hesitate, we backtrack, we start the sentence again. On the ChatGPT path,
+          the <strong>Réorganiser</strong> (reorganise) module sends your dictation back to
+          ChatGPT and writes its reply at your caret: what you meant, in order."""),
+("Ce que vous dites", "What you say"),
 ("""            «&nbsp;Alors <span class="filler">euh</span> attends, on va
             <span class="filler">on va</span> décaler la réunion à jeudi
             <span class="filler">enfin non</span> vendredi matin
@@ -132,61 +194,26 @@ PAIRS = [
             <span class="filler">we'll</span> push the meeting to Thursday
             <span class="filler">no wait</span> Friday morning
             <span class="filler">er</span> and let Sarah know”"""),
-("""            Vous relisez, vous coupez, vous ponctuez. Le temps gagné à la dictée
-            se reperd à la correction.""",
- """            You reread it, you cut, you punctuate. The time dictation saved goes
-            straight back into fixing it."""),
-("Avec Caspr", "With Caspr"),
+("""            Une dictée ordinaire écrit tout, «&nbsp;euh&nbsp;» compris. Le temps gagné
+            à parler se reperd à corriger.""",
+ """            Ordinary dictation writes all of it down, every “er” included. The time
+            speaking saved goes straight back into fixing it."""),
+("Avec Réorganiser", "With Réorganiser"),
 ("«&nbsp;On va décaler la réunion à vendredi matin, et prévenir Sarah.&nbsp;»",
  "“We'll push the meeting to Friday morning, and let Sarah know.”"),
 ("""            Les hésitations, les reprises et les faux départs sont retirés ; la
-            ponctuation et les majuscules sont déduites du sens.""",
- """            Hesitations, restarts and false starts are removed; punctuation and
-            capitals are inferred from the meaning."""),
-("""        Le mode «&nbsp;texte nettoyé&nbsp;» vient de CrisperWhisper, et il est celui par
-        défaut. Le mode «&nbsp;mot à mot&nbsp;» écrit à l'inverse exactement ce qui a été
-        dit, hésitations comprises — utile en entretien. Les moteurs de macOS, eux,
-        rendent un seul texte, sans passe de nettoyage.""",
- """        The “clean text” mode comes from CrisperWhisper, and it is the default.
-        “Word for word” does the opposite and writes exactly what was said,
-        hesitations included — useful for interviews. The macOS engines return a
-        single text, with no cleanup pass."""),
-# ---- vocabulaire -----------------------------------------------------------
-('id="vocabulaire" aria-labelledby="vocabulaire-titre"', 'id="vocabulary" aria-labelledby="vocabulary-title"'),
-('<h2 id="vocabulaire-titre">Et les mots que les autres écorchent</h2>',
- '<h2 id="vocabulary-title">And the words other engines mangle</h2>'),
-("""          Beaucoup de métiers empruntent leur vocabulaire à l'anglais. Un trader dit
-          «&nbsp;le <i lang="en">spread</i> s'est écarté sur le <i lang="en">forward</i>&nbsp;»,
-          une chercheuse «&nbsp;le <i lang="en">peer review</i> a retoqué le protocole&nbsp;»,
-          un développeur «&nbsp;les <i lang="en">dependencies</i> dans le
-          <i lang="en">useEffect</i>&nbsp;». Les modèles de reconnaissance vocale
-          imposent une langue par segment : en mode français, ces mots sont absorbés
-          phonétiquement.""",
- """          Plenty of trades borrow their vocabulary from another language. A French
-          trader says “le <i lang="fr">spread</i> s'est écarté sur le forward”, a
-          researcher “le peer review a retoqué le protocole”, a developer “les
-          dependencies dans le useEffect”. Speech models force one language per
-          segment, so in French mode those words get absorbed phonetically."""),
-("Comparaison de la transcription de trois termes techniques par les modèles de la famille Whisper en mode français et par Caspr",
- "How three technical terms are transcribed by Whisper-family models in French mode and by Caspr"),
-("Ce que vous dites", "What you say"),
-("Reconnaissance vocale, mode français", "Speech recognition, French mode"),
-("Caspr, avec lexique", "Caspr, with a lexicon"),
-("<span>Mesuré sur de la parole réelle, français et anglais mêlés :</span>",
- "<span>Measured on real speech mixing French and English:</span>"),
-("<b>32 termes sur 34</b> préservés avec lexique", "<b>32 of 34 terms</b> preserved with a lexicon"),
-("contre <b>29 sur 34</b> sans", "against <b>29 of 34</b> without"),
-("— et aucune régression sur les phrases en français simple.", "— and no regression on plain sentences."),
-("""        Le mécanisme s'appelle le conditionnement par lexique : le moteur accepte une
-        liste de termes qui oriente le décodage. Le vôtre s'écrit dans les réglages —
-        noms de clients, molécules, tickers, jargon de la maison — et la transcription
-        cesse de les traduire. Les trois exemples ci-dessus viennent du corpus de test ;
-        le mécanisme, lui, ne connaît aucun domaine en particulier.""",
- """        The mechanism is called vocabulary conditioning: the engine accepts a list of
-        terms that biases decoding. Yours goes into settings — client names, molecules,
-        tickers, in-house jargon — and the transcription stops translating them. The three
-        examples above come from the test corpus; the mechanism itself knows no particular
-        field."""),
+            ponctuation suit le sens.""",
+ """            Hesitations, restarts and false starts are removed; punctuation follows the
+            meaning."""),
+("""        La consigne se dit, elle ne se règle pas : «&nbsp;traduis en anglais&nbsp;» ou
+        «&nbsp;fais-en une liste&nbsp;», prononcé dans la dictée, suffit. Si la
+        réorganisation échoue, la transcription brute est écrite à la place : une dictée
+        ne se perd pas. Sur la voie macOS, le texte s'écrit tel qu'il a été reconnu, sans
+        seconde passe.""",
+ """        The instruction is spoken, not configured: “translate this into English” or “make
+        it a list”, said in the dictation, is enough. If reorganising fails, the raw
+        transcription is written instead: a dictation is never lost. On the macOS path,
+        the text is written as it was recognised, with no second pass."""),
 ]
 
 PAIRS += [
@@ -202,26 +229,26 @@ PAIRS += [
           realise the text should not go where it is going. A bar floats at the bottom of
           the screen while you talk, and everything on it can change without
           interrupting you."""),
-('<span class="control-name">Le mode</span>', '<span class="control-name">Mode</span>'),
-("<dd>Texte nettoyé, ou mot à mot. Le premier retire les hésitations et les faux départs, le second écrit exactement ce qui a été dit.</dd>",
- "<dd>Clean text, or word for word. The first removes hesitations and false starts, the second writes exactly what was said.</dd>"),
 ('<span class="control-name">La destination</span>', '<span class="control-name">Destination</span>'),
 ("<dd>Le curseur de l'application où vous êtes, ou un fichier. Le fichier de notes est mémorisé à part : l'aller-retour coûte un clic.</dd>",
  "<dd>The caret of whatever app you are in, or a file. The note file is remembered separately: the round trip costs one click.</dd>"),
+('<span class="control-name">Le module</span>', '<span class="control-name">Module</span>'),
+("<dd>Sur la voie ChatGPT : Brut, Réorganiser ou Discuter. Brut écrit la transcription telle quelle ; Discuter pose une question et garde la page ouverte pour la réponse.</dd>",
+ "<dd>On the ChatGPT path: Brut, Réorganiser or Discuter — raw, reorganise, discuss. Raw writes the transcription as it is; discuss asks a question and keeps the page open for the answer.</dd>"),
 ('<span class="control-name">L\'aperçu en direct</span>', '<span class="control-name">Live preview</span>'),
-("<dd>Ce qui est entendu, pendant que vous le dites. Il répond à «&nbsp;le micro m'entend-il&nbsp;», pas à «&nbsp;le texte sera-t-il juste&nbsp;».</dd>",
- "<dd>What is being heard, as you say it. It answers “is the mic hearing me”, not “will the text be right”.</dd>"),
-('<span class="control-name">La collecte</span>', '<span class="control-name">Collection</span>'),
-("<dd>Désactivée par défaut. Une fois active, elle archive les dictées sur votre disque pour mesurer les moteurs — et rien ne quitte la machine.</dd>",
- "<dd>Off by default. Once enabled it archives dictations on your disk so engines can be measured — and nothing leaves the machine.</dd>"),
-("""          Le mode et la destination sont lus <strong>à la fin de l'enregistrement</strong>,
+("<dd>Sur la voie macOS : ce qui est entendu, pendant que vous le dites. Il répond à «&nbsp;le micro m'entend-il&nbsp;», pas à «&nbsp;le texte sera-t-il juste&nbsp;».</dd>",
+ "<dd>On the macOS path: what is being heard, as you say it. It answers “is the mic hearing me”, not “will the text be right”.</dd>"),
+('<span class="control-name">La voie</span>', '<span class="control-name">Path</span>'),
+("<dd>macOS ou ChatGPT, depuis le menu de la barre ou un raccourci. Tant que la voie est ChatGPT, le fantôme de la barre des menus porte une étincelle.</dd>",
+ "<dd>macOS or ChatGPT, from the menu bar menu or a shortcut. While ChatGPT is the path, the ghost in the menu bar wears a sparkle.</dd>"),
+("""          La destination et le module sont lus <strong>à la fin de l'enregistrement</strong>,
           jamais au début. Appuyer sur <strong>Notes</strong> au milieu d'une phrase envoie
           cette dictée-là dans le fichier, et l'inverse fonctionne aussi. C'est ce qui rend
           la barre utile plutôt que décorative — et elle ne prend jamais le focus, pour que
           le texte atterrisse là où votre curseur se trouve déjà.""",
- """          Mode and destination are read <strong>when the recording ends</strong>, never when
-          it starts. Pressing <strong>Notes</strong> halfway through a sentence sends that
-          dictation to the file, and the reverse works too. That is what makes the bar
+ """          Destination and module are read <strong>when the recording ends</strong>, never
+          when it starts. Pressing <strong>Notes</strong> halfway through a sentence sends
+          that dictation to the file, and the reverse works too. That is what makes the bar
           useful rather than decorative — and it never takes focus, so the text lands where
           your caret already is."""),
 # ---- notes -----------------------------------------------------------------
@@ -243,108 +270,34 @@ PAIRS += [
         éditeur. Rien à exporter le jour où vous changez d'outil.""",
  """        The file stays a text file, on your disk, readable by any editor. Nothing to
         export the day you change tools."""),
-# ---- moteurs ---------------------------------------------------------------
-('id="moteurs" aria-labelledby="moteurs-titre"', 'id="engines" aria-labelledby="engines-title"'),
-('<h2 id="moteurs-titre">Le choix tient en une question</h2>', '<h2 id="engines-title">The choice comes down to one question</h2>'),
-("""          macOS, ou CrisperWhisper. Le premier est déjà là et ne demande rien.
-          Le second connaît votre lexique, mais il a des exigences.""",
- """          macOS, or CrisperWhisper. The first is already there and asks for nothing.
-          The second knows your lexicon, but it has requirements."""),
-("Prérequis comparés des moteurs de macOS et du moteur CrisperWhisper", "Requirements compared for the macOS engines and the CrisperWhisper engine"),
+# ---- deux voies, en-têtes du tableau ---------------------------------------
 ('<span class="sr-only">Critère</span>', '<span class="sr-only">Criterion</span>'),
 ('<span class="col-note">La reconnaissance vocale du système</span>', '<span class="col-note">The system\'s speech recognition</span>'),
-('<span class="col-note">Le moteur qui connaît votre lexique</span>', '<span class="col-note">The engine that knows your lexicon</span>'),
-('<th scope="row">Version de macOS</th>', '<th scope="row">macOS version</th>'),
-('<td data-col="macOS"><strong>14</strong> ou plus récent, comme l\'application</td>', '<td data-col="macOS"><strong>14</strong> or later, same as the app</td>'),
-('<td data-col="CrisperWhisper"><strong>14</strong> ou plus récent</td>', '<td data-col="CrisperWhisper"><strong>14</strong> or later</td>'),
-('<td data-col="macOS">Toute machine où la dictée du système fonctionne — <strong>Mac Intel compris</strong></td>',
- '<td data-col="macOS">Any machine where system dictation works — <strong>Intel Macs included</strong></td>'),
-('<td data-col="CrisperWhisper"><strong>Apple Silicon</strong> (M1 et au-delà)</td>', '<td data-col="CrisperWhisper"><strong>Apple Silicon</strong> (M1 and up)</td>'),
-('<th scope="row">À télécharger</th>', '<th scope="row">To download</th>'),
-('<td data-col="macOS">Rien, ou les modèles de langue depuis les Réglages Système</td>', '<td data-col="macOS">Nothing, or the language models from System Settings</td>'),
-('<td data-col="CrisperWhisper">Environ <strong>1,6 Go</strong> de poids</td>', '<td data-col="CrisperWhisper">About <strong>1.6 GB</strong> of weights</td>'),
-('<th scope="row">Mémoire</th>', '<th scope="row">Memory</th>'),
-('<td data-col="macOS">Négligeable</td>', '<td data-col="macOS">Negligible</td>'),
-('<td data-col="CrisperWhisper">Environ <strong>3 Go</strong> résidents</td>', '<td data-col="CrisperWhisper">About <strong>3 GB</strong> resident</td>'),
-('<th scope="row">Installation</th>', '<th scope="row">Setup</th>'),
-('<td data-col="macOS">Aucune, c\'est le réglage par défaut</td>', '<td data-col="macOS">None, it is the default</td>'),
-('<td data-col="CrisperWhisper">Un script, depuis l\'application</td>', '<td data-col="CrisperWhisper">One script, from the app</td>'),
-('<th scope="row">Vocabulaire de métier</th>', '<th scope="row">Trade vocabulary</th>'),
-('<td data-col="macOS">Non — il écrira «&nbsp;use effect&nbsp;»</td>', '<td data-col="macOS">No — it will write “use effect”</td>'),
-('<td data-col="CrisperWhisper"><strong>Oui</strong>, par conditionnement du décodage</td>', '<td data-col="CrisperWhisper"><strong>Yes</strong>, by conditioning the decoder</td>'),
-('<td data-col="macOS">Un seul rendu</td>', '<td data-col="macOS">A single rendering</td>'),
-('<td data-col="CrisperWhisper">Texte nettoyé, ou mot à mot</td>', '<td data-col="CrisperWhisper">Clean text, or word for word</td>'),
-('<th scope="row">Licence</th>', '<th scope="row">Licence</th>'),
-('<td data-col="macOS">Fournie avec macOS</td>', '<td data-col="macOS">Ships with macOS</td>'),
-("Poids en <strong>recherche non commerciale</strong>", "Weights are <strong>non-commercial research</strong>"),
-("À lire avant de l'installer", "Read before installing"),
-("""        Côté macOS il y a en fait deux versions, et Caspr prend la meilleure que votre
-        machine sait faire tourner, sans rien vous demander : la <strong>Dictée</strong>
-        du système, présente depuis macOS 10.15 et jusque sur les Mac Intel, et
-        <strong>Apple Intelligence</strong>, apparue avec macOS 26, plus fine sur les
-        passages longs. La disponibilité est mesurée sur la machine, jamais déduite
-        d'un numéro de version.""",
- """        On the macOS side there are in fact two versions, and Caspr picks the best one your
-        machine can run without asking you: system <strong>Dictation</strong>, present
-        since macOS 10.15 and all the way down to Intel Macs, and
-        <strong>Apple Intelligence</strong>, introduced with macOS 26 and finer on long
-        passages. Availability is measured on the machine, never inferred from a version
-        number."""),
-("""        Les poids de CrisperWhisper 2.0 relèvent d'une licence de recherche non commerciale
-        de Nyra Health. Caspr ne les embarque pas et ne les télécharge jamais en silence :
-        la licence s'affiche avant tout téléchargement, et le choix vous revient.""",
- """        CrisperWhisper 2.0's weights fall under a Nyra Health non-commercial research licence.
-        Caspr does not bundle them and never downloads them silently: the licence is shown
-        before any download, and the choice is yours."""),
-("Lire la licence", "Read the licence"),
-# ---- mesures ---------------------------------------------------------------
-('id="mesures" aria-labelledby="mesures-titre"', 'id="numbers" aria-labelledby="numbers-title"'),
-('<h2 id="mesures-titre">Ce qui a été mesuré</h2>', '<h2 id="numbers-title">What was measured</h2>'),
-("""          Sur des enregistrements de voix réelle, et non de la parole synthétique.
-          Les scripts qui reproduisent ces chiffres sont dans le dépôt.""",
- """          On real voice recordings rather than synthetic speech. The scripts that reproduce
-          these numbers are in the repository."""),
-("Aller-retour complet pour 13 secondes de parole, modèle déjà chaud", "Full round trip for 13 seconds of speech, model kept warm"),
-("4 à 5×", "4–5×"),
-("Plus rapide que la chaîne Python de référence, pour un texte identique à l'octet près", "Faster than the reference Python pipeline, for byte-identical text"),
-("94 %", "94%"),
-("Des termes techniques préservés avec lexique, contre 85 % sans", "Of technical terms preserved with a lexicon, against 85% without"),
-("Octet envoyé sur le réseau pendant une transcription, quel que soit le moteur", "Bytes sent over the network during a transcription, with any engine"),
-("""        Relevés sur un MacBook Pro M4 Pro, 48 Go, macOS 26.6. Deux points expliquent l'écart
-        avec la chaîne de référence : celle-ci coûte environ 1,5 seconde de surcouche par
-        transcription, et Whisper encode toujours 30 secondes même quand vous en avez dit 5 —
-        réduire cette fenêtre à 15 secondes retire près de la moitié du temps d'encodage sans
-        changer une lettre du résultat. En dessous de 15 secondes le modèle sort de son
-        domaine d'entraînement, et Caspr n'y descend pas.""",
- """        Measured on a MacBook Pro M4 Pro, 48 GB, macOS 26.6. Two things explain the gap with
-        the reference pipeline: it costs roughly 1.5 seconds of overhead per transcription,
-        and Whisper always encodes 30 seconds even when you spoke for 5 — shrinking that
-        window to 15 seconds removes nearly half the encoder time without changing a letter
-        of the output. Below 15 seconds the model leaves its training distribution, and
-        Caspr does not go there."""),
 # ---- local / open source ---------------------------------------------------
 ('aria-labelledby="local-titre"', 'aria-labelledby="local-title"'),
-('<h2 id="local-titre">Local par construction, open source par principe</h2>',
- '<h2 id="local-title">Local by construction, open source on principle</h2>'),
-("""          La confidentialité n'est pas une promesse que Caspr vous demande de croire,
-          c'est une conséquence de son architecture : il n'y a pas de serveur à qui
-          envoyer quoi que ce soit. Et vous n'avez pas à me croire sur parole —
+('<h2 id="local-titre">Aucun serveur, et tout le code à lire</h2>',
+ '<h2 id="local-title">No server, and all the code to read</h2>'),
+("""          Caspr n'a pas de serveur : il n'existe nulle part chez nous où envoyer quoi
+          que ce soit. Ce qui quitte votre Mac, et vers où, dépend seulement de la voie
+          que vous choisissez. Et vous n'avez pas à me croire sur parole —
           l'intégralité du code est publique, sous licence MIT, lisible et compilable
           par vous.""",
- """          Privacy is not a promise Caspr asks you to take on trust, it is a consequence of
-          how it is built: there is no server to send anything to. And you don't have to
-          take my word for it — the whole codebase is public, MIT licensed, yours to read
-          and to build."""),
-("<strong>Gratuit et open source.</strong> Code Swift et moteur Python sous licence MIT, sur GitHub. Aucun bridage, aucun abonnement, aucun compte.",
- "<strong>Free and open source.</strong> The Swift app and the Python engine are MIT licensed, on GitHub. Nothing held back, no subscription, no account."),
+ """          Caspr has no server: there is nowhere on our side to send anything to. What
+          leaves your Mac, and where it goes, depends only on the path you choose. And
+          you don't have to take my word for it — the whole codebase is public, MIT
+          licensed, yours to read and to build."""),
+("<strong>Voie macOS : hors ligne pour de bon.</strong> Coupez le Wi-Fi : la dictée fonctionne à l'identique, et rien n'est envoyé.",
+ "<strong>macOS path: offline for real.</strong> Turn off Wi-Fi and dictation behaves identically, and nothing is sent."),
+("<strong>Voie ChatGPT : votre compte, pas le nôtre.</strong> La voix passe par ChatGPT, dans une page que Caspr ouvre avec votre session, comme sur chatgpt.com — selon les conditions de votre compte OpenAI.",
+ "<strong>ChatGPT path: your account, not ours.</strong> Your voice goes through ChatGPT, in a page Caspr opens with your session, just as on chatgpt.com — under your OpenAI account's terms."),
+("<strong>Gratuit et open source.</strong> Code Swift sous licence MIT, sur GitHub. Aucun bridage, aucun abonnement, aucun compte Caspr.",
+ "<strong>Free and open source.</strong> MIT licensed Swift code, on GitHub. Nothing held back, no subscription, no Caspr account."),
 ("<strong>Aucune télémétrie.</strong> Pas de statistiques d'usage, pas de traceur, pas de rapport d'incident silencieux.",
  "<strong>No telemetry.</strong> No usage statistics, no tracker, no silent crash reports."),
-("<strong>Hors-ligne pour de bon.</strong> Coupez le Wi-Fi : la dictée fonctionne à l'identique.",
- "<strong>Offline for real.</strong> Turn off Wi-Fi and dictation behaves identically."),
-("<strong>Une seule requête, facultative.</strong> La vérification des mises à jour interroge GitHub, et se désactive dans les réglages.",
- "<strong>One optional request.</strong> The update check queries GitHub, and switches off in settings."),
-("<strong>Une désinstallation qui désinstalle.</strong> L'environnement Python, les poids, les caches et les préférences partent avec — et seulement ce qui est réellement présent.",
- "<strong>An uninstaller that uninstalls.</strong> The Python environment, the weights, the caches and the preferences go with it — and only what is actually there."),
+("<strong>Une seule requête à lui, facultative.</strong> La vérification des mises à jour interroge GitHub ; l'automatique est désactivée par défaut.",
+ "<strong>One request of its own, optional.</strong> The update check queries GitHub; the automatic one is off by default."),
+("<strong>Une désinstallation qui désinstalle.</strong> Préférences, historique, session ChatGPT, journaux et autorisations partent à la corbeille — et seulement ce qui est réellement présent.",
+ "<strong>An uninstaller that uninstalls.</strong> Preferences, history, the ChatGPT session, logs and permissions go to the Trash — and only what is actually there."),
 ("Lire le code sur GitHub", "Read the code on GitHub"),
 ]
 
@@ -353,55 +306,54 @@ PAIRS += [
 ('aria-labelledby="questions-titre"', 'aria-labelledby="questions-title"'),
 ('<h2 id="questions-titre">Questions</h2>', '<h2 id="questions-title">Questions</h2>'),
 ("<span>De quel Mac ai-je besoin&nbsp;?</span>", "<span>Which Mac do I need?</span>"),
-("<p>Caspr demande <strong>macOS 14 ou plus récent</strong>. Avec les moteurs de macOS, il fonctionne partout où la dictée du système fonctionne, <strong>Mac Intel compris</strong> : la Dictée existe depuis macOS 10.15, et Apple Intelligence s'y ajoute à partir de macOS 26 sur les Mac qui en disposent.</p>",
- "<p>Caspr needs <strong>macOS 14 or later</strong>. With the macOS engines it works anywhere system dictation works, <strong>Intel Macs included</strong>: Dictation has existed since macOS 10.15, and Apple Intelligence adds to it from macOS 26 on the Macs that support it.</p>"),
-("<p>Seul <strong>CrisperWhisper</strong> impose une puce Apple Silicon (M1 et au-delà), parce qu'il s'exécute sur Metal — avec environ 1,6 Go de poids à télécharger et 3 Go de mémoire résidente pendant l'usage.</p>",
- "<p>Only <strong>CrisperWhisper</strong> requires an Apple Silicon chip (M1 and up), because it runs on Metal — with about 1.6 GB of weights to download and 3 GB resident in memory while in use.</p>"),
+("<p>Caspr demande <strong>macOS 14 ou plus récent</strong>, <strong>Mac Intel compris</strong>. Par la voie macOS, il prend Apple Intelligence à partir de macOS 26 quand la machine sait écrire votre langue, et la Dictée du système sinon.</p>",
+ "<p>Caspr needs <strong>macOS 14 or later</strong>, <strong>Intel Macs included</strong>. On the macOS path it uses Apple Intelligence from macOS 26 when the machine can write your language, and system Dictation otherwise.</p>"),
+("<p>Par la voie <strong>ChatGPT</strong>, il faut un compte ChatGPT et une connexion à Internet : c'est la page de ChatGPT qui écoute et transcrit.</p>",
+ "<p>The <strong>ChatGPT</strong> path needs a ChatGPT account and an internet connection: the ChatGPT page is what listens and transcribes.</p>"),
 ("<span>Ma voix ou mes textes partent-ils sur un serveur&nbsp;?</span>", "<span>Does my voice or text leave my machine?</span>"),
-("<p>Non. La transcription s'exécute sur votre machine, avec tous les moteurs. Il n'y a ni compte, ni serveur, ni télémétrie. Coupez le Wi-Fi et Caspr fonctionne à l'identique.</p>",
- "<p>No. Transcription runs on your machine with every engine. There is no account, no server and no telemetry. Turn off Wi-Fi and Caspr behaves identically.</p>"),
-("<p>La seule requête réseau de l'application est la vérification des mises à jour sur GitHub, et elle se désactive dans les réglages.</p>",
- "<p>The only network request the app makes is the update check against GitHub, and it switches off in settings.</p>"),
+("<p>Cela dépend de la voie. <strong>Avec macOS, non</strong> : la transcription s'exécute sur votre machine, et rien n'est envoyé — coupez le Wi-Fi, elle fonctionne à l'identique. <strong>Avec ChatGPT, oui</strong> : votre voix passe par votre propre compte ChatGPT, chez OpenAI, comme sur chatgpt.com.</p>",
+ "<p>It depends on the path. <strong>With macOS, no</strong>: transcription runs on your machine and nothing is sent — turn off Wi-Fi and it behaves identically. <strong>With ChatGPT, yes</strong>: your voice goes through your own ChatGPT account, to OpenAI, just as on chatgpt.com.</p>"),
+("<p>Caspr, lui, n'a ni serveur, ni compte, ni télémétrie. Sa seule requête à lui est la vérification des mises à jour sur GitHub, et l'automatique est désactivée par défaut.</p>",
+ "<p>Caspr itself has no server, no account and no telemetry. Its only request of its own is the update check against GitHub, and the automatic one is off by default.</p>"),
 ("<span>Pourquoi macOS refuse-t-il d'ouvrir l'application la première fois&nbsp;?</span>", "<span>Why does macOS refuse to open the app the first time?</span>"),
 ("<p>Parce que l'application n'est pas notariée par Apple — la notarisation suppose un compte développeur payant. Caspr est signé de façon ad hoc, alors macOS affiche un avertissement au premier lancement.</p>",
  "<p>Because the app is not notarised by Apple — notarisation requires a paid developer account. Caspr is ad-hoc signed, so macOS warns on first launch.</p>"),
 ("<p>L'autorisation se donne une fois, dans Réglages Système, rubrique Confidentialité et sécurité. Le guide qui s'ouvre au téléchargement montre chaque étape en image.</p>",
  "<p>You grant permission once, in System Settings under Privacy &amp; Security. The guide that opens on download shows every step in pictures.</p>"),
-("<span>Caspr comprend-il le vocabulaire de mon métier&nbsp;?</span>", "<span>Does Caspr understand the vocabulary of my trade?</span>"),
-("<p>C'est la raison d'être du projet. CrisperWhisper accepte un lexique qui oriente le décodage vers les termes que vous lui donnez : noms de clients, molécules, tickers, acronymes maison, jargon de la profession. Le mécanisme ne connaît aucun domaine en particulier.</p>",
- "<p>That is the reason the project exists. CrisperWhisper accepts a lexicon that biases decoding toward the terms you supply: client names, molecules, tickers, in-house acronyms, the jargon of the profession. The mechanism knows no particular field.</p>"),
-("<p>Mesuré sur de la parole réelle mêlant français et anglais, <strong>32 termes sur 34</strong> sont préservés avec lexique, contre 29 sur 34 sans — et sans régression sur les phrases en français simple. Les moteurs de macOS, eux, n'ont pas ce mécanisme.</p>",
- "<p>Measured on real speech mixing French and English, <strong>32 of 34 terms</strong> survive with a lexicon, against 29 of 34 without — with no regression on plain sentences. The macOS engines have no such mechanism.</p>"),
+("<span>Qu'apporte la voie ChatGPT&nbsp;?</span>", "<span>What does the ChatGPT path add?</span>"),
+("<p>Une transcription souvent meilleure, et des <strong>modules</strong> : le texte brut, une réorganisation de ce que vous avez dit, ou une question à laquelle ChatGPT répond dans sa page.</p>",
+ "<p>Often better transcription, and <strong>modules</strong>: the raw text, a reorganised version of what you said, or a question ChatGPT answers in its page.</p>"),
+("<p>Caspr pilote l'<strong>interface web</strong> de ChatGPT, pas une API. Si OpenAI la remanie, la voie peut cesser de fonctionner jusqu'à une nouvelle calibration, que Caspr mène seul en essayant les boutons de la page. La voie macOS, elle, ne dépend de personne.</p>",
+ "<p>Caspr drives ChatGPT's <strong>web interface</strong>, not an API. If OpenAI redesigns it, the path can stop working until a new calibration, which Caspr runs on its own by trying the page's buttons. The macOS path depends on no one.</p>"),
 ("<span>Quelle est la licence&nbsp;?</span>", "<span>What is the licence?</span>"),
-("<p>Le code de Caspr est sous licence MIT, comme le code d'inférence de CrisperWhisper. <strong>Les poids du modèle ne le sont pas</strong> : ils relèvent d'une licence de recherche non commerciale de Nyra Health.</p>",
- "<p>Caspr's own code is MIT, as is CrisperWhisper's inference code. <strong>The model weights are not</strong>: they fall under a Nyra Health non-commercial research licence.</p>"),
-("<p>Caspr n'embarque donc pas ces poids et ne les télécharge jamais en silence. La licence s'affiche avant tout téléchargement et le choix vous revient. Sous une lecture stricte, dicter un courriel professionnel peut relever de l'usage commercial — ce qui est dit ici est un résumé, pas un avis juridique.</p>",
- "<p>Caspr therefore does not bundle those weights and never downloads them silently. The licence is shown before any download and the choice is yours. Under a strict reading, dictating work email may itself count as commercial use — this is a summary, not legal advice.</p>"),
+("<p>Le code de Caspr est sous <strong>licence MIT</strong>, public sur GitHub : vous pouvez le lire, le compiler et le modifier.</p>",
+ "<p>Caspr's code is under the <strong>MIT licence</strong>, public on GitHub: you can read it, build it and change it.</p>"),
+("<p>La voie ChatGPT utilise votre propre compte, selon les conditions d'OpenAI. Caspr n'est pas affilié à OpenAI.</p>",
+ "<p>The ChatGPT path uses your own account, under OpenAI's terms. Caspr is not affiliated with OpenAI.</p>"),
 ("<span>Puis-je désinstaller proprement&nbsp;?</span>", "<span>Can I uninstall cleanly?</span>"),
-("<p>Oui. L'application inclut un désinstallateur qui retire l'environnement Python, les poids du modèle, les caches et les préférences — et il ne propose de supprimer que ce qui est effectivement installé.</p>",
- "<p>Yes. The app ships an uninstaller that removes the Python environment, the model weights, the caches and the preferences — and it only offers to remove what is actually installed.</p>"),
+("<p>Oui. L'application inclut un désinstallateur qui met à la corbeille les préférences, l'historique, la session ChatGPT s'il y en a une, les journaux et les autorisations — et il ne propose que ce qui est effectivement présent.</p>",
+ "<p>Yes. The app ships an uninstaller that moves the preferences, the history, the ChatGPT session if there is one, the logs and the permissions to the Trash — and it only offers what is actually there.</p>"),
 # ---- appel final -----------------------------------------------------------
 ('aria-labelledby="final-titre"', 'aria-labelledby="final-title"'),
-('<h2 id="final-titre">Essayez-le sur une phrase que vous n\'auriez pas osé dicter</h2>',
- '<h2 id="final-title">Try it on a sentence you would not have dared dictate</h2>'),
-("""        Celle avec deux mots anglais au milieu, un nom propre et une hésitation.
-        C'est le cas pour lequel Caspr a été écrit.""",
- """        The one with two borrowed words in the middle, a proper noun and a hesitation.
-        That is the case Caspr was written for."""),
+('<h2 id="final-titre">Essayez-le sur la prochaine phrase que vous alliez taper</h2>',
+ '<h2 id="final-title">Try it on the next sentence you were about to type</h2>'),
+("""        Une touche, votre voix, et le texte arrive à votre curseur. Vous choisissez la
+        voie à l'installation, et vous en changez d'un clic.""",
+ """        One key, your voice, and the text arrives at your caret. You choose the path
+        when you install, and switch with one click."""),
 ("Voir toutes les versions", "See all releases"),
-("Gratuit et open source · macOS 14 ou plus récent · aucun compte", "Free and open source · macOS 14 or later · no account"),
+("Gratuit et open source · macOS 14 ou plus récent · aucun compte Caspr", "Free and open source · macOS 14 or later · no Caspr account"),
 # ---- pied de page ----------------------------------------------------------
-("Dictée vocale locale pour macOS. Rapide, privée, open source. Zéro cloud, zéro abonnement.",
- "Local dictation for macOS. Fast, private, open source. No cloud, no subscription."),
+("Dictée vocale pour macOS. Hors ligne avec macOS, ou par votre compte ChatGPT. Open source, sans serveur, sans abonnement.",
+ "Dictation for macOS. Offline with macOS, or through your ChatGPT account. Open source, no server, no subscription."),
 ("Un projet de <b>Lyria Studio</b>", "A project by <b>Lyria Studio</b>"),
 ('aria-labelledby="foot-produit"', 'aria-labelledby="foot-product"'),
 ('<h2 id="foot-produit">Le produit</h2>', '<h2 id="foot-product">Product</h2>'),
+('<li><a href="#voies">Deux voies</a></li>', '<li><a href="#paths">Two paths</a></li>'),
 ('<li><a href="#dictee">La dictée</a></li>', '<li><a href="#dictation">Dictation</a></li>'),
-('<li><a href="#vocabulaire">Le vocabulaire</a></li>', '<li><a href="#vocabulary">Vocabulary</a></li>'),
 ('<li><a href="#barre">La barre</a></li>', '<li><a href="#bar">The bar</a></li>'),
 ('<li><a href="#notes">Les notes</a></li>', '<li><a href="#notes">Notes</a></li>'),
-('<li><a href="#moteurs">Les moteurs</a></li>', '<li><a href="#engines">Engines</a></li>'),
-('<li><a href="#mesures">Les mesures</a></li>', '<li><a href="#numbers">Measurements</a></li>'),
+('<li><a href="#local">Confidentialité</a></li>', '<li><a href="#local">Privacy</a></li>'),
 ('<h2 id="foot-code">Le code</h2>', '<h2 id="foot-code">Code</h2>'),
 ("Dépôt GitHub", "GitHub repository"),
 (">Versions</a>", ">Releases</a>"),
@@ -433,13 +385,20 @@ PAIRS += [
 ('id="modal-done">J\'ai terminé</button>', 'id="modal-done">I\'m done</button>'),
 ]
 
+# Une paire qui ne trouve plus rien est une traduction périmée : la page
+# française a changé, et l'anglaise garderait l'ancien texte sans le dire.
+stale = [a for a, _ in PAIRS if a not in src]
+if stale:
+    print("pairs matching nothing in index.html:")
+    for a in stale:
+        print("  ", a[:90].replace("\n", " "))
+
 out = src
 for a, b in PAIRS:
     out = out.replace(a, b)
 
 # Les ancres restantes suivent les identifiants anglais.
-for a, b in [("#dictee", "#dictation"), ("#vocabulaire", "#vocabulary"), ("#barre", "#bar"),
-             ("#moteurs", "#engines"), ("#mesures", "#numbers")]:
+for a, b in [("#voies", "#paths"), ("#dictee", "#dictation"), ("#barre", "#bar")]:
     out = out.replace(f'href="{a}"', f'href="{b}"')
 
 (ROOT / "en.html").write_text(out, encoding="utf-8")
@@ -465,8 +424,8 @@ class Visible(HTMLParser):
 v = Visible(); v.feed(out)
 blob = " ".join(v.t) + " " + " ".join(v.a)
 # Les citations françaises sont l'exemple : elles doivent rester.
-for keep in ["s'est écarté sur le forward", "a retoqué le protocole",
-             "les dependencies dans le useEffect", "dépendances", "français", "French"]:
+# Les noms des modules sont ceux de l'application, qui est en français.
+for keep in ["Réorganiser", "Version française"]:
     blob = blob.replace(keep, "")
 left = sorted(set(re.findall(r"\b[A-Za-zÀ-ÿ']*(?:é|è|ê|à|ù|ç|û|ô|î|É)[A-Za-zÀ-ÿ']*\b", blob)))
 print("en.html — French left in visible text:", left if left else "none")

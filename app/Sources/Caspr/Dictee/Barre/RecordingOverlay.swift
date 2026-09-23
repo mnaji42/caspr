@@ -401,12 +401,18 @@ final class RecordingOverlay {
         cardBelowModules?.isActive = false
         cardAtTop?.isActive = true
         statusLabel.isHidden = false
-        statusLabel.maximumNumberOfLines = hint == nil ? 1 : 2
-        statusLabel.attributedStringValue = Self.failureText(message, hint: hint)
+        // Un message venu d'ailleurs peut ne pas tenir sur une ligne — le
+        // refus de ChatGPT, dont la fin dit quand réessayer. Il prend alors
+        // la seconde ligne, plutôt que de perdre justement cette fin.
+        let texte = Self.failureText(message, hint: hint)
+        let deuxLignes = hint != nil
+            || texte.size().width > Self.cardWidth - 2 * Self.padding
+        statusLabel.maximumNumberOfLines = deuxLignes ? 2 : 1
+        statusLabel.attributedStringValue = texte
 
         panel.setContentSize(NSSize(width: Self.cardWidth,
                                     height: 2 * Self.padding
-                                        + (hint == nil ? 20 : 38)))
+                                        + (deuxLignes ? 38 : 20)))
         cardSheen?.frame = card?.bounds ?? .zero
         position(panel)
         card?.layer?.borderColor = NSColor.systemRed.withAlphaComponent(0.35).cgColor

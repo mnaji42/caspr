@@ -8,6 +8,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkey: HotkeyMonitor!
     private var historyHotkey: HotkeyMonitor!
     private var voieHotkey: HotkeyMonitor!
+    /// Le raccourci « Changer de voie » a-t-il été accepté par le système ?
+    /// Le menu ne l'affiche qu'à cette condition (cf. `registerVoieShortcut`).
+    private var voieShortcutActif = false
     private var modifierKey: ModifierKeyMonitor!
     private var reArmTimer: Timer?
     private var controller: DictationController!
@@ -457,7 +460,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // La bascule de voie, juste sous la dictée qu'elle commande. Le menu
         // est reconstruit à chaque changement d'état et de voie : la coche
         // dit toujours ce que fera le prochain appui.
-        let voieLabel = prefs.voieShortcut.map { "  \($0.label)" } ?? ""
+        let voieLabel = voieShortcutActif
+            ? (prefs.voieShortcut.map { "  \($0.label)" } ?? "") : ""
         let voie = NSMenuItem(title: "Écrire avec ChatGPT\(voieLabel)",
                               action: #selector(toggleVoie), keyEquivalent: "")
         voie.target = self
@@ -797,12 +801,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Le raccourci « Changer de voie », s'il y en a un.
+    ///
+    /// Le résultat est gardé pour le menu : une combinaison refusée — prise
+    /// par la dictée, ou par une autre application — y restait affichée, et
+    /// la presser faisait autre chose que changer de voie.
     private func registerVoieShortcut() {
         guard let shortcut = Preferences.shared.voieShortcut else {
+            voieShortcutActif = false
             voieHotkey.unregister()
             return
         }
-        if !voieHotkey.register(shortcut) {
+        voieShortcutActif = voieHotkey.register(shortcut)
+        if !voieShortcutActif {
             Log.error("raccourci \(shortcut.label) (changer de voie) refusé — déjà pris ?")
         }
     }

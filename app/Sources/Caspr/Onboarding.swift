@@ -46,7 +46,8 @@ final class OnboardingWindowController {
                                self?.close()
                                self?.openSettings?()
                            },
-                           onTitleChange: { title in host?.title = title })
+                           onTitleChange: { title in host?.title = title },
+                           onCalibrationEnded: { [weak self] in self?.comeBack() })
         }
         host = window
         self.window = window
@@ -61,6 +62,18 @@ final class OnboardingWindowController {
     private func close() {
         window?.close()
         window = nil
+    }
+
+    /// Ramène l'accueil devant, là où il était.
+    ///
+    /// Une calibration de la page ChatGPT se termine en cachant Caspr tout
+    /// entier, pour rendre la main à l'application d'où l'on venait — et
+    /// l'accueil disparaissait avec elle, au milieu du parcours, comme s'il
+    /// était fini. Sans `center()` : on le retrouve où on l'avait laissé.
+    private func comeBack() {
+        guard let window else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 }
 
@@ -190,6 +203,8 @@ private struct OnboardingView: View {
     /// ici : c'est `NSWindow` qui le porte, et le redessiner en SwiftUI
     /// donnerait deux titres à trois pixels d'écart.
     let onTitleChange: (String) -> Void
+    /// Une calibration de la page ChatGPT vient de rendre la main.
+    let onCalibrationEnded: () -> Void
 
     @State private var prefs = Preferences.shared
     /// Observé pour le pied de page : la fin d'une calibration, ou une session
@@ -208,10 +223,12 @@ private struct OnboardingView: View {
     @State private var launchAtLogin = LoginItem.isEnabled || !Preferences.shared.onboarded
 
     init(onFinish: @escaping () -> Void, onOpenSettings: @escaping () -> Void,
-         onTitleChange: @escaping (String) -> Void) {
+         onTitleChange: @escaping (String) -> Void,
+         onCalibrationEnded: @escaping () -> Void) {
         self.onFinish = onFinish
         self.onOpenSettings = onOpenSettings
         self.onTitleChange = onTitleChange
+        self.onCalibrationEnded = onCalibrationEnded
         // Reprend là où on s'était arrêté. Rouvrir sur la page de bienvenue
         // quelqu'un qui était à l'étape des autorisations lui ferait relire ce
         // qu'il vient de lire, et douter d'avoir progressé.
@@ -288,6 +305,13 @@ private struct OnboardingView: View {
         // et le titre de l'écran du premier essai la nomme.
         .onChange(of: prefs.voie) { _, voie in
             onTitleChange(step.windowTitle(voie))
+        }
+        // Choisir ChatGPT lance la calibration par-dessus l'accueil, et elle
+        // cache Caspr en finissant : l'accueil revient, pour qu'on voie où en
+        // est la voie et qu'on poursuive le parcours.
+        .onChange(of: relais.occupation) { avant, maintenant in
+            guard avant == .calibration, maintenant == .libre else { return }
+            onCalibrationEnded()
         }
     }
 

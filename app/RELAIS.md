@@ -186,7 +186,7 @@ réduit au silence le reste de l'enregistrement.
 
 **Le relais se conforme à `SpeechEngine`.** L'insertion, l'historique, la
 barre et les échecs sont ceux de la voie macOS. Les différences tiennent dans
-une poignée de branches de `transcribeAndInject`, et ce sont des
+une poignée de `switch` sur la voie dans `transcribeAndInject`, et ce sont des
 différences réelles : aucun audio de notre côté, donc pas de « Réessayer » ;
 une page à rendre et à préparer à la fin de chaque dictée.
 

@@ -664,13 +664,9 @@ final class DictationController {
         state = .processing
         // Le relais se conforme au protocole des moteurs, donc tout ce qui suit
         // (insertion, historique, échecs, barre) marche sans le savoir — à la
-        // poignée de différences près que ce drapeau porte. Il est tiré d'un
-        // `switch` sans `default` : une voie de plus obligerait à dire ici de
-        // quel côté elle se range.
-        let parRelais = switch voie {
-        case .apple: false
-        case .chatgpt: true
-        }
+        // poignée de différences près, dont chacune est un `switch` sans
+        // `default` sur la voie du cycle : une voie de plus obligerait à dire,
+        // à chacune, de quel côté elle se range.
         // RELAIS — vrai quand l'échec laisse la transcription dans la page, à
         // récupérer dans la fenêtre qu'on ouvre pour cela.
         var texteLaisseDansLaPage = false
@@ -680,40 +676,46 @@ final class DictationController {
         // condamne la page jusqu'au redémarrage.
         func acheverLeCycle() {
             voieDuCycle = nil
-            if parRelais { Relais.partage.rendreLaMain() }
-            // RELAIS — et la page est rendue prête pour la prochaine, pendant
-            // qu'on ne s'en sert pas. Sauf si l'on vient d'y laisser un texte
-            // à récupérer : la préparer maintenant le détruirait sous les yeux
-            // de qui vient le chercher. Elle attend alors qu'on en ait fini.
-            //
-            // Avant de quitter la discussion, et non après : c'est ce report
-            // qui dit à la sortie de la discussion de laisser la fenêtre
-            // ouverte sur le texte.
-            if parRelais {
+            switch voie {
+            case .apple:
+                // Le micro est déjà rendu, à l'arrêt du magnétophone.
+                break
+            case .chatgpt:
+                Relais.partage.rendreLaMain()
+                // Et la page est rendue prête pour la prochaine, pendant
+                // qu'on ne s'en sert pas. Sauf si l'on vient d'y laisser un
+                // texte à récupérer : la préparer maintenant le détruirait sous
+                // les yeux de qui vient le chercher. Elle attend alors qu'on en
+                // ait fini.
+                //
+                // Avant de quitter la discussion, et non après : c'est ce
+                // report qui dit à la sortie de la discussion de laisser la
+                // fenêtre ouverte sur le texte.
                 Relais.partage.preparerLaProchaine(apresEchec: texteLaisseDansLaPage)
-            }
-            // RELAIS — délivrer ailleurs, c'est quitter la discussion.
-            //
-            // Basculer de « Discuter » vers un module qui écrit au curseur
-            // referme la fenêtre : l'état devait suivre. Il ne suivait pas, et
-            // Caspr poursuivait alors un fil que plus personne ne voyait — la
-            // dictée suivante arrivait dans la conversation d'avant.
-            //
-            // Ici plutôt qu'au fil des chemins de sortie : réussite, texte
-            // vide, échec et annulation passent tous par là.
-            if parRelais, Relais.partage.sortieCourante != .aucune {
-                quitterLaDiscussion()
-            }
-            // RELAIS — la barre de ChatGPT se range à la fin de la dictée,
-            // quelle qu'en soit l'issue.
-            //
-            // Seules la réussite et un échec sur deux la rangeaient : un texte
-            // vide la laissait flotter au-dessus du travail, sans rapport avec
-            // le message affiché. Deux exceptions, qui sont ce que la dictée
-            // laisse délibérément à l'écran — la discussion qui continue, et
-            // la fenêtre ouverte pour qu'on y récupère son texte.
-            if parRelais, !texteLaisseDansLaPage, !Relais.partage.enDiscussion {
-                Relais.partage.masquerBarre()
+                // Délivrer ailleurs, c'est quitter la discussion.
+                //
+                // Basculer de « Discuter » vers un module qui écrit au curseur
+                // referme la fenêtre : l'état devait suivre. Il ne suivait pas,
+                // et Caspr poursuivait alors un fil que plus personne ne voyait
+                // — la dictée suivante arrivait dans la conversation d'avant.
+                //
+                // Ici plutôt qu'au fil des chemins de sortie : réussite, texte
+                // vide, échec et annulation passent tous par là.
+                if Relais.partage.sortieCourante != .aucune {
+                    quitterLaDiscussion()
+                }
+                // La barre de ChatGPT se range à la fin de la dictée, quelle
+                // qu'en soit l'issue.
+                //
+                // Seules la réussite et un échec sur deux la rangeaient : un
+                // texte vide la laissait flotter au-dessus du travail, sans
+                // rapport avec le message affiché. Deux exceptions, qui sont ce
+                // que la dictée laisse délibérément à l'écran — la discussion
+                // qui continue, et la fenêtre ouverte pour qu'on y récupère son
+                // texte.
+                if !texteLaisseDansLaPage, !Relais.partage.enDiscussion {
+                    Relais.partage.masquerBarre()
+                }
             }
         }
         // Seulement pour le cycle en cours : un cycle abandonné rendrait la
@@ -730,35 +732,40 @@ final class DictationController {
                 TranscriptionRequest(samples: samples, language: language))
             guard numero == cycle else { return }
 
-            // RELAIS — une sortie qui n'écrit nulle part s'arrête ici.
+            // Une sortie qui n'écrit nulle part s'arrête ici.
             //
             // La réponse est déjà à l'écran, dans la page que l'utilisateur a
             // sous les yeux. Rien à insérer, rien à archiver — l'historique est
             // un filet pour retrouver un texte qu'une insertion aurait perdu,
             // et une conversation n'est pas une dictée qu'on range.
-            if parRelais, Relais.partage.sortieCourante == .aucune {
-                // Abandonnée avant l'envoi, la dictée n'ouvre pas de
-                // discussion : l'annulation a déjà rendu la main. Après
-                // l'envoi, l'appui n'a fait que cesser d'attendre, et le fil
-                // parti doit rester ouvert — sans quoi la fin du cycle
-                // rechargeait la page sous la réponse de ChatGPT.
-                if Task.isCancelled, !Relais.partage.messageParti {
-                    throw CancellationError()
+            switch voie {
+            case .apple:
+                break
+            case .chatgpt:
+                if Relais.partage.sortieCourante == .aucune {
+                    // Abandonnée avant l'envoi, la dictée n'ouvre pas de
+                    // discussion : l'annulation a déjà rendu la main. Après
+                    // l'envoi, l'appui n'a fait que cesser d'attendre, et le
+                    // fil parti doit rester ouvert — sans quoi la fin du cycle
+                    // rechargeait la page sous la réponse de ChatGPT.
+                    if Task.isCancelled, !Relais.partage.messageParti {
+                        throw CancellationError()
+                    }
+                    // Sauf un refus — un quota, un envoi impossible : sans voix
+                    // ni texte à insérer, la barre est le seul endroit où le
+                    // lire. L'avertissement se suffit, en une ligne : un titre
+                    // « n'a pas répondu » au-dessus de « n'a pas répondu en
+                    // 3 min » ne faisait que le répéter.
+                    if let avertissement = Relais.partage.prendreAvertissement() {
+                        overlay.showFailure(avertissement)
+                        state = .failed("\(avertissement).")
+                    } else {
+                        overlay.hide()
+                        state = .idle
+                    }
+                    entrerEnDiscussion()
+                    return
                 }
-                // Sauf un refus — un quota, un envoi impossible : sans voix
-                // ni texte à insérer, la barre est le seul endroit où le lire.
-                // L'avertissement se suffit, en une ligne : un titre « n'a
-                // pas répondu » au-dessus de « n'a pas répondu en 3 min » ne
-                // faisait que le répéter.
-                if let avertissement = Relais.partage.prendreAvertissement() {
-                    overlay.showFailure(avertissement)
-                    state = .failed("\(avertissement).")
-                } else {
-                    overlay.hide()
-                    state = .idle
-                }
-                entrerEnDiscussion()
-                return
             }
             let text = result.text
             guard !text.isEmpty else {
@@ -780,11 +787,14 @@ final class DictationController {
                 // configuré rend le vide aussi sûrement qu'un micro coupé, et
                 // dans ce cas jeter la dictée oblige à tout redire — ce que
                 // cette application s'interdit partout ailleurs.
-                // RELAIS — rien à conserver : il n'y a pas d'audio de notre
-                // côté, et « Réessayer » rejouerait le vide.
-                if !parRelais {
+                switch voie {
+                case .apple:
                     pendingAudio = samples
                     pendingPreview = previewText
+                case .chatgpt:
+                    // Rien à conserver : il n'y a pas d'audio de notre côté,
+                    // et « Réessayer » rejouerait le vide.
+                    break
                 }
                 // `.failed` et non `.idle` : la barre renvoyait au menu, et le
                 // menu affichait « Prêt ». Envoyer quelqu'un chercher une
@@ -792,24 +802,34 @@ final class DictationController {
                 // de se taire — c'est lui faire douter de ce qu'il vient de
                 // lire. Le menu porte donc la même raison que sur un échec du
                 // moteur, puisque c'en est un du point de vue de l'utilisateur.
-                state = .failed(parRelais
-                    ? "ChatGPT n'a rien transcrit — avez-vous parlé ?"
-                    : "Le moteur a répondu sans rien transcrire "
-                      + "(\(writerChoice.fullLabel)) — "
-                      + "audio conservé, « Réessayer » ci-dessous.")
+                let raison = switch voie {
+                case .apple:
+                    "Le moteur a répondu sans rien transcrire "
+                        + "(\(writerChoice.fullLabel)) — "
+                        + "audio conservé, « Réessayer » ci-dessous."
+                case .chatgpt:
+                    "ChatGPT n'a rien transcrit — avez-vous parlé ?"
+                }
+                state = .failed(raison)
                 return
             }
-            if parRelais { Relais.partage.masquerBarre() }         // RELAIS —
-            overlay.hide()
             // L'application au premier plan au moment d'insérer. L'insertion
             // par accessibilité vise l'élément focalisé de cette
             // application-là : si c'est Caspr, le texte part dans une de nos
             // propres fenêtres et disparaît sans qu'aucune erreur ne soit
             // levée. C'était indiagnosticable de l'extérieur.
-            // RELAIS — rendre le clavier avant d'écrire. Après une discussion,
-            // ou si l'on bascule vers un module qui écrit en pleine dictée, la
-            // fenêtre du relais est au premier plan : le texte y partirait.
-            if parRelais { await Relais.partage.rendreLeClavier() }
+            switch voie {
+            case .apple:
+                overlay.hide()
+            case .chatgpt:
+                Relais.partage.masquerBarre()
+                overlay.hide()
+                // Rendre le clavier avant d'écrire. Après une discussion, ou si
+                // l'on bascule vers un module qui écrit en pleine dictée, la
+                // fenêtre du relais est au premier plan : le texte y
+                // partirait.
+                await Relais.partage.rendreLeClavier()
+            }
             // Et là où l'on parlait, si l'on en est parti entre-temps.
             switch target {
             case .caret: await ramener(visee)
@@ -829,11 +849,15 @@ final class DictationController {
             pendingAudio = nil
             pendingPreview = nil
             Log.info("transcrit en \(Int(result.latency.wallMs)) ms, \(text.count) caractères")
-            // RELAIS — la transformation a échoué et c'est le brut qui vient
-            // d'être inséré : le dire, là où l'on regarde. Sans quoi un texte
-            // non remanié passe pour la réponse de ChatGPT, et un quota
-            // atteint pour une consigne mal suivie.
-            if parRelais, let avertissement = Relais.partage.prendreAvertissement() {
+            // La transformation a échoué et c'est le brut qui vient d'être
+            // inséré : le dire, là où l'on regarde. Sans quoi un texte non
+            // remanié passe pour la réponse de ChatGPT, et un quota atteint
+            // pour une consigne mal suivie.
+            let avertissement: String? = switch voie {
+            case .apple: nil
+            case .chatgpt: Relais.partage.prendreAvertissement()
+            }
+            if let avertissement {
                 overlay.showFailure("Transcription brute insérée", hint: avertissement)
                 state = .failed("Transcription brute insérée — \(avertissement).")
             } else {
@@ -844,42 +868,50 @@ final class DictationController {
             return
         } catch {
             guard numero == cycle else { return }
-            // RELAIS — pas d'audio conservé : il n'y en a pas. « Réessayer »
+            // Ce qui reste à reprendre, et où : l'audio de Caspr pour
+            // « Réessayer » sur la voie macOS ; sur la voie ChatGPT, le texte
+            // resté dans la fenêtre du relais — sauf quand la page est morte :
+            // celle qu'on ouvrirait est neuve, et le texte a disparu avec
+            // l'ancienne.
+            //
+            // Pas d'audio conservé pour ChatGPT : il n'y en a pas. « Réessayer »
             // rejouerait un enregistrement vide sur une page qui est passée à
             // autre chose, donc échouerait à coup sûr. Proposer un recours qui
-            // ne peut pas marcher est pire que de n'en proposer aucun : le
-            // texte, lui, est resté dans la fenêtre du relais, et c'est ce
-            // qu'il faut aller chercher.
-            if !parRelais {
+            // ne peut pas marcher est pire que de n'en proposer aucun.
+            let texteRecuperable: Bool
+            let raison: String
+            switch voie {
+            case .apple:
                 pendingAudio = samples
                 pendingPreview = previewText
+                let minutes = Double(samples.count) / AudioRecorder.targetSampleRate / 60
+                Log.error("échec de transcription : \(error.localizedDescription) — "
+                          + "\(String(format: "%.1f", minutes)) min conservées")
+                texteRecuperable = false
+                raison = "\(error.localizedDescription) — audio conservé, "
+                    + "« Réessayer » dans le menu."
+            case .chatgpt:
+                Log.error("échec de transcription : \(error.localizedDescription)")
+                texteRecuperable = (error as? RelaisPage.Erreur)?.laissePeutEtreLeTexte ?? true
+                raison = texteRecuperable
+                    ? "\(error.localizedDescription) — le texte est peut-être encore "
+                      + "dans la fenêtre du relais."
+                    : error.localizedDescription
             }
-            let minutes = Double(samples.count) / AudioRecorder.targetSampleRate / 60
-            Log.error("échec de transcription : \(error.localizedDescription)"
-                      + (parRelais ? "" : " — \(String(format: "%.1f", minutes)) min conservées"))
             // Dit là où l'utilisateur regarde. La barre des menus recevait déjà
             // le détail, mais on ne consulte pas un menu qu'on n'a pas de
             // raison d'ouvrir : sans ça, un échec se lit comme « je m'y suis
             // mal pris ».
-            // RELAIS — sauf quand la page est morte : celle qu'on ouvrirait
-            // est neuve, et le texte a disparu avec l'ancienne.
-            let texteRecuperable = parRelais
-                && (error as? RelaisPage.Erreur)?.laissePeutEtreLeTexte ?? true
             overlay.showFailure(Self.shortReason(for: error),
                                 hint: Self.rescueHint(preview: previewText))
-            state = .failed(parRelais
-                ? (texteRecuperable
-                    ? "\(error.localizedDescription) — le texte est peut-être encore "
-                      + "dans la fenêtre du relais."
-                    : error.localizedDescription)
-                : "\(error.localizedDescription) — audio conservé, « Réessayer » dans le menu.")
-            // RELAIS — la barre reste, et s'agrandit : quand la lecture
+            state = .failed(raison)
+            // La barre de ChatGPT reste, et s'agrandit : quand la lecture
             // échoue, le texte est encore dans la page, et c'est le seul moyen
             // de le récupérer. Elle redevient donc utilisable au clavier, pour
             // qu'un ⌘C y soit possible. Rien n'est rechargé, et rien ne se
             // collera à la dictée suivante — celle-ci vide la zone avant
             // d'écouter.
-            if parRelais, texteRecuperable {
+            if texteRecuperable {
                 texteLaisseDansLaPage = true
                 Relais.partage.ouvrirFenetre()
             }

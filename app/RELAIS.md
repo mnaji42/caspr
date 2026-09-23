@@ -11,6 +11,12 @@ Ce document garde ce qui a été appris à la dure en pilotant un service tiers
 par son interface web. Les règles qui suivent ne se redécouvrent qu'en
 cassant quelque chose chez quelqu'un.
 
+Cette interface n'est pas une API : OpenAI la remanie sans prévenir, et rien
+ne promet qu'un bouton garde sa place. C'est le prix de la voie, et il se
+dit, au README comme sur le site. La défense est la calibration, qui
+réapprend les boutons en les essayant, et un repère qui ne trouve rien dit
+« absent » au lieu de deviner (cf. les règles plus bas).
+
 ## Les composants
 
 Tout tient dans `app/Sources/Caspr/Relais/`, un fichier par responsabilité —
@@ -26,7 +32,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `Relais` qui enregistre. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
 | `RelaisAttente.swift` | L'échéance **unique** d'une dictée, fixée à l'arrêt de l'écoute sur la durée parlée, et la phase en cours que la barre affiche. Toutes les attentes après l'arrêt la consomment ; aucune n'a plus son propre budget. |
-| `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. |
+| `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. La carte de session (`RelaisSession`) est aussi celle de l'accueil, et c'est elle qui dit ce que la voie exige pour dicter. |
 | `RelaisModuleCard.swift` | Le réglage d'un module : ses actions, sa sortie, son affichage. |
 | `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
 
@@ -132,7 +138,9 @@ n'aurait jamais suivi.
 Ce que l'automate s'interdit, et pourquoi :
 
 - **Se connecter.** C'est le compte de l'utilisateur : sans session, la
-  fenêtre s'ouvre et le parcours s'arrête. « Sans session » veut dire que la
+  fenêtre s'ouvre, et le parcours attend qu'il s'y connecte — dix minutes au
+  plus, fermer la fenêtre l'arrête — avant de demander, comme toujours, la
+  permission d'envoyer le message d'essai. « Sans session » veut dire que la
   page l'a **dit** (un bouton de connexion, une page d'authentification), vu
   par le filet et non par le calibrage peut-être faux, après l'avoir laissée
   se charger. Une page qui ne dit rien en trente secondes « ne répond pas » :
@@ -200,8 +208,13 @@ distingue de la voie macOS, et pourquoi.
   parlait, capturée à l'appui : il vaut pour les deux voies, mais c'est pour
   ChatGPT qu'il compte, parce que trente secondes à trois minutes séparent la
   parole de l'insertion.
+- **`Onboarding.swift`** — le choix de la voie, juste après la bienvenue :
+  les deux lignes de `CarteVoie`. Choisir ChatGPT y lance la connexion puis
+  la calibration, et l'écran du premier essai montre `RelaisSession` au lieu
+  du moteur de macOS. La promesse de confidentialité y est dite par voie.
 - **`SetupRecoveryGuard.swift`** — le socle minimal de la voie ChatGPT : le
-  raccourci, et une page connectée et calibrée. Rien sur macOS.
+  raccourci, et une page connectée et calibrée (`RelaisSession.isValid`).
+  Rien sur macOS.
 
 ## Cinq règles à ne jamais oublier
 

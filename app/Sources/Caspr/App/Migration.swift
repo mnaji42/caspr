@@ -17,7 +17,8 @@ import CasprCore
 /// corbeille refusée un jour (disque plein, dossier verrouillé) ne serait
 /// jamais retentée, et un agent réinstallé après coup — par une ancienne
 /// version relancée depuis une sauvegarde — ne serait jamais retiré. Le prix
-/// est une poignée de `fileExists` par lancement.
+/// est une poignée de `fileExists` par lancement, et deux appels courts à
+/// `launchctl`.
 ///
 /// ## Corbeille, jamais suppression
 ///
@@ -62,16 +63,28 @@ enum Migration {
     /// Synchrone, parce que c'est la priorité et que c'est court : le démon
     /// doit être sorti avant que quoi que ce soit touche aux fichiers qu'il
     /// tient ouverts.
+    ///
+    /// Le `bootout` est tenté à chaque lancement, que le plist soit là ou
+    /// non : un plist jeté à la main, ou un premier `bootout` raté, laissaient
+    /// sinon un démon chargé que plus rien ne regardait, jusqu'à la fin de la
+    /// session — et relancé en boucle vers un moteur déjà à la corbeille.
     private static func disarmAgents(home: URL) {
         for label in LegacyCleanup.agentLabels {
-            let plist = LegacyCleanup.agentPlist(label, home: home)
-            guard FileManager.default.fileExists(atPath: plist.path) else { continue }
-            // Un statut non nul veut dire, presque toujours, que l'agent
-            // n'était pas chargé : ce n'est pas une raison de garder le plist,
-            // qui le rechargerait à la prochaine ouverture de session.
             let status = launchctl(["bootout", "gui/\(getuid())/\(label)"])
-            Log.notice("migration : agent \(label) sorti de launchd (statut \(status))")
-            trash(LegacyCleanup.Location(plist, "agent \(label)"), home: home)
+            switch status {
+            case 0:
+                Log.notice("migration : agent \(label) sorti de launchd")
+            case 3, 113:
+                break // pas chargé (ESRCH, ou service introuvable) : rien à faire
+            default:
+                Log.error("migration : agent \(label) peut-être encore chargé "
+                          + "(bootout, statut \(status)) — retenté au prochain lancement")
+            }
+            // Le plist part quoi qu'il arrive : gardé, il rechargerait le
+            // démon à chaque ouverture de session, ce qui est pire qu'un
+            // démon resté chargé jusqu'à la prochaine.
+            trash(LegacyCleanup.Location(LegacyCleanup.agentPlist(label, home: home),
+                                         "agent \(label)"), home: home)
         }
     }
 

@@ -236,7 +236,54 @@ final class RelaisPage: NSObject {
         barre.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
         cacher()
-        charger()
+        if Self.cacheDisqueVide {
+            charger()
+        } else {
+            viderLeCacheDisquePuisCharger()
+        }
+    }
+
+    /// Vrai dès que le cache disque de WebKit a été vidé, pour ce lancement.
+    ///
+    /// Statique : la page est détruite quand on choisit macOS, et reconstruite
+    /// quand on revient à ChatGPT. Une seule purge par lancement suffit, et la
+    /// refaire à chaque bascule rechargerait tout chatgpt.com pour rien.
+    private static var cacheDisqueVide = false
+
+    /// Vide le cache HTTP de la page, puis la charge.
+    ///
+    /// La page reste ouverte des semaines, et WebKit y garde tout ce que
+    /// chatgpt.com télécharge — scripts, images, versions successives de
+    /// l'application. Mesuré chez le propriétaire : 942 Mo dans
+    /// `~/Library/Caches/fr.lyriastudio.caspr/WebKit/NetworkCache`, sans
+    /// plafond visible. Ce cache ne sert qu'à aller plus vite ; le vider au
+    /// premier montage de chaque lancement le borne à ce qu'une session
+    /// télécharge.
+    ///
+    /// **Le cache disque, et rien d'autre.** Les cookies, le stockage local,
+    /// IndexedDB et les service workers portent la session ChatGPT : les
+    /// effacer déconnecterait l'utilisateur à chaque lancement. Le cache des
+    /// service workers (`WKWebsiteDataTypeFetchCache`) est laissé aussi : il
+    /// pesait 4 Ko, et il appartient à la page plus qu'au navigateur.
+    ///
+    /// Le chargement attend la purge, pour ne pas remplir le cache pendant
+    /// qu'on le vide. `chargementEnCours` est levé dès maintenant : les
+    /// attentes de la zone de saisie savent ainsi qu'une page arrive.
+    private func viderLeCacheDisquePuisCharger() {
+        Self.cacheDisqueVide = true
+        chargementEnCours = true
+        let debut = Date.now
+        Task { [weak self] in
+            await WKWebsiteDataStore.default().removeData(
+                ofTypes: [WKWebsiteDataTypeDiskCache], modifiedSince: .distantPast)
+            let ms = Int(Date.now.timeIntervalSince(debut) * 1000)
+            Log.info("relais : cache disque de WebKit vidé (\(ms) ms)")
+            // Une page qui a déjà une adresse a été chargée entre-temps — ou
+            // détruite, ce qui y pose `about:blank`. La charger ici en
+            // relancerait la navigation par-dessus.
+            guard let self, self.webView.url == nil else { return }
+            self.charger()
+        }
     }
 
     /// Barre de navigation au-dessus de la page.

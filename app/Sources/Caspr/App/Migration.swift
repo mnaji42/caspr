@@ -24,7 +24,8 @@ import CasprCore
 /// Ce qui part est gros et, pour le corpus, irremplaçable. Personne n'a cliqué
 /// sur quoi que ce soit : une corbeille se rouvre, un `removeItem` non. Seuls
 /// les réglages sont effacés pour de bon, et ce ne sont que des clés qui ne
-/// règlent plus rien.
+/// règlent plus rien — sauf le lexique, écrit mot à mot par l'utilisateur : ses
+/// mots partent d'abord à la corbeille, dans « Caspr — ancien lexique.txt ».
 ///
 /// Les règles qui décident de *quoi* part vivent dans
 /// `CasprCore/LegacyCleanup.swift`, sous tests. Ici, seulement les gestes.
@@ -48,7 +49,7 @@ enum Migration {
         let home = FileManager.default.homeDirectoryForCurrentUser
 
         disarmAgents(home: home)
-        migrateSettings()
+        migrateSettings(home: home)
 
         // Décidé ici, sur l'acteur principal, parce que c'est une lecture de
         // réglages ; le geste, lui, part avec le reste.
@@ -95,9 +96,16 @@ enum Migration {
 
     // MARK: - Les réglages
 
-    private static func migrateSettings() {
+    private static func migrateSettings(home: URL) {
         let defaults = UserDefaults.standard
-        let done = LegacyCleanup.migrateSettings(defaults)
+        // Le lexique n'est effacé qu'une fois sa copie dans la corbeille ;
+        // sinon il reste, et le lancement suivant retente la copie.
+        var keep: Set<String> = []
+        if let words = LegacyCleanup.lexiconBackup(defaults),
+           !trashLexicon(words, home: home) {
+            keep.insert(LegacyCleanup.lexiconKey)
+        }
+        let done = LegacyCleanup.migrateSettings(defaults, keep: keep)
         for line in done { Log.notice("migration : \(line)") }
         // La voie est posée ici, une fois, et non déduite par `Preferences` à
         // chaque lecture : l'interrupteur du relais ne serait jamais devenu
@@ -105,6 +113,22 @@ enum Migration {
         if let voie = VoieDeDictee.migrer(defaults) {
             Log.notice("migration : voie de dictée posée — \(voie.rawValue)")
         }
+    }
+
+    /// Écrit les mots du lexique dans un fichier texte, puis met ce fichier à
+    /// la corbeille : c'est là que l'utilisateur cherchera ce que la mise à
+    /// jour a retiré, à côté du corpus. Quelques octets, d'où le synchrone.
+    private static func trashLexicon(_ words: String, home: URL) -> Bool {
+        let file = FileManager.default.temporaryDirectory
+            .appending(path: "Caspr — ancien lexique.txt")
+        do {
+            try words.write(to: file, atomically: true, encoding: .utf8)
+        } catch {
+            Log.error("migration : ancien lexique non copié, gardé jusqu'au "
+                      + "prochain lancement — \(error.localizedDescription)")
+            return false
+        }
+        return trash(LegacyCleanup.Location(file, "ancien lexique"), home: home)
     }
 
     /// Le domaine de réglages de Sofler, si plus rien n'en a besoin.

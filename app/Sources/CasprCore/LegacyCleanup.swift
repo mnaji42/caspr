@@ -84,14 +84,32 @@ public enum LegacyCleanup {
         "caspr.trigger.side",
     ]
 
+    /// Le lexique : parmi les réglages sans objet, le seul que l'utilisateur a
+    /// écrit de sa main — des noms de projets, du jargon, tapés un à un.
+    public static let lexiconKey = "caspr.lexicon"
+
+    /// Les mots du lexique, un par ligne, s'il en reste.
+    ///
+    /// De quoi les retrouver dans la corbeille avant que la clé ne soit
+    /// effacée : rien dans Caspr ne les relit plus, mais une autre version, ou
+    /// un autre outil, pourrait en vouloir. Un lexique vide n'a rien à garder.
+    public static func lexiconBackup(_ defaults: UserDefaults) -> String? {
+        guard let words = defaults.object(forKey: lexiconKey) as? [String],
+              !words.isEmpty else { return nil }
+        return words.joined(separator: "\n") + "\n"
+    }
+
     /// Efface les réglages qui n'ont plus d'objet, et range l'étape d'accueil
     /// sous son nom.
     ///
     /// Idempotente : un second passage ne trouve plus rien et ne rend rien.
     ///
+    /// - Parameter keep: des clés de `obsoleteKeys` à laisser en place cette
+    ///   fois-ci — le lexique, tant que sa copie n'a pas atteint la corbeille.
     /// - Returns: ce qui a été fait, une ligne par geste, pour le journal.
     @discardableResult
-    public static func migrateSettings(_ defaults: UserDefaults) -> [String] {
+    public static func migrateSettings(_ defaults: UserDefaults,
+                                       keep: Set<String> = []) -> [String] {
         var done: [String] = []
 
         // L'étape d'accueil change de clé en même temps que de forme : un
@@ -110,7 +128,8 @@ public enum LegacyCleanup {
             done.append("réglage effacé : \(Key.legacyOnboardingStep)")
         }
 
-        for key in obsoleteKeys where defaults.object(forKey: key) != nil {
+        for key in obsoleteKeys
+        where !keep.contains(key) && defaults.object(forKey: key) != nil {
             defaults.removeObject(forKey: key)
             done.append("réglage effacé : \(key)")
         }

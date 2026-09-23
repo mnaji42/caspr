@@ -92,6 +92,29 @@ struct LegacyCleanupTests {
         }
     }
 
+    /// Le lexique a été tapé mot à mot : il ne part qu'une fois sa copie
+    /// faite, et reste tant qu'elle ne l'est pas.
+    @Test("Le lexique se recopie, et reste tant qu'on le demande")
+    func keepsLexiconUntilSaved() {
+        Self.withDefaults { defaults in
+            #expect(LegacyCleanup.lexiconBackup(defaults) == nil)
+            defaults.set([String](), forKey: "caspr.lexicon")
+            #expect(LegacyCleanup.lexiconBackup(defaults) == nil)
+
+            defaults.set(["FastAPI", "Caspr"], forKey: "caspr.lexicon")
+            defaults.set(true, forKey: "caspr.lexicon.useDefault")
+            #expect(LegacyCleanup.lexiconBackup(defaults) == "FastAPI\nCaspr\n")
+
+            LegacyCleanup.migrateSettings(defaults, keep: [LegacyCleanup.lexiconKey])
+            #expect(defaults.object(forKey: "caspr.lexicon") as? [String]
+                    == ["FastAPI", "Caspr"])
+            #expect(defaults.object(forKey: "caspr.lexicon.useDefault") == nil)
+
+            LegacyCleanup.migrateSettings(defaults)
+            #expect(defaults.object(forKey: "caspr.lexicon") == nil)
+        }
+    }
+
     /// L'accueil rouvre là où on l'a quitté. Relu comme un rang, l'ancien
     /// index désignerait l'écran d'après dès que l'accueil en perd un.
     @Test("L'étape d'accueil passe d'un rang à un nom, et l'ancien rang part")

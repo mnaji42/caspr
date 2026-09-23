@@ -36,8 +36,8 @@ public enum LegacyCleanup {
     /// écrits par les versions d'avant, pas l'ordre de l'accueil d'aujourd'hui.
     /// Le jour où l'accueil perd un écran, un index relu tel quel rouvrirait
     /// sur la page suivante — l'écran de fin, peut-être, pour quelqu'un qui
-    /// n'a jamais accordé le micro. Les noms sont ceux de `Step.name` dans
-    /// `Onboarding.swift`, y compris ceux d'écrans disparus depuis : c'est
+    /// n'a jamais accordé le micro. Les noms sont ceux de `OnboardingStep.name`
+    /// dans `Accueil/OnboardingStep.swift`, y compris ceux d'écrans disparus depuis : c'est
     /// l'accueil qui sait où reprendre quand l'un d'eux ne désigne plus rien.
     public static let legacyOnboardingScreens = [
         "welcome", "preferences", "liveEngine", "finalEngine", "completion",
@@ -179,8 +179,9 @@ public enum LegacyCleanup {
 
     /// Le dossier du projet Python, lu dans le descripteur.
     ///
-    /// Lu à la main plutôt qu'avec `EngineInstall.Descriptor` : ce type décode
-    /// un `CrisperWhisperModel`, qui disparaît avec le reste.
+    /// Lu à la main : le type qui décrivait ce fichier est parti avec
+    /// l'installation du moteur qui l'écrivait, et seul le champ `project` sert
+    /// encore, à retrouver ce qu'il faut jeter.
     public static func engineProject(descriptor data: Data) -> String? {
         let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         return json?["project"] as? String

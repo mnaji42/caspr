@@ -8,9 +8,7 @@ import Speech
 /// lui donne l'enregistrement entier d'un coup et on attend son texte
 /// définitif, plutôt que de suivre ses résultats volatils.
 ///
-/// Il vient avec le système : rien à télécharger, aucune licence à accepter,
-/// et il fonctionne sur toute machine en macOS 26. C'est ce qui en fait le
-/// moteur par défaut.
+/// Il vient avec le système et fonctionne sur toute machine en macOS 26.
 @available(macOS 26.0, *)
 final class AppleSpeechEngine: TranscripteurMacOS {
     enum EngineError: LocalizedError {

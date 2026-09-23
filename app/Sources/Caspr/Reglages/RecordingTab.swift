@@ -19,7 +19,7 @@ struct RecordingTab: View {
         SettingsToggleRow(
             title: "Afficher les mots prononcés en temps réel",
             description: "Affiche le flux sous la barre flottante pendant la "
-                + "parole (0 Mo de RAM, moteur macOS).",
+                + "parole (moteur macOS).",
             // La note n'apparaît **que** désactivé : rappeler ce qu'on perd
             // quand on ne perd rien serait du bruit.
             note: prefs.livePreviewEnabled ? nil

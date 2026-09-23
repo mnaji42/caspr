@@ -16,12 +16,11 @@ import CasprCore
 ///
 /// ## Ce qui bloque, et ce qui n'a pas à bloquer
 ///
-/// Le doc 02 se contredit sur ce point : §1 exige que **toutes** les langues
-/// retenues aient leur modèle, §0.quater dit que seule la langue active
-/// détermine si le moteur est prêt. C'est §0.quater qui a raison, et l'autre
-/// lecture serait pénible : quelqu'un qui a déclaré cinq langues et téléchargé
-/// celle dans laquelle il dicte peut dicter — l'en empêcher pour un modèle
-/// espagnol dont il se servira dans trois semaines n'a aucune contrepartie.
+/// Seule la **langue active** détermine si le moteur est prêt. Exiger le
+/// modèle de toutes les langues déclarées serait pénible : quelqu'un qui a
+/// déclaré cinq langues et téléchargé celle dans laquelle il dicte peut
+/// dicter — l'en empêcher pour un modèle espagnol dont il se servira dans
+/// trois semaines n'a aucune contrepartie.
 ///
 /// Les langues secondaires manquantes sont donc **proposées, jamais exigées**.
 struct AppleEngineCard: View, ValidatingComponent {
@@ -223,9 +222,8 @@ struct AppleEngineCard: View, ValidatingComponent {
     private var headerDetail: String {
         shownTechnology == .apple
             ? "Fourni par macOS 26+ (SpeechTranscriber) : modèles neuronaux sur "
-                + "puce Apple. Zéro donnée envoyée au cloud, 0 Mo de RAM résidente."
-            : "Fourni par macOS (SFSpeechRecognizer) : prêt immédiatement, "
-                + "aucune licence ni téléchargement requis."
+                + "puce Apple. Zéro donnée envoyée au cloud."
+            : "Fourni par macOS (SFSpeechRecognizer) : prêt immédiatement."
     }
 
     // MARK: - La version
@@ -290,8 +288,9 @@ struct AppleEngineCard: View, ValidatingComponent {
     /// télécharger un modèle qui n'existe pas, et le bouton ne pouvait
     /// qu'échouer. Une langue non proposée n'est pas en attente : elle sort
     /// simplement de la liste. Rien à annoncer tant qu'elle n'est pas la
-    /// langue principale — et si elle le devient, c'est le bandeau de la carte
-    /// de langue qui le dit, pas celle-ci.
+    /// langue principale — et si elle le devient, le choix automatique passe
+    /// à la Dictée et c'est `legacyReason`, dans `versionSection`, qui dit
+    /// pourquoi.
     private var missing: [Language] {
         prefs.activeLanguages.filter { assets.state(of: $0.code) == .missing }
     }

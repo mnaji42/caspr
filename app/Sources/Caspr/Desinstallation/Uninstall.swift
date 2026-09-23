@@ -278,8 +278,9 @@ enum Uninstall {
     /// écran ne le mentionne.
     ///
     /// Retirée avec les réglages plutôt que sous un élément à elle : c'est de
-    /// l'état applicatif, et lui donner sa propre case exposerait dans le
-    /// désinstalleur une fonctionnalité qui doit rester facile à retrancher.
+    /// l'état applicatif, comme l'historique, et `detail(for: .settings)` la
+    /// nomme (« session ChatGPT connectée ») pour que la case dise ce qu'elle
+    /// emporte.
     private static var relaisSession: URL {
         home.appending(path: "Library/WebKit/\(bundleIdentifier)")
     }

@@ -16,10 +16,9 @@ import SwiftUI
 ///
 /// ## Ce qui n'est pas ici
 ///
-/// Le doc 02 §6 place le démarrage automatique dans cette carte ; le doc 01
-/// §2.bis en fait une section distincte. C'est le second qui a raison :
-/// « lancer Caspr à l'ouverture de session » ne dit rien de la destination du
-/// texte, et les ranger ensemble ferait chercher l'un sous l'autre.
+/// Le démarrage automatique est une section à part : « lancer Caspr à
+/// l'ouverture de session » ne dit rien de la destination du texte, et les
+/// ranger ensemble ferait chercher l'un sous l'autre.
 struct DestinationCard: View, ValidatingComponent {
     @State private var prefs = Preferences.shared
     @State private var isDropTarget = false

@@ -777,8 +777,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyPreferences() {
         let prefs = Preferences.shared
 
-        // Mode et langue ne sont plus recopiés : le contrôleur les lit
-        // dans les préférences au moment de s'en servir. Reste le déclencheur,
+        // La langue et la destination ne sont plus recopiées : le contrôleur
+        // les lit dans les préférences au moment de s'en servir. Reste le déclencheur,
         // dont le côté est fixé à la création du tap : il faut le reconstruire.
         modifierKey.stop()
         modifierKey = ModifierKeyMonitor(

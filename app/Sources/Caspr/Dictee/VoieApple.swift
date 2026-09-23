@@ -39,6 +39,15 @@ final class VoieApple {
     /// qui reste quand la passe finale échoue (cf. `Livraison`).
     private(set) var previewText = ""
 
+    /// Le numéro de l'aperçu dont on accepte encore le texte.
+    ///
+    /// Pas seulement celui qui écoute : un aperçu arrêté finit son analyse,
+    /// et ce qu'il rend alors est la fin de la dictée, celle que le recours
+    /// « Insérer l'aperçu » doit contenir. Il cesse de compter quand un autre
+    /// le remplace — dictée suivante, changement de langue — ou qu'on annule :
+    /// le numéro change.
+    private var apercuRetenu = 0
+
     private let overlay: RecordingOverlay
     private let livraison: Livraison
 
@@ -100,6 +109,7 @@ final class VoieApple {
         // micro : elle part avant que le magnétophone n'écoute.
         await Relais.partage.libererLaPageGardee()
         try recorder.start()
+        apercuRetenu &+= 1
         previewText = ""
     }
 
@@ -126,6 +136,7 @@ final class VoieApple {
     func annuler() {
         recorder.cancel()
         arreterApercu()
+        apercuRetenu &+= 1
         rendreLeMicro()
     }
 
@@ -224,18 +235,22 @@ final class VoieApple {
     /// échec de l'aperçu n'a donc aucun effet sur la dictée.
     func demarrerApercu(langue: String) {
         guard Preferences.shared.livePreviewEnabled, preview == nil else { return }
+        apercuRetenu &+= 1
+        let jeton = apercuRetenu
         // La version qui écrira, et nulle autre : cf. `SpeechPreview.engine`.
         guard let made = SpeechPreview.make(
             for: langue,
             onText: { [weak self] text in
-                guard let self else { return }
+                guard let self, apercuRetenu == jeton else { return }
                 if previewText.isEmpty, !text.isEmpty {
                     Log.info("aperçu : premier texte reçu")
                 }
                 // Retenu pour le recours : si la passe finale échoue, c'est
                 // un texte de macOS sur exactement le même audio.
                 previewText = text
-                overlay.setPreviewText(text)
+                // Arrêté, l'aperçu n'a plus de barre où s'afficher : elle est
+                // passée au traitement.
+                if preview != nil { overlay.setPreviewText(text) }
             },
             onFailure: { [weak self] reason in
                 Log.error("aperçu indisponible : \(reason)")

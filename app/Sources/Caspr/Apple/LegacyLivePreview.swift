@@ -24,7 +24,6 @@ final class LegacyLivePreview: SpeechPreviewing, @unchecked Sendable {
 
     private let lock = NSLock()
     private var request: SFSpeechAudioBufferRecognitionRequest?
-    private var task: SFSpeechRecognitionTask?
 
     init(onText: @escaping @MainActor @Sendable (String) -> Void,
          onFailure: @escaping @MainActor @Sendable (String) -> Void) {
@@ -58,8 +57,10 @@ final class LegacyLivePreview: SpeechPreviewing, @unchecked Sendable {
         // la fin, et l'aperçu n'aperçoit rien.
         audio.shouldReportPartialResults = true
 
-        let task = recognizer.recognitionTask(with: audio) { [weak self] result, error in
-            guard let self else { return }
+        // Le rappel tient `onText` et non l'aperçu : celui-ci est libéré dès
+        // l'arrêt, et le résultat final — la fin de la dictée — arrive après.
+        let onText = self.onText
+        recognizer.recognitionTask(with: audio) { result, error in
             if error != nil {
                 // Silencieux : une reconnaissance interrompue en fin de dictée
                 // est le cas normal, et l'annoncer ferait clignoter un
@@ -69,21 +70,19 @@ final class LegacyLivePreview: SpeechPreviewing, @unchecked Sendable {
             }
             guard let result else { return }
             let text = result.bestTranscription.formattedString
-            Task { @MainActor in self.onText(text) }
+            Task { @MainActor in onText(text) }
         }
 
         // Prise hors du contexte asynchrone : un verrou bloquant tenu à
         // travers une suspension immobiliserait un fil du pool coopératif.
-        store(request: audio, task: task)
+        store(request: audio)
 
         await report("en écoute…")
     }
 
-    private func store(request: SFSpeechAudioBufferRecognitionRequest,
-                       task: SFSpeechRecognitionTask) {
+    private func store(request: SFSpeechAudioBufferRecognitionRequest) {
         lock.lock(); defer { lock.unlock() }
         self.request = request
-        self.task = task
     }
 
     /// Appelé depuis le fil audio : on ne touche qu'à une référence protégée.
@@ -97,13 +96,15 @@ final class LegacyLivePreview: SpeechPreviewing, @unchecked Sendable {
     func stop() {
         lock.lock()
         let request = self.request
-        let task = self.task
         self.request = nil
-        self.task = nil
         lock.unlock()
 
+        // Fin de l'audio, sans annuler la tâche : elle rend encore son
+        // résultat final, puis se termine seule — comme celle de
+        // `LegacySpeechEngine`, dont personne ne garde la référence.
+        // L'annuler aussitôt jetait la fin de la dictée, que garde le recours
+        // « Insérer l'aperçu ».
         request?.endAudio()
-        task?.cancel()
     }
 
     private func report(_ message: String) async {

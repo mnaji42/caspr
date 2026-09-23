@@ -60,7 +60,13 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     /// n'avait rien à arrêter ; `start` reprenait ensuite, branchait
     /// l'analyseur, et l'aperçu ressuscité écrivait sur une barre et dans un
     /// contrôleur passés à la dictée suivante. C'est le jeton que chaque
-    /// étape vérifie avant d'agir, rappels compris.
+    /// étape du démarrage vérifie avant d'agir.
+    ///
+    /// Sauf la publication du texte : ce que l'analyseur finalise après
+    /// l'arrêt — le dernier volatil promu en définitif, la dernière seconde
+    /// de parole — est la fin de la dictée, et c'est ce texte que garde le
+    /// recours « Insérer l'aperçu ». C'est `VoieApple` qui écarte les textes
+    /// d'un aperçu remplacé ou annulé.
     private var stopped = false
 
     private var isStopped: Bool { lock.withLock { stopped } }
@@ -206,7 +212,6 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
 
     @MainActor
     private func publish(_ text: String) {
-        guard !isStopped else { return }
         onText(text.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
@@ -265,11 +270,16 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
             return taken
         }
         continuation?.finish()
-        // Laisser l'analyseur se terminer proprement avant d'abandonner la
-        // boucle : la tuer net laisse le moteur système en cours d'analyse.
+        // Laisser l'analyseur finaliser, et la boucle de résultats le suivre
+        // jusqu'au bout : le flux se termine avec l'analyse. L'annuler
+        // aussitôt après jetait les derniers résultats — la fin de la
+        // dictée. Elle ne s'annule que si la finalisation échoue.
         Task {
-            try? await analyzer?.finalizeAndFinishThroughEndOfInput()
-            results?.cancel()
+            do {
+                try await analyzer?.finalizeAndFinishThroughEndOfInput()
+            } catch {
+                results?.cancel()
+            }
         }
     }
 }

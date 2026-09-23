@@ -26,23 +26,35 @@ struct RelaisReglages: View {
             Divider().opacity(0.25)
             if !calibre {
                 Note("Configuration inachevée : la dictée ne partira pas tant que "
-                     + "les boutons de la page n'auront pas été montrés une fois.",
+                     + "Caspr n'aura pas appris les boutons de la page — seul, ou "
+                     + "en vous les faisant montrer.",
                      warning: true)
             }
             capacites
             // Grisés pendant qu'un autre flux pilote la page. Un bouton qu'on
             // peut cliquer et qui refusera ensuite vaut moins qu'un bouton qui
             // dit d'emblée que ce n'est pas le moment.
-            ButtonRow {
-                Button(calibre ? "Tout recalibrer…" : "Apprendre les boutons…") {
-                    Relais.partage.calibrerTout(relire)
+            //
+            // L'automatique d'abord, la main ensuite, et les deux toujours là :
+            // le parcours manuel est le repli d'une page que l'automate ne
+            // sait pas lire, et ce jour-là il ne doit pas falloir le chercher.
+            VStack(alignment: .leading, spacing: 8) {
+                ButtonRow {
+                    Button("Calibrer automatiquement…") {
+                        Relais.partage.calibrerAutomatiquement(relire)
+                    }
+                    Button("Montrer à la main…") {
+                        Relais.partage.calibrerTout(relire)
+                    }
                 }
-                Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
-                Button("Diagnostic…") { Relais.partage.diagnostic() }
-                // Pas devant une session déjà perdue : il n'y a plus rien à
-                // effacer, et c'est « Se connecter… » qu'on cherche alors.
-                if relais.sessionVue != .deconnecte {
-                    Button("Se déconnecter…") { deconnecter() }
+                ButtonRow {
+                    Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
+                    Button("Diagnostic…") { Relais.partage.diagnostic() }
+                    // Pas devant une session déjà perdue : il n'y a plus rien à
+                    // effacer, et c'est « Se connecter… » qu'on cherche alors.
+                    if relais.sessionVue != .deconnecte {
+                        Button("Se déconnecter…") { deconnecter() }
+                    }
                 }
             }
             .disabled(empechement != nil)

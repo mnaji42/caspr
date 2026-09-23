@@ -23,6 +23,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `Relais.swift` | La façade et le cycle de vie. `apresLivraison` y tient la règle « la fin d'une dictée prépare la suivante ». |
 | `RelaisPage.swift` | La `WKWebView`, ses **deux** fenêtres, le micro, les popups de connexion. |
 | `RelaisPont.swift` | Le JavaScript injecté : cliquer, lire, vider, calibrer. |
+| `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `Relais` qui enregistre. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
 | `RelaisAttente.swift` | L'échéance **unique** d'une dictée, fixée à l'arrêt de l'écoute sur la durée parlée, et la phase en cours que la barre affiche. Toutes les attentes après l'arrêt la consomment ; aucune n'a plus son propre budget. |
 | `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. |
@@ -88,6 +89,46 @@ prochain remaniement de la page.
 
 Une transformation qui échoue rend la **transcription brute**. Une dictée de
 dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
+
+### La calibration
+
+Deux parcours, qui apprennent les mêmes repères. **L'automatique** essaie
+lui-même les boutons de la page et ne retient que ceux dont il a vu l'effet ;
+**le manuel** les fait montrer, clic par clic. Le second reste toujours à un
+bouton : c'est le repli d'une page que l'automate ne sait pas lire.
+
+La preuve est l'effet, jamais le libellé :
+
+| Repère | Retenu quand… |
+|---|---|
+| zone de texte | ce qu'on y écrit s'y relit, et elle se vide |
+| micro | après le clic, la page enregistre |
+| arrêt | après le clic, la zone de texte revient |
+| envoi | après le clic, la page porte une conversation |
+| copier | le presse-papiers change, n'est pas vide, et ne contient pas le message envoyé |
+
+C'est ce qui rend la langue de l'interface sans objet, et Caspr ne la force
+pas. Les candidats viennent du filet du pont, `data-testid` d'abord ; chacun
+doit être **seul** à répondre à son repère, du bon genre — vérifier qu'un
+sélecteur retrouve l'élément qu'on a trouvé par lui ne vérifierait rien.
+
+Ce que l'automate s'interdit, et pourquoi :
+
+- **Se connecter.** C'est le compte de l'utilisateur : sans session, la
+  fenêtre s'ouvre et le parcours s'arrête.
+- **Écrire avant la fin.** Le parcours manuel enregistre repère par repère,
+  sous une main qui voit ce qu'elle clique. Un automate qui ferait de même et
+  échouerait à mi-chemin remplacerait en silence la moitié d'un calibrage qui
+  marchait. Il travaille donc sur des preuves à part, et n'écrit que
+  l'aller-retour entier.
+- **Envoyer plus d'un message.** Le message d'essai est annoncé avant de
+  partir ; s'il quitte la zone de texte, aucun bouton d'envoi ne se retente.
+- **Ouvrir un menu.** Le menu « … » de la réponse porte « Régénérer » et
+  « Supprimer ». D'où « Lire à haute voix », qui s'y cache parfois : il reste
+  à montrer à la main, et le rapport le propose tant que la réponse est à
+  l'écran.
+- **Garder le presse-papiers.** Sauvegardé tout entier avant d'essayer
+  « copier », rendu après.
 
 ## Où le relais touche le reste de l'application
 

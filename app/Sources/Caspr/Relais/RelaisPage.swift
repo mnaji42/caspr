@@ -593,8 +593,12 @@ final class RelaisPage: NSObject {
     /// page, il fait seulement cesser d'attendre ici. L'annulation de la tâche
     /// appelante produit le même effet, pour que la touche de dictée
     /// interrompe aussi un appel resté en suspens.
+    ///
+    /// Ouvert au reste du module pour la calibration automatique, qui a son
+    /// fichier (cf. `RelaisCalibrationAuto`) : ses appels passent par ce même
+    /// délai.
     @discardableResult
-    private func appeler(_ corps: String, _ args: [String: Any] = [:],
+    func appeler(_ corps: String, _ args: [String: Any] = [:],
                          delai: Duration = RelaisPage.delaiPont) async throws -> [String: Any] {
         // Une tâche déjà annulée ne touche plus à la page : le clic qu'elle
         // demandait n'est plus voulu par personne.

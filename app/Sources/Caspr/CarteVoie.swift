@@ -125,19 +125,20 @@ struct CarteVoie: View {
     /// Vaut pour la dictée suivante : une dictée en cours garde la voie
     /// qu'elle avait à l'appui.
     ///
-    /// Vers ChatGPT sans calibrage, la calibration part aussitôt : c'est ce que
-    /// la voie réclame avant tout, et la page n'existe que sur cette voie
-    /// (cf. `Relais.pageActive`) — on ne peut pas calibrer d'abord et choisir
-    /// ensuite. Pas pendant une dictée macOS : elle construirait la page sous
-    /// le magnétophone. Les réglages disent alors pourquoi leurs boutons
-    /// attendent, et « Apprendre les boutons… » se rallume à l'arrêt.
+    /// Vers ChatGPT sans calibrage, la calibration automatique part aussitôt :
+    /// c'est ce que la voie réclame avant tout, et la page n'existe que sur
+    /// cette voie (cf. `Relais.pageActive`) — on ne peut pas calibrer d'abord
+    /// et choisir ensuite. Sans session, elle ouvre la fenêtre de connexion et
+    /// s'arrête là. Pas pendant une dictée macOS : elle construirait la page
+    /// sous le magnétophone. Les réglages disent alors pourquoi leurs boutons
+    /// attendent, et « Calibrer automatiquement… » se rallume à l'arrêt.
     private func choisir(_ voie: VoieDeDictee) {
         guard voie != prefs.voie else { return }
         prefs.voie = voie
         switch voie {
         case .chatgpt:
             if !Relais.partage.estCalibre, !Relais.partage.ecouteMacOS {
-                Relais.partage.calibrerTout()
+                Relais.partage.calibrerAutomatiquement()
             }
         case .apple:
             break

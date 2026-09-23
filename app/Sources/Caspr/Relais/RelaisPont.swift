@@ -198,7 +198,8 @@ extension RelaisPage {
         return candidats.filter((c) => convient(genre, c)).includes(el);
       }
 
-      function reperesDe(el, genre) {
+      // Les repères qu'un élément porte, du plus solide au plus fragile.
+      function reperesPossibles(el) {
         const guillemets = (v) => v.replace(/"/g, '\\"');
         const candidats = [];
         // Le même garde-fou que pour l'identifiant : un `data-testid` est
@@ -208,10 +209,73 @@ extension RelaisPage {
         if (!idEngendre(el.id)) candidats.push('#' + esc(el.id));
         const aria = el.getAttribute('aria-label');
         if (aria) candidats.push('[aria-label="' + guillemets(aria) + '"]');
-        for (const c of candidats) {
+        return candidats;
+      }
+
+      function reperesDe(el, genre) {
+        for (const c of reperesPossibles(el)) {
           if (repereValide(c, el, genre)) return c;
         }
         return '';
+      }
+
+      // L'élément est-il le **seul** à répondre à ce sélecteur ?
+      //
+      // Avec un genre, selon la règle de `trouver` — connectés, et du bon
+      // genre — pour un repère cherché dans tout le document. Sans genre, tout
+      // ce qui répond compte : c'est la règle de la paire « copier », où la
+      // page prend le premier élément du bloc sans rien filtrer.
+      const seulDans = (selecteur, portee, el, genre) => {
+        let tous = [];
+        try { tous = [...portee.querySelectorAll(selecteur)]; } catch (e) { return false; }
+        const retenus = genre ? tous.filter((c) => c.isConnected && convient(genre, c)) : tous;
+        return retenus.length === 1 && retenus[0] === el;
+      };
+
+      // Le repère qu'apprend la calibration automatique : une adresse, pas
+      // une ressemblance.
+      //
+      // `repereValide` ne peut pas servir ici. Il vérifie que le sélecteur
+      // retrouve l'élément — mais l'automate a trouvé l'élément *par* ce
+      // sélecteur : la question contient sa réponse. Ce qui dit quelque chose,
+      // c'est l'unicité : qu'un seul élément, du bon genre, y réponde. Le
+      // reste de la preuve est dans l'effet, que Swift observe.
+      //
+      // `repli` : le sélecteur du filet qui a trouvé l'élément, retenu s'il
+      // est lui aussi une adresse et que l'élément n'en porte aucune à lui.
+      function repereUnique(el, portee, genre, repli) {
+        const candidats = reperesPossibles(el);
+        if (repli) candidats.push(repli);
+        for (const c of candidats) {
+          if (seulDans(c, portee, el, genre)) return c;
+        }
+        return '';
+      }
+
+      // Un bouton qui ouvre un menu, la page le déclare (cf.
+      // `calibrerAvecMenu`). L'automate ne le clique jamais : le menu « … »
+      // de la réponse porte « Régénérer » et « Supprimer ».
+      const ouvreUnMenu = (el) => !!el.getAttribute('aria-haspopup')
+        || el.getAttribute('aria-expanded') !== null;
+
+      // Le bouton « copier » et le bloc qui le porte, désignés sans
+      // ambiguïté : le bloc est le dernier visible de son sélecteur — c'est
+      // celui que `copierLaReponse` choisira — et le bouton y est seul.
+      function paireCopier(el) {
+        let n = el.parentElement;
+        for (let i = 0; i < 5 && n; i++) {
+          for (const selParent of reperesPossibles(n)) {
+            let blocs = [];
+            try { blocs = [...document.querySelectorAll(selParent)]; } catch (e) { continue; }
+            const vus = blocs.filter((b) => b.getClientRects().length > 0);
+            const liste = vus.length ? vus : blocs;
+            if (liste[liste.length - 1] !== n) continue;
+            const selecteur = repereUnique(el, n, null, '');
+            if (selecteur) return { selecteur, parent: selParent };
+          }
+          n = n.parentElement;
+        }
+        return null;
       }
 
       // Un sélecteur qui a une chance de survivre au prochain déploiement.
@@ -817,6 +881,80 @@ extension RelaisPage {
             };
             document.addEventListener('click', surClic, true);
           });
+        },
+
+        // Les candidats de la calibration automatique pour un repère, à
+        // éprouver dans l'ordre.
+        //
+        // Tirés du filet, dans son ordre : le `data-testid` d'abord, écrit
+        // par la page pour ses propres tests et donc jamais traduit, puis les
+        // libellés. Seuls restent les éléments visibles, du bon genre, qui
+        // n'ouvrent pas de menu, et qui portent un repère où ils sont seuls
+        // (cf. `repereUnique`). Aucun n'est cliqué ici : c'est Swift qui
+        // éprouve, un par un, et s'arrête au premier dont l'effet se voit.
+        candidats(cible) {
+          const genre = GENRE[cible];
+          const liste = [];
+          for (const s of (HEURISTIQUES[cible] || [])) {
+            let els = [];
+            try { els = [...document.querySelectorAll(s)]; } catch (e) { continue; }
+            for (const el of els) {
+              if (!visible(el) || !convient(genre, el)) continue;
+              if (genre === 'bouton' && ouvreUnMenu(el)) continue;
+              const sel = repereUnique(el, document, genre, s);
+              if (sel && !liste.includes(sel)) liste.push(sel);
+            }
+          }
+          return { ok: true, candidats: liste };
+        },
+
+        // Les candidats pour le bouton « copier » de la **dernière** réponse.
+        //
+        // Cherchés en remontant depuis elle, et non dans tout le document :
+        // la page pose un bouton « copier » sous chaque message, celui de
+        // l'utilisateur compris. Au premier niveau qui en contient, il doit y
+        // en avoir un seul — une réponse qui porte un bloc de code en a un de
+        // plus, et deviner lequel est celui du tour, c'est ce qui s'est
+        // trompé chaque fois qu'on l'a essayé.
+        //
+        // Avec le bloc qui le porte quand il s'en trouve un sans ambiguïté
+        // (cf. `paireCopier`) ; sinon sans bloc, et `copierLaReponse`
+        // cherchera autour de la dernière réponse, comme pour les calibrages
+        // d'avant la paire. Swift éprouve l'un ou l'autre par ce même appel.
+        //
+        // Le filet d'abord, les niveaux ensuite : le `data-testid` du bouton
+        // du tour, un cran plus haut, l'emporte sur un libellé « Copier le
+        // code » posé dans la réponse même, qui copierait le seul bloc de
+        // code — non vide, étranger au message envoyé, et donc pris pour une
+        // preuve.
+        candidatsCopier() {
+          const reponses = [...document.querySelectorAll(REPONSES)].filter(visible);
+          if (!reponses.length) return { ok: false, raison: 'pas de réponse' };
+          const derniere = reponses[reponses.length - 1];
+          const liste = [];
+          for (const s of HEURISTIQUES.copier) {
+            let noeud = derniere;
+            for (let niveau = 0; niveau < 6 && noeud; niveau++) {
+              let els = [];
+              try { els = [...noeud.querySelectorAll(s)]; } catch (e) { break; }
+              const boutons = els.filter((b) => visible(b) && convient('bouton', b)
+                                                && !ouvreUnMenu(b));
+              if (boutons.length) {
+                if (boutons.length === 1) {
+                  const el = boutons[0];
+                  const paire = paireCopier(el)
+                    || { selecteur: repereUnique(el, noeud, 'bouton', s) || s, parent: '' };
+                  if (!liste.some((c) => c.selecteur === paire.selecteur
+                                         && c.parent === paire.parent)) liste.push(paire);
+                }
+                // Le premier niveau qui en contient décide : plus haut, on
+                // entrerait dans les messages voisins.
+                break;
+              }
+              noeud = noeud.parentElement;
+            }
+          }
+          return { ok: true, candidats: liste };
         },
 
         // Efface le brouillon que ChatGPT garde en réserve.

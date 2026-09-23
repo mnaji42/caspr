@@ -177,6 +177,12 @@ final class Relais: ObservableObject {
     /// abandonnée — c'est même là qu'on en a le plus besoin.
     private var calibration: Task<Void, Never>?
     var calibrationEnCours: Bool { occupation == .calibration }
+    /// La calibration en cours est-elle le parcours automatique ? Abandonné,
+    /// il laisse une page à remettre d'aplomb (cf. `abandonnerCalibration`).
+    private var calibrationAutomatique = false
+    /// Le numéro du parcours automatique en cours : une fin qui arrive après
+    /// un abandon ne rend pas la main à la place de ce qui a commencé depuis.
+    private var numeroCalibration = 0
 
     /// Met fin à la calibration, d'où qu'on le demande.
     func abandonnerCalibration() {
@@ -187,6 +193,18 @@ final class Relais: ObservableObject {
         Task {
             await page?.abandonnerCalibration()
             page?.cacher()
+        }
+        // Le parcours automatique a pu laisser la page en écoute, ou le
+        // message d'essai à moitié écrit. Elle est rechargée par la
+        // préparation, et non à part : c'est elle que la dictée suivante
+        // attend avant de cliquer le micro.
+        if calibrationAutomatique {
+            calibrationAutomatique = false
+            lancerPreparation { page in
+                await page.rendreLeMicro()
+                page.charger()
+                _ = await page.attendreComposeurPret(secondes: 30)
+            }
         }
         Log.info("relais : calibration abandonnée")
     }
@@ -917,6 +935,199 @@ final class Relais: ObservableObject {
         }
     }
 
+    /// Apprendre les boutons de la page sans les faire montrer : Caspr les
+    /// essaie lui-même, sous les yeux de l'utilisateur, et ne retient que
+    /// ceux dont il a vu l'effet (cf. `RelaisCalibrationAuto`).
+    ///
+    /// Trois limites, qui sont chacune une décision :
+    ///
+    /// - **La connexion n'est jamais automatisée.** C'est le compte de
+    ///   l'utilisateur. Sans session, la fenêtre s'ouvre pour qu'il se
+    ///   connecte, et le parcours s'arrête là — il se relance une fois
+    ///   connecté.
+    /// - **Rien n'est enregistré tant que l'aller-retour entier n'est pas
+    ///   prouvé.** Le parcours manuel enregistre repère par repère ; un
+    ///   automate qui ferait de même et échouerait à mi-chemin détruirait en
+    ///   silence un calibrage qui marchait.
+    /// - **Un seul message d'essai, annoncé avant.** Il part réellement dans
+    ///   une conversation de l'utilisateur, et compte sur son quota.
+    ///
+    /// Le parcours manuel reste le repli, proposé dans le rapport quand un
+    /// repère manque, et toujours à un bouton dans les réglages.
+    func calibrerAutomatiquement(_ termine: (() -> Void)? = nil) {
+        guard !ecouteMacOS else {
+            Self.alerter("Pas maintenant",
+                         "Une dictée macOS est en cours. Terminez-la avant de calibrer.")
+            termine?()
+            return
+        }
+        guard occupation == .libre else {
+            Self.alerter("Pas maintenant",
+                         (occupation.raison ?? "") + " Terminez-la avant de calibrer.")
+            termine?()
+            return
+        }
+        guard let page = try? pageActive() else {
+            termine?()
+            return
+        }
+        // Le parcours recharge la page : un fil de discussion ou une
+        // préparation en cours n'y survivraient pas, et le croire encore
+        // ouvert ferait poursuivre une conversation disparue.
+        oublierCeQuiVitSurLaPage()
+        occupation = .calibration
+        calibrationAutomatique = true
+        numeroCalibration &+= 1
+        let numero = numeroCalibration
+        page.montrer()
+        calibration = Task {
+            let aLaMain = await menerLaCalibrationAutomatique(page)
+            // Abandonnée entre-temps : l'abandon a déjà rendu la main, et ce
+            // qui a commencé depuis n'est pas à nous.
+            guard numeroCalibration == numero, occupation == .calibration else {
+                termine?()
+                return
+            }
+            calibration = nil
+            calibrationAutomatique = false
+            occupation = .libre
+            if aLaMain { calibrerTout(termine) } else { termine?() }
+        }
+    }
+
+    /// Le parcours automatique, de la connexion au rapport. Rend vrai quand
+    /// l'utilisateur choisit de finir à la main.
+    private func menerLaCalibrationAutomatique(_ page: RelaisPage) async -> Bool {
+        guard await page.etatConnexion() == .connecte else {
+            guard !Task.isCancelled else { return false }
+            Self.alerter("D'abord, se connecter à ChatGPT", """
+                La fenêtre ChatGPT est ouverte derrière ce message. Connectez-vous : \
+                c'est votre compte, et Caspr ne se connecte jamais à votre place.
+
+                À savoir : « Continuer avec Google » ne fonctionne pas ici. Google refuse \
+                volontairement ses connexions dans une fenêtre embarquée. Une adresse \
+                e-mail et un mot de passe fonctionnent.
+
+                Une fois connecté, relancez « Calibrer automatiquement » dans \
+                Réglages › Voie.
+                """)
+            return false
+        }
+        guard !Task.isCancelled, Self.demander("Calibrer automatiquement", """
+            Caspr va apprendre seul les boutons de la page, en les essayant sous vos \
+            yeux, dans une conversation neuve :
+
+            • le micro de la page s'ouvre une seconde, puis s'arrête — ce qu'il \
+            entend est effacé ;
+            • un message d'essai part réellement, un seul : « \(RelaisPage.essai) » ;
+            • le bouton « copier » de la réponse est essayé, et votre presse-papiers \
+            vous est rendu tel quel.
+
+            Rien n'est enregistré tant que tout n'a pas marché : votre calibrage \
+            actuel ne peut pas être abîmé. Comptez une demi-minute ; fermer la \
+            fenêtre arrête tout.
+            """)
+        else {
+            page.cacher()
+            NSApp.hide(nil)
+            return false
+        }
+
+        let ancien = RelaisSelecteurs.charger()
+        let issue: RelaisCalibrationAuto.Issue
+        do {
+            issue = try await RelaisCalibrationAuto(page: page, ancien: ancien).mener()
+        } catch {
+            // Abandonné : l'abandon remet la page d'aplomb (cf.
+            // `abandonnerCalibration`).
+            return false
+        }
+        await page.rendreLeMicro()
+        // Fermer la fenêtre arrête tout, comme l'annonce l'a promis — y
+        // compris l'écriture d'un parcours qui venait d'aboutir.
+        guard !Task.isCancelled else { return false }
+
+        guard let nouveau = issue.preuves.calibrage(remplacant: ancien) else {
+            Log.error("relais : calibration automatique incomplète — manquent "
+                      + issue.preuves.manquants.map(\.rawValue).joined(separator: ", "))
+            page.charger()
+            let rapport = Self.rapport(issue, ancien: ancien, enregistre: false)
+            let aLaMain = Self.choisir("Calibration automatique inachevée", rapport,
+                                       ["Montrer les boutons à la main…", "Fermer"]) == 0
+            if !aLaMain {
+                page.cacher()
+                NSApp.hide(nil)
+            }
+            return aLaMain
+        }
+        // La seule écriture du parcours automatique, une fois l'aller-retour
+        // entier prouvé.
+        page.selecteurs = nouveau
+        nouveau.enregistrer()
+        Log.info("relais : calibration automatique enregistrée — "
+                 + RelaisPreuves.parcours.map { "\($0.rawValue) \(nouveau[$0])" }
+                    .joined(separator: ", "))
+
+        // La réponse au message d'essai est encore à l'écran : c'est le
+        // moment de montrer « Lire à haute voix », s'il sert. Deux clics au
+        // plus, et le seul que l'automate ne fera pas.
+        let rapport = Self.rapport(issue, ancien: ancien, enregistre: true)
+        if Self.choisir("C'est appris", rapport,
+                        ["Terminé", "Montrer « Lire à haute voix »…"]) == 1,
+           Self.demander("Lire à haute voix", """
+               Cliquez « Lire à haute voix » sous la réponse — le petit haut-parleur.
+
+               S'il n'apparaît pas directement, ouvrez d'abord le menu « … » : Caspr \
+               retient le chemin complet et le refera pour vous.
+               """) {
+            do { try await page.calibrerLecture() }
+            catch is CancellationError { return false }
+            catch { Self.alerter("Relais", error.localizedDescription) }
+        }
+        page.charger()
+        page.cacher()
+        NSApp.hide(nil)
+        return false
+    }
+
+    /// Ce que le parcours a trouvé et ce qui lui manque, repère par repère.
+    private static func rapport(_ issue: RelaisCalibrationAuto.Issue,
+                                ancien: RelaisSelecteurs, enregistre: Bool) -> String {
+        func nom(_ cible: RelaisCible) -> String {
+            switch cible {
+            case .composeur: "la zone de texte"
+            case .micro: "le micro"
+            case .stop: "l'arrêt"
+            case .envoi: "l'envoi"
+            case .copier: "« copier » sous la réponse"
+            case .reponse: "la réponse"
+            case .lecture: "« Lire à haute voix »"
+            }
+        }
+        var lignes = RelaisPreuves.parcours.map { cible -> String in
+            if issue.preuves.selecteurs[cible] != nil { return "✓ \(nom(cible))" }
+            let raison = issue.preuves.raisons[cible]
+                ?? "pas essayé : une étape précédente a échoué"
+            return "✗ \(nom(cible)) — \(raison)"
+        }
+        lignes.append(ancien.saitLire && enregistre
+            ? "✓ « Lire à haute voix » — gardé tel que vous l'aviez montré"
+            : "– « Lire à haute voix » — facultatif, à montrer à la main")
+        lignes.append("")
+        lignes.append(issue.messageEnvoye
+            ? "Un message d'essai est parti dans une conversation neuve."
+            : "Aucun message n'a été envoyé.")
+        if !enregistre {
+            lignes.append(ancien.estCalibre
+                ? "Rien n'a été enregistré : votre calibrage précédent est intact."
+                : "Rien n'a été enregistré.")
+            lignes.append("")
+            lignes.append("Vous pouvez montrer les boutons à la main : c'est le même "
+                          + "apprentissage, clic par clic.")
+        }
+        return lignes.joined(separator: "\n")
+    }
+
     /// Apprendre à Caspr tout ce que la page sait faire, d'un seul parcours.
     ///
     /// Une seule calibration, et non plus une par fonctionnalité. Les
@@ -1097,7 +1308,18 @@ final class Relais: ObservableObject {
         return a.runModal() == .alertFirstButtonReturn
     }
 
-    /// Ce que le relais voit de la page, en clair.    /// Ce que le relais voit de la page, en clair.
+    /// Une question à plusieurs issues ; rend le rang du bouton choisi.
+    private static func choisir(_ titre: String, _ texte: String,
+                                _ boutons: [String]) -> Int {
+        NSApp.activate(ignoringOtherApps: true)
+        let a = NSAlert()
+        a.messageText = titre
+        a.informativeText = texte
+        for bouton in boutons { a.addButton(withTitle: bouton) }
+        return a.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+    }
+
+    /// Ce que le relais voit de la page, en clair.
     ///
     /// Quand un clic ne prend pas, la seule question utile est « sur quoi
     /// as-tu cliqué ? ». Sans cet écran, il n'y a aucun moyen de distinguer un

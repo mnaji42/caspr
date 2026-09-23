@@ -404,18 +404,23 @@ extension RelaisPage {
     /// l'échéance pour rien ; il est rendu pour que la barre le montre, comme
     /// l'échéance elle-même quand elle passe sans réponse.
     ///
-    /// - Parameter auPlus: une borne plus courte que l'échéance, quand la
-    ///   réponse est déjà connue pour finie — après une copie, il ne reste
-    ///   qu'à la voir immobile, et le texte attend pour s'insérer.
+    /// - Parameter dejaFinie: la réponse est connue pour finie — elle vient
+    ///   d'être copiée, et le texte attend ce clic pour s'insérer. Le premier
+    ///   relevé qui la montre suffit, sans deux secondes de stabilité à
+    ///   prouver ; et la borne est propre, dix secondes même au-delà de
+    ///   l'échéance (cf. `RelaisAttente.limite`) : cette attente-là ne guette
+    ///   plus ChatGPT, et la couper jetait la voix d'une réponse obtenue.
     @discardableResult
     func faireLireLaReponse(attente: RelaisAttente,
-                            auPlus: TimeInterval? = nil) async -> Erreur? {
+                            dejaFinie: Bool = false) async -> Erreur? {
         guard selecteurs.saitLire else { return nil }
         attente.entrer(.reponse)
-        let limite = auPlus.map { attente.limite(dans: $0) } ?? attente.echeance
+        let limite = dejaFinie ? Date.now.addingTimeInterval(10) : attente.echeance
         var precedent = ""
         var stable = 0
         var prete = false
+        // Une réponse nouvelle a-t-elle paru, même inachevée ?
+        var reponseVue = false
         var tour = 0
         var silences = 0
         while Date.now < limite {
@@ -432,7 +437,10 @@ extension RelaisPage {
                   r["nouvelle"] as? Bool == true
             else { stable = 0; continue }
             let texte = (r["texte"] as? String) ?? ""
-            if r["enCours"] as? Bool != true, !texte.isEmpty, texte == precedent {
+            if !texte.isEmpty { reponseVue = true }
+            let finie = r["enCours"] as? Bool != true && !texte.isEmpty
+            if dejaFinie, finie { prete = true; break }
+            if finie, texte == precedent {
                 stable += 1
                 if stable >= 8 { prete = true; break }      // ~2 s sans changement
             } else {
@@ -441,13 +449,20 @@ extension RelaisPage {
             precedent = texte
         }
         guard prete else {
-            Log.error("relais : réponse jamais prête, lecture à haute voix abandonnée")
             // L'attente a expiré : une alerte apparue depuis l'envoi est la
-            // meilleure explication qu'on ait. À défaut, l'échéance passée
-            // en est une, et elle se dit.
+            // meilleure explication qu'on ait.
             if let message = await erreurAffichee(nouvelles: true) {
+                Log.error("relais : ChatGPT a refusé (« \(message) »), lecture abandonnée")
                 return .refusParChatGPT(message)
             }
+            // Une réponse qu'on a vue n'est pas une réponse absente : elle est
+            // à l'écran, encore en cours peut-être, et seul le son manque.
+            // « ChatGPT n'a pas répondu », en rouge devant elle, était faux.
+            if reponseVue || dejaFinie {
+                Log.error("relais : réponse pas finie à temps, lecture à haute voix abandonnée")
+                return nil
+            }
+            // À défaut, l'échéance passée est l'explication, et elle se dit.
             return attente.expiree ? attente.epuisee() : nil
         }
 

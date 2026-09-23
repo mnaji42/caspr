@@ -778,11 +778,11 @@ final class Relais: ObservableObject {
                 return brut
             }
             if module.ditLaReponse {
-                // La réponse est déjà là : ce qui fait défaut ici, c'est le
-                // son seul, et le texte remanié s'insère quand même. Trente
-                // secondes au plus, et non l'échéance : le texte attend ce
-                // clic pour s'insérer.
-                await (try? pageActive())?.faireLireLaReponse(attente: attente, auPlus: 30)
+                // La réponse est déjà là, finie et copiée : ce qui fait défaut
+                // ici, c'est le son seul, et le texte remanié s'insère quand
+                // même. Il attend ce clic pour s'insérer : aucune stabilité à
+                // reprouver (cf. `dejaFinie`).
+                await (try? pageActive())?.faireLireLaReponse(attente: attente, dejaFinie: true)
                 // Interrompue, elle rend la main sans rien dire : sans cette
                 // vérification, le texte s'insérait au curseur un instant
                 // après l'abandon, et entrait dans l'historique.

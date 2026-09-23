@@ -13,11 +13,18 @@ import AppKit
 ///
 /// ## Ce qui compte comme « socle minimal »
 ///
-/// Trois choses, et pas une de plus : une langue retenue, le micro et
-/// l'accessibilité accordés, et un moteur de macOS capable d'écrire dans cette
-/// langue. Avec ça, on dicte. Le moteur final et la destination, eux, ont des
-/// valeurs par défaut qui fonctionnent — quitter à l'étape 4 ou 5 n'empêche
-/// rien, et bloquer dessus serait une exigence sans contrepartie.
+/// Ce qu'exige **la voie retenue**, et pas une chose de plus.
+///
+/// - **macOS** : une langue retenue, le micro et l'accessibilité accordés, et
+///   une version de macOS capable d'écrire dans cette langue.
+/// - **ChatGPT** : le micro et l'accessibilité, et une page calibrée pour
+///   dicter. Rien sur macOS — c'est la page qui écoute, et exiger un modèle
+///   Apple Intelligence qu'elle n'utilisera jamais rendait Caspr
+///   inutilisable pour qui n'a que ChatGPT.
+///
+/// La destination et le reste ont des valeurs par défaut qui fonctionnent :
+/// quitter l'accueil avant la fin n'empêche rien, et bloquer dessus serait une
+/// exigence sans contrepartie.
 ///
 /// ## Ce que la garde n'intercepte pas
 ///
@@ -38,11 +45,24 @@ enum SetupRecoveryGuard {
     /// Caspr dispose-t-il du strict nécessaire pour dicter ?
     static var isMinimumViableSetupCompleted: Bool {
         let prefs = Preferences.shared
-        guard !prefs.selectedLanguages.isEmpty else { return false }
+        // Le raccourci et ses autorisations valent pour les deux voies : le
+        // micro de la page ChatGPT passe par celui de Caspr, et l'insertion
+        // par l'accessibilité.
         guard TriggerCard.isValid else { return false }
-        // Le moteur de macOS, mesuré : sans lui, l'aperçu comme l'écriture
-        // par défaut n'ont rien pour travailler.
-        return AppleEngineCard.isValid
+        switch prefs.voie {
+        case .apple:
+            guard !prefs.selectedLanguages.isEmpty else { return false }
+            // Le moteur de macOS, mesuré : sans lui, l'aperçu comme l'écriture
+            // n'ont rien pour travailler.
+            return AppleEngineCard.isValid
+        case .chatgpt:
+            // Calibré implique connecté une fois : la calibration refuse de
+            // commencer tant que la page n'a pas de session (cf.
+            // `Relais.attendreConnexion`). Une session perdue depuis ne se
+            // mesure qu'en interrogeant la page, ce qu'une garde synchrone ne
+            // peut pas faire ; l'appui le découvre alors, et le dit.
+            return Relais.partage.estCalibre
+        }
     }
 
     /// L'accueil doit-il reprendre la main ?

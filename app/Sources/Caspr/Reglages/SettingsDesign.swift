@@ -687,6 +687,29 @@ struct CasprSwitch: ToggleStyle {
     }
 }
 
+/// La case à cocher du prototype : carré arrondi de 16 pt qui se remplit
+/// d'accent avec une coche sombre.
+struct CheckBox: View {
+    let checked: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(checked ? Style.accent : Color.clear)
+                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(checked ? Style.accent : Style.textTertiary,
+                                  lineWidth: 1.5))
+                .frame(width: 16, height: 16)
+            if checked {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Style.onAccent)
+            }
+        }
+        .padding(.top, 1)
+    }
+}
+
 /// Case à cocher pour une option à l'intérieur d'une fonctionnalité.
 struct OptionCheck: View {
     let title: String

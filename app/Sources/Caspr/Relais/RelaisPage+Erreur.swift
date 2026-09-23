@@ -43,10 +43,13 @@ extension RelaisPage {
         ///
         /// Non quand la page est morte : celle qu'on ouvrirait pour l'y
         /// chercher est une page neuve et vide, et promettre le contraire
-        /// envoyait fouiller une fenêtre où rien ne subsistait.
+        /// envoyait fouiller une fenêtre où rien ne subsistait. Ni quand elle
+        /// est figée : la fin du cycle la recharge (cf. `Relais.preparer`),
+        /// comme le message le dit, et la fenêtre ouverte sur elle n'aurait
+        /// montré qu'une page muette, qui écoutait peut-être encore.
         var laissePeutEtreLeTexte: Bool {
             switch self {
-            case .pageInterrompue, .relaisEteint: false
+            case .pontMuet, .pageInterrompue, .relaisEteint: false
             default: true
             }
         }

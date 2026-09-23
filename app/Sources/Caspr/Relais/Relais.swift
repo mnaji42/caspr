@@ -360,9 +360,9 @@ final class Relais: ObservableObject {
     /// - **sinon** — le cas de « Brut », qui n'envoie rien : il suffit de vider
     ///   la zone de saisie du texte qu'on vient de dicter.
     ///
-    /// Et quand la page ne répond plus du tout, on la recharge : une page
-    /// figée ne doit pas devenir la panne de la dictée suivante. **Seulement
-    /// dans ce cas.** Une zone qui refuse de se vider sur une page qui répond
+    /// Et quand la page ne répond plus du tout, on la recharge, discussion
+    /// comprise : une page figée ne doit pas devenir la panne de la dictée
+    /// suivante. **Seulement dans ce cas.** Une zone qui refuse de se vider sur une page qui répond
     /// n'est pas une page à jeter — c'est souvent une transcription encore en
     /// cours, qu'un rechargement détruirait ; `demarrer()` vide de toute façon
     /// la zone avant d'écouter.
@@ -388,8 +388,15 @@ final class Relais: ObservableObject {
     /// Le travail de `preparerLaProchaine`, à part pour que l'arrêt d'une
     /// dictée abandonnée le fasse aussi (cf. `interrompre`).
     private func preparer(_ page: RelaisPage) async {
-        guard !enDiscussion, !Task.isCancelled else { return }
-        switch await page.tientUneConversation() {
+        guard !Task.isCancelled else { return }
+        let conversation = await page.tientUneConversation()
+        guard !Task.isCancelled else { return }
+        // En discussion, le fil ouvert est la page prête — tant qu'elle
+        // répond. Figée, le fil est perdu de toute façon, et la garder sous
+        // prétexte d'une discussion condamnait chaque appui au même échec,
+        // sous un message qui promettait un rechargement jamais fait.
+        if enDiscussion, conversation != nil { return }
+        switch conversation {
         case true?:
             page.charger()
             let prete = await page.attendreComposeurPret(secondes: 30)
@@ -404,20 +411,6 @@ final class Relais: ObservableObject {
             await page.viderComposeur()
         case nil:
             guard !Task.isCancelled else { return }
-            Log.error("relais : la page ne répond plus — rechargement au repos")
-            page.charger()
-            _ = await page.attendreComposeurPret(secondes: 30)
-        }
-    }
-
-    /// Recharge la page au repos, discussion ou non.
-    ///
-    /// Pour une page figée, et pour elle seule : le fil qu'elle portait est
-    /// perdu de toute façon, et la garder sous prétexte qu'une discussion est
-    /// ouverte condamnait chaque appui au même échec, cinq secondes plus tard,
-    /// sous un message qui promettait un rechargement jamais fait.
-    private func rechargerAuRepos() {
-        lancerPreparation { page in
             Log.error("relais : la page ne répond plus — rechargement au repos")
             page.charger()
             _ = await page.attendreComposeurPret(secondes: 30)
@@ -524,9 +517,9 @@ final class Relais: ObservableObject {
         } catch RelaisPage.Erreur.pontMuet {
             // Une page figée au démarrage n'atteint jamais la fin du cycle, où
             // la préparation a lieu : sans ceci, chaque appui retrouverait la
-            // même page figée. Elle est rechargée au repos, pour le suivant —
-            // en discussion aussi.
-            rechargerAuRepos()
+            // même page figée. La préparation la recharge au repos, pour le
+            // suivant — en discussion aussi.
+            preparerLaProchaine()
             throw RelaisPage.Erreur.pontMuet
         }
     }

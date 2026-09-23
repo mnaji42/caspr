@@ -8,7 +8,7 @@
    ============================================================================= */
 
 :root {
-  /* --- Couleurs, reprises de Style.swift --------------------------------- */
+  /* --- Couleurs, reprises de Style (SettingsDesign.swift) ---------------- */
   --accent: #00e5cc;                          /* Style.accent */
   --accent-hover: #38efd8;                    /* propre au site : l'app ne s'en servait pas */
   --accent-dim: rgba(0, 229, 204, 0.12);      /* Style.accentDim */
@@ -33,7 +33,7 @@
   --stroke-strong: rgba(255, 255, 255, 0.14);
   --inner: rgba(0, 0, 0, 0.28);               /* Style.innerBoxFill */
 
-  /* --- Rayons, repris de Style.swift ------------------------------------- */
+  /* --- Rayons, repris de Style (SettingsDesign.swift) -------------------- */
   --r-card: 14px;                             /* Style.cardRadius */
   --r-inner: 11px;                            /* Style.innerRadius */
   --r-field: 9px;                             /* Style.fieldRadius */

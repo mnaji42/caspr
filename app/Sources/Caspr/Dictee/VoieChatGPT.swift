@@ -207,11 +207,24 @@ final class VoieChatGPT {
         var brutGarde = false
         do {
             let brut = try await relais.arreterEtLire(secondesDictees: dictee.duree)
+            // Rien n'a été dit : on s'arrête là, quel que soit le module.
+            // Testé après les modules qui n'écrivent nulle part, ce cas ouvrait
+            // en silence une discussion où aucun message n'était parti — la
+            // fenêtre prenait le clavier, et le menu proposait de quitter un
+            // fil jamais commencé. Rien à conserver, donc rien à promettre
+            // sous le message : il n'y a pas d'audio de ce côté-ci, et
+            // « Réessayer » n'existe pas sur cette voie.
+            guard !brut.isEmpty else {
+                guard estEnCours() else { return .sansSuite }
+                Log.error("ChatGPT a rendu un texte vide (\(Log.ms(depuis: debut)) ms)")
+                overlay.showFailure("Rien n'a été entendu")
+                return .echec("ChatGPT n'a rien transcrit — avez-vous parlé ?")
+            }
             // Le filet, posé dès que le brut est lu et avant la seconde passe :
             // ce qui échoue ensuite — l'insertion, une attente abandonnée à la
             // touche — ne le perd plus. Pas pour un cycle qui n'est plus le
             // sien : le recours appartient à la dictée d'après.
-            if !brut.isEmpty, estEnCours() {
+            if estEnCours() {
                 livraison.garderLeBrut(brut)
                 brutGarde = true
             }
@@ -258,14 +271,9 @@ final class VoieChatGPT {
                 relais.entrerEnDiscussion(module)
                 return issue
             }
-            guard !texte.isEmpty else {
-                // Rien à conserver, donc rien à promettre sous le message : il
-                // n'y a pas d'audio de ce côté-ci, et « Réessayer » n'existe
-                // pas sur cette voie.
-                Log.error("ChatGPT a rendu un texte vide (\(Log.ms(depuis: debut)) ms)")
-                overlay.showFailure("Rien n'a été entendu")
-                return .echec("ChatGPT n'a rien transcrit — avez-vous parlé ?")
-            }
+            // Pas de texte vide ici : la transformation rend le brut quand elle
+            // échoue ou que la réponse est vide, et le brut vide s'est arrêté
+            // plus haut.
             relais.masquerBarre()
             overlay.hide()
             // Le brut va à l'historique à côté du texte remanié, quand ils

@@ -470,7 +470,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let retry = NSMenuItem(title: label, action: #selector(retry), keyEquivalent: "")
             retry.target = self
             retry.toolTip = "Relance la transcription sur l'enregistrement "
-                + "conservé, avec \(Preferences.shared.engine.fullLabel)."
+                + "conservé, avec \(EngineSafetyManager.effectiveEngine.fullLabel)."
             menu.addItem(retry)
 
             let discard = NSMenuItem(title: "Abandonner cet enregistrement",

@@ -9,12 +9,13 @@ import SwiftUI
 /// d'expliquer une fois lancée et invisible. Sans accueil, le premier lancement
 /// se solde par une icône muette et une dictée qui ne fait rien.
 ///
-/// ## Cinq étapes, et aucune n'est une page vide
+/// ## Quatre étapes, et aucune n'est une page vide
 ///
 /// Une version précédente en comptait six, dont quatre ne portaient qu'un titre
 /// et deux phrases ; celle d'après en comptait cinq mais réimplémentait les
 /// questions que les Réglages posaient déjà, si bien que les deux avaient
-/// divergé. Celle-ci n'écrit **aucun** réglage de son côté : chaque étape
+/// divergé. La cinquième, le moteur de la passe finale, est partie quand la
+/// version de macOS a cessé d'être un choix. Celle-ci n'écrit **aucun** réglage de son côté : chaque étape
 /// instancie les mêmes vues que les Réglages, et sa seule responsabilité est
 /// l'ordre dans lequel on les rencontre.
 @MainActor
@@ -63,12 +64,12 @@ final class OnboardingWindowController {
 // MARK: - Les étapes
 
 private enum Step: Int, CaseIterable {
-    case welcome, preferences, liveEngine, finalEngine, completion
+    case welcome, preferences, liveEngine, completion
 
     /// Le titre de la fenêtre, qui **suit l'étape**.
     ///
     /// Repris tel quel de `HeaderNav.jsx` : la barre de titre annonce où l'on
-    /// est, elle ne répète pas « Bienvenue » sur les cinq écrans.
+    /// est, elle ne répète pas « Bienvenue » sur les quatre écrans.
     /// L'étape sur laquelle rouvrir.
     ///
     /// Lue à deux endroits — la vue, pour savoir quoi afficher, et la fenêtre,
@@ -78,8 +79,14 @@ private enum Step: Int, CaseIterable {
     /// désigne soit affectée, si bien que la mise à jour du titre partait dans
     /// le vide. La barre annonçait « Bienvenue dans Caspr » au-dessus de
     /// « Vos Préférences » jusqu'au premier changement d'étape.
+    ///
+    /// L'écran du moteur final n'existe plus : qui s'y était arrêté avait
+    /// franchi tout ce qui le précède, et reprend à la fin plutôt qu'à la
+    /// bienvenue.
     @MainActor static var resumed: Step {
-        allCases.first { $0.name == Preferences.shared.onboardingScreen } ?? .welcome
+        let stored = Preferences.shared.onboardingScreen
+        if stored == "finalEngine" { return .completion }
+        return allCases.first { $0.name == stored } ?? .welcome
     }
 
     /// Le nom sous lequel l'étape est enregistrée.
@@ -95,7 +102,6 @@ private enum Step: Int, CaseIterable {
         case .welcome: "welcome"
         case .preferences: "preferences"
         case .liveEngine: "liveEngine"
-        case .finalEngine: "finalEngine"
         case .completion: "completion"
         }
     }
@@ -104,8 +110,7 @@ private enum Step: Int, CaseIterable {
         switch self {
         case .welcome: "Bienvenue dans Caspr"
         case .preferences: "Vos Préférences"
-        case .liveEngine: "Moteur Live & Premier Essai"
-        case .finalEngine: "Moteur de transcription finale"
+        case .liveEngine: "Moteur & Premier Essai"
         case .completion: "Tout est prêt !"
         }
     }
@@ -123,14 +128,9 @@ private enum Step: Int, CaseIterable {
              "Configurez vos langues de travail pour que Caspr s'adapte à "
                 + "vous.")
         case .liveEngine:
-            ("Moteur Live & Premier Essai",
-             "Ce moteur assure l'aperçu en direct (Live Preview) sous la barre "
-                + "flottante.")
-        case .finalEngine:
-            ("Moteur de transcription finale",
-             "Le moteur Live (configuré à l'étape précédente) assure l'aperçu "
-                + "sous la barre flottante. Choisissez maintenant la version de "
-                + "macOS qui rédigera le texte définitif de votre dictée.")
+            ("Moteur & Premier Essai",
+             "Le moteur de macOS écrit votre dictée et en montre l'aperçu en "
+                + "direct sous la barre flottante.")
         case .completion:
             ("Tout est prêt !",
              "Caspr est configuré et prêt à transcrire votre voix en toute "
@@ -262,7 +262,6 @@ private struct OnboardingView: View {
         case .welcome: welcomeStep
         case .preferences: preferencesStep
         case .liveEngine: liveEngineStep
-        case .finalEngine: finalEngineStep
         case .completion: completionStep
         }
     }
@@ -331,9 +330,9 @@ private struct OnboardingView: View {
         }
     }
 
-    // MARK: 3 — Moteur live, déclencheur et essai
+    // MARK: 3 — Moteur, déclencheur et essai
 
-    /// L'ordre du prototype : le moteur d'aperçu **avant** le déclencheur.
+    /// L'ordre du prototype : le moteur **avant** le déclencheur.
     ///
     /// L'inverse paraissait plus logique — on configure la touche, puis ce
     /// qu'elle déclenche — mais c'est le moteur qui décide des autorisations à
@@ -342,7 +341,7 @@ private struct OnboardingView: View {
     /// apparaître après coup dans une carte qu'on croyait finie.
     private var liveEngineStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel("Moteur de reconnaissance en direct", followsHeader: true)
+            SectionLabel("Moteur de reconnaissance", followsHeader: true)
             AppleEngineCard()
                 .padding(.bottom, 12)
 
@@ -351,16 +350,7 @@ private struct OnboardingView: View {
         }
     }
 
-    // MARK: 4 — Moteur final
-
-    /// La version de macOS qui écrit le texte définitif. Il y avait un choix
-    /// de moteur au-dessus d'elle ; il est parti avec le moteur local, et le
-    /// nom de l'écran reste celui sous lequel l'étape est enregistrée.
-    private var finalEngineStep: some View {
-        AppleEngineCard(target: .final)
-    }
-
-    // MARK: 5 — Tout est prêt
+    // MARK: 4 — Tout est prêt
 
     private var completionStep: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -436,7 +426,7 @@ private struct OnboardingView: View {
                 summary("Déclencheur :", prefs.triggerKind == .option
                         ? "Touche \(prefs.triggerSide.label) (Maintenir pour parler)"
                         : "Raccourci clavier (\(prefs.dictateShortcut.label))")
-                summary("Moteur final :", engineSummary)
+                summary("Moteur :", engineSummary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -457,7 +447,7 @@ private struct OnboardingView: View {
     /// Intelligence même quand le modèle de la langue n'est pas téléchargé et
     /// que la Dictée classique prendra le relais.
     private var engineSummary: String {
-        let version = EngineSafetyManager.shared.effectiveEngine.versionLabel
+        let version = EngineSafetyManager.effectiveEngine.versionLabel
         return "macOS Natif · \(version) (0 Mo de RAM, instantané)"
     }
 
@@ -514,10 +504,9 @@ private struct OnboardingView: View {
         switch step {
         case .welcome: nil
         case .preferences: LanguagePicker.validate()
-        // Le déclencheur **et** le moteur d'aperçu : c'est l'étape qui rend
-        // Caspr utilisable, et la dernière qu'exige la garde d'accès.
-        case .liveEngine: TriggerCard.validate() ?? AppleEngineCard.validate(target: .live)
-        case .finalEngine: AppleEngineCard.validate(target: .final)
+        // Le déclencheur **et** le moteur : c'est l'étape qui rend Caspr
+        // utilisable, et la dernière qu'exige la garde d'accès.
+        case .liveEngine: TriggerCard.validate() ?? AppleEngineCard.validate()
         case .completion: nil
         }
     }

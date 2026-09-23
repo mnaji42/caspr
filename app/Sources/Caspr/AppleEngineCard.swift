@@ -1,23 +1,16 @@
 import SwiftUI
 import CasprCore
 
-/// Le moteur de macOS : quelle version, et les modèles qu'elle réclame.
+/// Le moteur de macOS : la version qui écrit, et les modèles qu'elle réclame.
 ///
-/// ## Deux réglages, et c'est l'utilisateur qui arbitre
+/// ## Aucun choix de version
 ///
-/// Le même composant sert deux fois — pour l'aperçu en direct, et pour le
-/// texte définitif — et chaque exemplaire pilote **son** réglage, désigné par
-/// `target`. C'est ce que fait
-/// `AppleEngineCard.jsx`.
-///
-/// J'avais tranché l'inverse, en croyant qu'un aperçu utilisant une autre
-/// version que la passe finale afficherait pendant qu'on parle un texte
-/// qu'aucun moteur ne produirait. C'est vrai, et ce n'est pas une incohérence :
-/// ce sont deux besoins différents, et quelqu'un peut légitimement vouloir la
-/// Dictée pour un aperçu léger pendant qu'il parle et Apple Intelligence pour
-/// le texte définitif. Les coupler retirait ce choix sans rien garantir en
-/// échange. Cf. `Preferences.liveEngineTechnology`, et le seul point de contact
-/// qui subsiste, dans `setTechnology`.
+/// La carte en proposait un, deux fois — pour l'aperçu en direct et pour le
+/// texte définitif —, et ces deux réglages ne désignaient deux choses que
+/// parce que le texte définitif pouvait être CrisperWhisper. La version se
+/// choisit désormais toute seule, sur ce que la machine sait écrire dans la
+/// langue (`EngineChoice.automatic`) : la carte **montre** celle qui écrit,
+/// et ce qui lui manque.
 ///
 /// ## Ce qui bloque, et ce qui n'a pas à bloquer
 ///
@@ -30,82 +23,28 @@ import CasprCore
 ///
 /// Les langues secondaires manquantes sont donc **proposées, jamais exigées**.
 struct AppleEngineCard: View, ValidatingComponent {
-    /// Lequel des deux moteurs cette carte règle.
-    ///
-    /// Le même composant sert deux fois — pour l'aperçu en direct, et pour le
-    /// texte définitif — et chaque exemplaire pilote **son** réglage. C'est le `target` de
-    /// `AppleEngineCard.jsx`. Sans lui, les deux cartes écrivaient la même
-    /// valeur : choisir Dictée pour l'aperçu basculait aussi la transcription,
-    /// et réciproquement.
-    var target: Target = .live
-
-    enum Target { case live, final }
-
-    /// La version réglée par cette carte-ci.
-    private var technology: EngineChoice {
-        target == .final ? prefs.finalAppleTechnology : prefs.liveEngineTechnology
-    }
-
-    /// La version que la carte **montre**, qui n'est pas toujours celle qui est
-    /// enregistrée.
-    ///
-    /// Quand la machine n'en propose qu'une, c'est elle — le réglage, lui, peut
-    /// encore désigner l'autre : il a été pris sur un Mac où les deux
-    /// existaient, ou il vaut sa valeur par défaut. La carte décrivait alors
-    /// Apple Intelligence sur une machine qui ne sait faire que la Dictée, et
-    /// n'affichait ni le nombre de langues ni la ligne d'autorisation qui va
-    /// avec — deux informations qui manquaient exactement là où elles
-    /// comptaient.
-    private var shownTechnology: EngineChoice {
-        available.count == 1 ? (available.first ?? technology) : technology
-    }
-
-    private func setTechnology(_ choice: EngineChoice) {
-        switch target {
-        case .final:
-            prefs.finalAppleTechnology = choice
-        case .live:
-            prefs.liveEngineTechnology = choice
-            // Le seul point de contact qui subsiste, et il ne joue qu'une fois :
-            // tant que la version de la passe finale n'a jamais été choisie,
-            // régler l'aperçu la règle aussi. C'est le cas de l'accueil, où
-            // l'écran 3 vient avant l'écran 4 — sans ça, prendre Dictée pour
-            // l'aperçu laisserait Apple Intelligence en transcription sans que
-            // personne l'ait demandé. Dès qu'elle a été choisie une fois, elle
-            // ne bouge plus toute seule.
-            if !prefs.finalTechnologyWasChosen {
-                prefs.finalAppleTechnology = choice
-            }
-        }
-    }
-
     @State private var prefs = Preferences.shared
-    @State private var safety = EngineSafetyManager.shared
     @State private var assets = SpeechAssets.shared
     @State private var monitor = PermissionsMonitor.shared
     @State private var installing: Set<String> = []
 
+    /// La version qui écrit, et que la carte décrit.
+    private var shownTechnology: EngineChoice {
+        EngineSafetyManager.engine(for: prefs.primaryLanguage)
+    }
+
     // MARK: - Validité
 
-    /// Prêt quand la **langue active** peut être transcrite.
+    /// Prêt quand la **langue active** peut être transcrite par la version
+    /// qui écrira.
     ///
     /// Deux conditions selon la version, et elles n'ont rien à voir : Apple
     /// Intelligence veut son modèle sur le disque, la Dictée veut le droit de
     /// reconnaissance vocale — elle se sert des actifs que macOS a déjà.
-    /// `target` décide **quelle** version on juge : l'écran de l'aperçu en
-    /// direct valide celle de l'aperçu, l'écran du moteur final celle de la
-    /// passe finale. Les juger toutes deux sur la seconde bloquait l'écran 3
-    /// de l'accueil sur l'état d'un réglage qui ne s'y règle pas.
-    /// La conformité au protocole, qui juge la passe finale — la seule dont
-    /// dépend ce qui sera réellement inséré.
-    static func validate() -> ComponentValidationError? { validate(target: .final) }
+    static func validate() -> ComponentValidationError? {
+        let language = Preferences.shared.primaryLanguage
 
-    static func validate(target: Target) -> ComponentValidationError? {
-        let prefs = Preferences.shared
-        let language = prefs.primaryLanguage
-
-        switch target == .final ? prefs.finalAppleTechnology
-                                : prefs.liveEngineTechnology {
+        switch EngineSafetyManager.engine(for: language) {
         case .apple:
             guard EngineChoice.apple.isAvailable(for: language) else {
                 return .noSystemEngine(
@@ -177,82 +116,8 @@ struct AppleEngineCard: View, ValidatingComponent {
         .task { await assets.refreshLocaleCount() }
     }
 
-    /// **Ce message ne devrait jamais paraître.**
-    ///
-    /// Il dit qu'un réglage désigne un moteur que cette machine ne sait faire
-    /// tourner pour *aucune* langue — un état que rien, dans l'application, n'a
-    /// le droit d'écrire. S'il s'affiche un jour, la faute est ailleurs dans le
-    /// code, et c'est précisément pour ça qu'il existe : la panne qui l'a
-    /// motivé s'est manifestée par une transcription vide et rien d'autre, et
-    /// il a fallu remonter trois fichiers pour comprendre que le réglage
-    /// pointait sur Apple Intelligence sur un Mac qui n'en a pas.
-    ///
-    /// ## La condition est étroite exprès
-    ///
-    /// « Le moteur réglé n'est pas disponible » ne suffit pas : c'est un état
-    /// **légitime et courant**, celui de quelqu'un qui a choisi Apple
-    /// Intelligence puis dicte dans une langue qu'il ne couvre pas. Le réglage
-    /// n'est alors pas fautif, il ne s'applique simplement pas ici et
-    /// maintenant — `EngineSafetyManager` le laisse en place à dessein, et la
-    /// note de couverture des langues le dit déjà. Crier à l'anomalie là-dessus ferait de ce
-    /// message un bruit de fond, et le jour où il dirait vrai plus personne ne
-    /// le lirait.
-    ///
-    /// On exige donc que la machine soit incapable de faire tourner ce moteur
-    /// **du tout** : zéro locale proposée, mesuré auprès du système. C'est la
-    /// différence entre « pas dans cette langue » et « pas sur ce Mac ».
-    private var inconsistency: EngineChoice? {
-        guard !available.isEmpty, !available.contains(technology) else { return nil }
-        // Seul Apple Intelligence peut se retrouver dans cet état par un défaut
-        // de Caspr. Une Dictée indisponible, elle, a toujours une cause visible
-        // côté système — l'interrupteur éteint — et `SystemDictationRow` la
-        // porte déjà.
-        guard technology == .apple, assets.appleLocaleCount == 0 else { return nil }
-        return available.first
-    }
-
-    @ViewBuilder
-    private func inconsistencyNotice(_ fix: EngineChoice) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Note("**Réglage incohérent — c'est un défaut de Caspr, pas une "
-                 + "manipulation de votre part.** "
-                 + (target == .final ? "Ce moteur" : "Cet aperçu")
-                 + " est réglé sur \(technology.fullLabel), que ce Mac ne sait "
-                 + "faire tourner pour aucune langue. Rien n'est bloqué : la "
-                 + "dictée se replie sur \(fix.fullLabel). Mais ce réglage "
-                 + "n'aurait pas dû pouvoir s'écrire ici.", warning: true)
-            ButtonRow {
-                Button("Régler sur \(fix.fullLabel)") { setTechnology(fix) }
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: Style.innerRadius, style: .continuous)
-                .fill(Style.warning.opacity(0.08))
-                .overlay(RoundedRectangle(cornerRadius: Style.innerRadius,
-                                          style: .continuous)
-                    .strokeBorder(Style.warning.opacity(0.35), lineWidth: 1)))
-    }
-
     @ViewBuilder
     private var content: some View {
-        // En tête, avant tout le reste : si ce filet se déclenche, plus rien
-        // sur la carte ne mérite d'être lu avant lui.
-        if let fix = inconsistency {
-            inconsistencyNotice(fix)
-        } else if target == .final, safety.isFallingBack {
-            // Le texte définitif part ailleurs que là où le réglage le dit :
-            // le taire ferait passer la transcription de l'autre version pour
-            // un caprice de celle qu'on a choisie.
-            Note("**\(prefs.engine.fullLabel) ne sait pas écrire ici pour "
-                 + "l'instant.** Caspr dicte avec "
-                 + "\(safety.effectiveEngine.fullLabel) en attendant, et "
-                 + "reviendra tout seul à votre choix dès qu'il sera "
-                 + "opérationnel — votre réglage n'a pas été modifié.",
-                 warning: true)
-        }
-
         // L'en-tête : une pastille qui dit si le moteur est opérationnel, le
         // nom de la version active, et ce qu'elle est.
         HStack(alignment: .top, spacing: 12) {
@@ -269,7 +134,7 @@ struct AppleEngineCard: View, ValidatingComponent {
             }
         }
 
-        versionPicker
+        versionSection
 
         switch shownTechnology {
         case .appleLegacy:
@@ -278,7 +143,7 @@ struct AppleEngineCard: View, ValidatingComponent {
             // pour rien.
             SystemDictationRow()
             SpeechAccessRow(explains: true)
-        default:
+        case .apple:
             models
         }
     }
@@ -318,21 +183,11 @@ struct AppleEngineCard: View, ValidatingComponent {
         EngineChoice.availableSystemEngines(for: prefs.primaryLanguage)
     }
 
-    /// **La même carte dans les deux cas**, à la rangée de choix près.
-    ///
-    /// Une seule version disponible produisait auparavant une mise en page à
-    /// part : pas d'intitulé « VERSION DU MOTEUR », pas de nombre de langues, et
-    /// à la place une ligne « macOS · Dictée — seule version ici » qui répétait
-    /// le titre de la carte deux centimètres plus bas. Ça se lisait comme un
-    /// écran inachevé, et la seule chose qu'on y gagnait — savoir qu'il n'y a
-    /// pas de choix — est déjà dite par l'absence du sélecteur.
-    ///
-    /// Ce qui disparaît, c'est donc **la rangée « Technologie » et elle seule**.
-    /// Le reste est identique, et la version montrée est traitée exactement
-    /// comme si elle avait été choisie. Aucune version disponible reste un cas
-    /// à part : la raison mesurée, et le bouton qui y mène.
+    /// La version qui écrit, et pourquoi c'est elle. Aucune version
+    /// disponible reste un cas à part : la raison mesurée, et le bouton qui y
+    /// mène.
     @ViewBuilder
-    private var versionPicker: some View {
+    private var versionSection: some View {
         if !available.isEmpty {
             Divider().opacity(0.25)
             Text("VERSION DU MOTEUR")
@@ -341,14 +196,11 @@ struct AppleEngineCard: View, ValidatingComponent {
                 .foregroundStyle(Style.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if available.count > 1 {
-                Row(label: "Technologie :") {
-                    PillPicker(options: available.map { ($0, $0.versionLabel) },
-                               selection: Binding(
-                                   get: { technology },
-                                   set: { setTechnology($0) }))
-                }
-            }
+            // Dit une fois, pour qu'on ne cherche pas le sélecteur : la
+            // Dictée écrit nettement moins bien, et elle ne sert que là où
+            // Apple Intelligence ne sait pas.
+            Note("Caspr choisit tout seul : Apple Intelligence quand elle sait "
+                 + "écrire votre langue principale, la Dictée de macOS sinon.")
             languageCoverage
 
             Note(shownTechnology.versionExplanation)
@@ -469,17 +321,27 @@ struct AppleEngineCard: View, ValidatingComponent {
     /// l'idée — en aligner soixante ferait de cette carte un catalogue.
     @ViewBuilder
     private var languageCoverage: some View {
-        let covered = Language.appleSupports(prefs.primaryLanguage) != false
-        if shownTechnology == .apple, let count = assets.appleLocaleCount {
-            Note("**\(count) langues** sur ce Mac — français, anglais, espagnol, "
-                 + "allemand, italien, portugais, japonais, coréen, chinois…"
-                 + (covered ? ""
-                    : " **\(prefs.primary.displayName) n'en fait pas partie** : "
-                      + "la Dictée de macOS prend le relais."))
-        } else if shownTechnology == .appleLegacy {
-            Note("**\(LegacySpeechEngine.supportedLocaleCount) langues** sur ce "
-                 + "Mac : c'est la liste de la Dictée de macOS, la plus large "
-                 + "des deux.")
+        switch shownTechnology {
+        case .apple:
+            if let count = assets.appleLocaleCount {
+                Note("**\(count) langues** sur ce Mac — français, anglais, espagnol, "
+                     + "allemand, italien, portugais, japonais, coréen, chinois…")
+            }
+        case .appleLegacy:
+            // Apple Intelligence existe ici, mais pas pour cette langue : c'est
+            // la raison du choix, et la seule chose qu'on puisse y faire est
+            // de le savoir.
+            if let count = assets.appleLocaleCount, count > 0,
+               Language.appleSupports(prefs.primaryLanguage) == false {
+                Note("Apple Intelligence ne propose pas le "
+                     + "**\(prefs.primary.displayName)** sur ce Mac : la Dictée "
+                     + "écrit à sa place, dans ses \(LegacySpeechEngine.supportedLocaleCount) "
+                     + "langues.")
+            } else {
+                Note("**\(LegacySpeechEngine.supportedLocaleCount) langues** sur ce "
+                     + "Mac : c'est la liste de la Dictée de macOS, la plus large "
+                     + "des deux.")
+            }
         }
     }
 

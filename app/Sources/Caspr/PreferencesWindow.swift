@@ -253,16 +253,10 @@ private struct RecordingTab: View {
                 : "L'aperçu textuel est masqué. La barre flottante affichera "
                   + "uniquement les ondes sonores pendant la parole.",
             isOn: $prefs.livePreviewEnabled,
-            bottomMargin: prefs.livePreviewEnabled ? 10 : 0)
-
-        // Une carte **à part**, et non un panneau glissé dans la précédente :
-        // c'est ce que fait `SettingsView.jsx`, et c'est plus juste. Le moteur
-        // n'est pas un détail du réglage « afficher l'aperçu » — il a son
-        // propre état, ses propres modèles à télécharger et sa propre pastille
-        // de validité, qu'une sous-carte sans en-tête ne peut pas montrer.
-        if prefs.livePreviewEnabled {
-            AppleEngineCard()
-        }
+            bottomMargin: 0)
+        // Pas de carte du moteur ici : l'aperçu tourne sur la version qui
+        // écrit, et celle-ci est dans l'onglet Moteur IA. Une seconde carte
+        // identique laisserait croire qu'il y a deux réglages.
 
         SectionLabel("Retours Sonores")
         Card {

@@ -47,18 +47,18 @@ final class PermissionsMonitor {
 
     /// Le droit de reconnaissance vocale est-il en jeu ici ?
     ///
-    /// Deux façons de faire tourner la Dictée, et il suffit d'une : elle
-    /// écrit, ou c'est elle qui assure l'aperçu en direct.
+    /// Seulement quand la Dictée écrit : l'aperçu en direct tourne sur la même
+    /// version, et la voie ChatGPT n'en fait tourner aucune.
     var requiresSpeech: Bool {
-        let prefs = Preferences.shared
-        if prefs.engine == .appleLegacy { return true }
-        // La permission de reconnaissance vocale suit **le moteur de l'aperçu**,
-        // qui est celui qui l'utilise. La déduire du moteur d'écriture la
-        // demandait au mauvais moment : réglé sur Dictée pour l'aperçu et sur
-        // Apple Intelligence pour la transcription, on ne la réclamait jamais.
-        return prefs.livePreviewEnabled
-            && SpeechPreview.engine(using: prefs.liveEngineTechnology,
-                                    for: prefs.language) == .appleLegacy
+        switch Preferences.shared.voie {
+        case .chatgpt:
+            return false
+        case .apple:
+            switch EngineSafetyManager.effectiveEngine {
+            case .apple: return false
+            case .appleLegacy: return true
+            }
+        }
     }
 
     var allGranted: Bool {

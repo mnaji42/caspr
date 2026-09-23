@@ -22,17 +22,8 @@ public enum LegacyCleanup {
 
     // MARK: - Réglages
 
-    /// Les clés du moteur, telles qu'elles sont rangées sur le disque.
+    /// Les clés de l'accueil, telles qu'elles sont rangées sur le disque.
     public enum Key {
-        public static let finalEngine = "caspr.engine.final"
-        public static let appleTechnology = "caspr.engine.apple"
-        public static let lastValidEngine = "caspr.engine.lastValid"
-        /// Le réglage unique d'avant la séparation en deux décisions.
-        public static let legacyEngine = "caspr.engine"
-        /// Posée par `Preferences` dès sa première lecture : tant qu'elle
-        /// manque, `caspr.engine` sert encore à reconnaître une installation
-        /// existante, et il ne faut pas le lui retirer.
-        public static let migratedSchema = "caspr.schema.migrated"
         /// L'étape d'accueil atteinte, rangée par son **rang** jusqu'ici.
         public static let legacyOnboardingStep = "caspr.onboarding.step"
         /// La même, rangée par son **nom**.
@@ -46,23 +37,23 @@ public enum LegacyCleanup {
     /// Le jour où l'accueil perd un écran, un index relu tel quel rouvrirait
     /// sur la page suivante — l'écran de fin, peut-être, pour quelqu'un qui
     /// n'a jamais accordé le micro. Les noms sont ceux de `Step.name` dans
-    /// `Onboarding.swift`.
+    /// `Onboarding.swift`, y compris ceux d'écrans disparus depuis : c'est
+    /// l'accueil qui sait où reprendre quand l'un d'eux ne désigne plus rien.
     public static let legacyOnboardingScreens = [
         "welcome", "preferences", "liveEngine", "finalEngine", "completion",
     ]
 
-    /// La valeur brute sous laquelle CrisperWhisper était enregistré, dans les
-    /// deux énumérations qui le portaient.
-    public static let retiredEngine = "crisperwhisper"
-    /// La famille « macOS » de `Preferences.FinalEngineChoice`.
-    public static let appleFamily = "apple"
-
     /// Les réglages qui ne règlent plus rien.
     ///
-    /// Lexique, collecte, mode par défaut, moteur local. **Jamais** une clé
-    /// `relais.*`, le raccourci, les langues, l'historique, la destination ou
-    /// le fichier de notes : ce sont eux que l'utilisateur retrouverait vides
-    /// à la mise à jour, et le calibrage du relais ne se refait pas en un clic.
+    /// Lexique, collecte, mode par défaut, moteur local — et le choix de la
+    /// version de macOS, qui se fait désormais tout seul selon ce que la
+    /// machine sait écrire dans la langue. **Jamais** une clé `relais.*`, le
+    /// raccourci, les langues, l'historique, la destination ou le fichier de
+    /// notes : ce sont eux que l'utilisateur retrouverait vides à la mise à
+    /// jour, et le calibrage du relais ne se refait pas en un clic. Jamais non
+    /// plus `caspr.engine.appleSupport` : ce n'est pas un choix, c'est ce que
+    /// le système a répondu sur les langues d'Apple Intelligence, et le
+    /// reperdre ferait dicter la première phrase sur un « on ne sait pas ».
     public static let obsoleteKeys = [
         "caspr.lexicon",
         "caspr.lexicon.useDefault",
@@ -75,54 +66,30 @@ public enum LegacyCleanup {
         // Les habitudes déclarées à l'accueil ne servaient qu'à recommander
         // CrisperWhisper ou macOS : sans l'un des deux, plus rien à conseiller.
         "caspr.habits",
+        // Le moteur : la famille (macOS ou CrisperWhisper), la version de la
+        // passe finale, celle de l'aperçu, le dernier moteur qui avait écrit
+        // et le réglage unique d'avant leur séparation. Un CrisperWhisper
+        // encore inscrit n'a plus rien à traduire : il n'y a plus de version
+        // à choisir à sa place.
+        "caspr.engine.final",
+        "caspr.engine.apple",
+        "caspr.engine.live",
+        "caspr.engine.lastValid",
+        "caspr.engine",
+        // La marque qui retenait l'effacement de `caspr.engine` tant que la
+        // version courante n'avait pas relu l'installation.
+        "caspr.schema.migrated",
     ]
 
-    /// Reprend les réglages d'un utilisateur de CrisperWhisper, et efface ceux
-    /// qui n'ont plus d'objet.
+    /// Efface les réglages qui n'ont plus d'objet, et range l'étape d'accueil
+    /// sous son nom.
     ///
     /// Idempotente : un second passage ne trouve plus rien et ne rend rien.
     ///
-    /// - Parameter appleTechnology: la version de macOS à retenir, en valeur
-    ///   brute. Appelée **seulement** s'il faut en choisir une : elle
-    ///   interroge le système, et un utilisateur déjà sur macOS n'a pas à en
-    ///   payer le prix à chaque lancement.
     /// - Returns: ce qui a été fait, une ligne par geste, pour le journal.
     @discardableResult
-    public static func migrateSettings(
-        _ defaults: UserDefaults,
-        appleTechnology: () -> String
-    ) -> [String] {
+    public static func migrateSettings(_ defaults: UserDefaults) -> [String] {
         var done: [String] = []
-        var resolved: String?
-        func technology() -> String {
-            if let resolved { return resolved }
-            let value = appleTechnology()
-            resolved = value
-            return value
-        }
-
-        // Deux clés, pas une : la famille et la version. N'écrire que la
-        // famille laisserait la version à ce que `Preferences` en déduirait
-        // au lancement suivant, sans que personne ait vérifié qu'elle marche
-        // sur cette machine. Et la clé héritée compte aussi : une installation
-        // qui ne s'est jamais relancée depuis la séparation n'a qu'elle.
-        let final = defaults.string(forKey: Key.finalEngine)
-        let legacy = defaults.string(forKey: Key.legacyEngine)
-        if final == retiredEngine || (final == nil && legacy == retiredEngine) {
-            let chosen = technology()
-            defaults.set(appleFamily, forKey: Key.finalEngine)
-            defaults.set(chosen, forKey: Key.appleTechnology)
-            done.append("moteur final : CrisperWhisper → macOS (\(chosen))")
-        }
-
-        // Le filet de `EngineSafetyManager` : laissé sur CrisperWhisper, il
-        // ferait retomber une dictée qui échoue sur un moteur que plus rien
-        // ne sait lancer.
-        if defaults.string(forKey: Key.lastValidEngine) == retiredEngine {
-            let fallback = defaults.string(forKey: Key.appleTechnology) ?? technology()
-            defaults.set(fallback, forKey: Key.lastValidEngine)
-            done.append("dernier moteur valide : CrisperWhisper → \(fallback)")
-        }
 
         // L'étape d'accueil change de clé en même temps que de forme : un
         // index traduit une fois pour toutes en nom, avant que l'accueil ne
@@ -143,18 +110,6 @@ public enum LegacyCleanup {
         for key in obsoleteKeys where defaults.object(forKey: key) != nil {
             defaults.removeObject(forKey: key)
             done.append("réglage effacé : \(key)")
-        }
-
-        // La clé héritée ne part que quand tout ce qu'elle pouvait encore dire
-        // est rangé ailleurs : la famille, la version, et la marque que
-        // l'installation a déjà été reconnue. Retirée avant, elle ferait
-        // prendre une ancienne installation pour une neuve.
-        if defaults.object(forKey: Key.legacyEngine) != nil,
-           defaults.object(forKey: Key.finalEngine) != nil,
-           defaults.object(forKey: Key.appleTechnology) != nil,
-           defaults.object(forKey: Key.migratedSchema) != nil {
-            defaults.removeObject(forKey: Key.legacyEngine)
-            done.append("réglage effacé : \(Key.legacyEngine)")
         }
         return done
     }

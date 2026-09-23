@@ -3,40 +3,47 @@ import Testing
 
 /// Les deux versions du moteur de macOS, et ce qui doit rester vrai d'elles.
 ///
-/// Ces règles ne lèvent aucune erreur quand elles se trompent : un identifiant
-/// renommé relit simplement le défaut au lancement suivant, deux libellés
-/// identiques donnent un sélecteur à deux lignes pareilles.
+/// Ces règles ne lèvent aucune erreur quand elles se trompent : une version
+/// mal choisie rend une chaîne vide, deux libellés identiques une carte qui
+/// ne dit plus laquelle écrit.
 @Suite("Versions du moteur de macOS")
 struct EngineChoiceTests {
 
-    /// `systemEngines` bâtit le sélecteur et fixe l'ordre de préférence. Une
-    /// version qui y manquerait ne serait jamais proposée, ni jamais choisie
-    /// en repli.
+    /// `systemEngines` fixe l'ordre de préférence. Une version qui y
+    /// manquerait ne serait jamais montrée comme disponible.
     @Test("Toutes les versions sont proposées, Apple Intelligence d'abord")
     func systemListCoversEveryCase() {
         #expect(Set(EngineChoice.systemEngines) == Set(EngineChoice.allCases))
         #expect(EngineChoice.systemEngines.first == .apple)
     }
 
-    /// Les `rawValue` sont écrits dans les préférences. En renommer un ne
-    /// casse aucune compilation : ça relit simplement `nil` au prochain
-    /// lancement, et l'utilisateur retrouve la version par défaut sans que
-    /// rien ne le dise.
-    @Test("Les identifiants persistés sont ceux déjà écrits sur disque")
-    func rawValuesAreStable() {
-        #expect(EngineChoice.apple.rawValue == "apple")
-        #expect(EngineChoice.appleLegacy.rawValue == "apple-legacy")
-        for engine in EngineChoice.allCases {
-            #expect(EngineChoice(rawValue: engine.rawValue) == engine)
+    /// Apple Intelligence écrit mieux : dès qu'elle sait la langue, c'est
+    /// elle, que la Dictée soit prête ou non.
+    @Test("Apple Intelligence prête l'emporte")
+    func appleWinsWhenReady() {
+        for legacy in [true, false] {
+            #expect(EngineChoice.automatic(appleReady: true, legacyReady: legacy,
+                                           appleUnanswered: false) == .apple)
         }
     }
 
-    /// L'ancien moteur local ne doit plus se relire. S'il se relisait, un
-    /// réglage que la migration n'aurait pas encore traduit ferait dicter
-    /// avec un moteur que plus rien ne sait lancer.
-    @Test("L'identifiant de l'ancien moteur local ne se relit plus")
-    func retiredEngineIsGone() {
-        #expect(EngineChoice(rawValue: LegacyCleanup.retiredEngine) == nil)
+    /// Le cas de la machine virtuelle : Apple Intelligence se dit disponible
+    /// sans modèle. Seule une réponse du système la rend prête ; sans elle,
+    /// la Dictée qui marche doit écrire.
+    @Test("La Dictée prête écrit quand Apple Intelligence ne l'est pas")
+    func legacyWhenAppleIsNotReady() {
+        for unanswered in [true, false] {
+            #expect(EngineChoice.automatic(appleReady: false, legacyReady: true,
+                                           appleUnanswered: unanswered) == .appleLegacy)
+        }
+    }
+
+    @Test("Aucune prête : Apple Intelligence si le système n'a pas encore répondu")
+    func noneReady() {
+        #expect(EngineChoice.automatic(appleReady: false, legacyReady: false,
+                                       appleUnanswered: true) == .apple)
+        #expect(EngineChoice.automatic(appleReady: false, legacyReady: false,
+                                       appleUnanswered: false) == .appleLegacy)
     }
 
     @Test("Deux versions ne portent jamais le même libellé")

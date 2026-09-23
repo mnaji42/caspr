@@ -96,7 +96,7 @@ dix minutes ne se perd pas parce que la seconde passe n'a pas abouti.
 ## Les points d'accroche
 
 - **`TranscriptionSettings.swift`** — une ligne.
-  `RelaisCard { AppleEngineCard(target: .final) }` enveloppe la carte de
+  `RelaisCard { AppleEngineCard() }` enveloppe la carte de
   macOS, dont elle décide l'affichage : les deux s'excluent à l'écran comme en
   fonctionnement.
 - **`CasprApp.swift`** — la page est chargée au lancement quand la voie est

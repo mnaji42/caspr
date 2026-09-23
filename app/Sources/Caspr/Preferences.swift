@@ -33,19 +33,12 @@ final class Preferences {
         static let noteFile = "caspr.notes.file"
         static let destination = "caspr.dictation.destination"
         static let livePreview = "caspr.preview.live"
-        static let engine = "caspr.engine"              // hérité, migré vers apple
-        static let finalAppleTechnology = "caspr.engine.apple"
-        static let liveTechnology = "caspr.engine.live"
         static let shortcut = "caspr.shortcut"
         static let onboarded = "caspr.onboarded"
         /// Le nom de l'étape, et non plus son numéro — cf. `onboardingScreen`.
         static let onboardingScreen = "caspr.onboarding.screen"
         static let updateCheck = "caspr.update.check"
         static let ignoredUpdate = "caspr.update.ignored"
-        static let lastValidEngine = "caspr.engine.lastValid"
-        /// Marque qu'une installation antérieure au multi-langues a été
-        /// reprise — cf. `init`.
-        static let migratedSchema = "caspr.schema.migrated"
     }
 
     private let defaults = UserDefaults.standard
@@ -281,25 +274,6 @@ final class Preferences {
         didSet { defaults.set(ignoredUpdateVersion, forKey: Key.ignoredUpdate) }
     }
 
-    /// Le moteur retenu au tout premier lancement.
-    ///
-    /// Choisi sur ce que la machine sait faire, pas sur son numéro de version.
-    /// `.apple` était écrit en dur, ce qui donnait un défaut inutilisable sur
-    /// un Mac Intel, sur un macOS antérieur à 26, ou sur toute machine sans
-    /// Apple Intelligence : l'application s'ouvrait sur un moteur incapable
-    /// d'écrire une ligne, et rien ne disait pourquoi.
-    ///
-    /// L'ordre suit la qualité attendue puis la disponibilité : le moteur de
-    /// macOS 26 s'il est là, celui de la Dictée sinon.
-    ///
-    /// Quand aucune version de macOS ne marche ici, on retient quand même la
-    /// famille : l'interface montre alors la ligne « macOS » avec la raison
-    /// mesurée et le bouton qui y mène, ce qui vaut mieux que de désigner un
-    /// moteur que rien n'explique.
-    static func defaultEngine(for language: String) -> EngineChoice {
-        EngineChoice.systemEngine(preferring: .apple, for: language) ?? .apple
-    }
-
     // MARK: - Notes
 
     /// Fichier des notes, retenu **indépendamment** de la destination courante.
@@ -370,80 +344,7 @@ final class Preferences {
         }
     }
 
-    // MARK: - Moteur
-
-    /// La version de macOS qui écrit le texte définitif — Apple Intelligence
-    /// ou Dictée.
-    ///
-    /// Il y avait au-dessus d'elle un second réglage, la famille : macOS ou
-    /// l'ancien moteur local. Parti avec lui, il ne reste que celui-ci ;
-    /// l'ancienne clé `caspr.engine.final` n'est plus lue.
-    var finalAppleTechnology: EngineChoice {
-        didSet {
-            defaults.set(finalAppleTechnology.rawValue, forKey: Key.finalAppleTechnology)
-        }
-    }
-
-    /// La version de macOS qui alimente l'aperçu en direct.
-    ///
-    /// **Indépendante de celle de la passe finale.** Elle était couplée : régler
-    /// l'aperçu sur Dictée réglait aussi la transcription sur Dictée, et
-    /// l'inverse. L'argument était qu'un aperçu utilisant l'autre version
-    /// afficherait un texte que le moteur final n'allait pas produire — mais ce
-    /// sont deux besoins différents et l'utilisateur arbitre lui-même : Dictée
-    /// pour un aperçu léger pendant qu'on parle, Apple Intelligence pour le
-    /// texte définitif, ou l'inverse. Le prototype range d'ailleurs les deux
-    /// dans deux états séparés (`liveEngineTechnology`, `finalAppleTechnology`)
-    /// et `AppleEngineCard` choisit lequel piloter via son `target`.
-    var liveEngineTechnology: EngineChoice {
-        didSet {
-            defaults.set(liveEngineTechnology.rawValue, forKey: Key.liveTechnology)
-        }
-    }
-
-    /// La version de la passe finale a-t-elle déjà été choisie **explicitement** ?
-    ///
-    /// Sert au seul endroit où les deux réglages se parlent encore : pendant
-    /// l'accueil, choisir la version de l'aperçu alors que celle de la
-    /// transcription n'a jamais été touchée pose la même des deux côtés. Sans
-    /// ça, quelqu'un qui prend Dictée à l'écran 3 se retrouve avec Apple
-    /// Intelligence à l'écran 4 sans l'avoir demandé. Dès qu'elle est choisie
-    /// une fois, elle ne bouge plus toute seule — y compris si l'on revient en
-    /// arrière changer l'aperçu.
-    ///
-    /// Mesuré sur la présence de la clé, et non sur un drapeau de plus : les
-    /// observateurs ne se déclenchent pas pendant l'initialisation, donc la
-    /// valeur par défaut calculée au démarrage n'écrit rien.
-    var finalTechnologyWasChosen: Bool {
-        defaults.string(forKey: Key.finalAppleTechnology) != nil
-    }
-
-    /// Le moteur qui écrit.
-    ///
-    /// Point d'entrée historique : tout ce qui transcrit veut savoir « qui
-    /// écrit », pas « quelle case est cochée où ».
-    var engine: EngineChoice {
-        get { finalAppleTechnology }
-        set { finalAppleTechnology = newValue }
-    }
-
-    /// Le dernier moteur dont on a **constaté** qu'il savait écrire.
-    ///
-    /// Filet de sécurité : tant que la version choisie ne sait pas écrire ici
-    /// — modèle Apple Intelligence pas encore téléchargé, Dictée éteinte —
-    /// la dictée continue avec celle-ci plutôt que d'échouer. Cf.
-    /// `EngineSafetyManager`.
-    var lastValidEngine: EngineChoice {
-        didSet { defaults.set(lastValidEngine.rawValue, forKey: Key.lastValidEngine) }
-    }
-
     private init() {
-        // La marque que cette installation a été lue par la version courante.
-        // Plus rien ici ne la relit, mais `LegacyCleanup` l'attend avant
-        // d'effacer l'ancien réglage unique `caspr.engine` : sans elle, il
-        // le garderait indéfiniment, faute de savoir qu'il a été repris.
-        defaults.set(true, forKey: Key.migratedSchema)
-
         // Migration : l'ancien réglage était un simple interrupteur sur la
         // touche Option, le raccourci restant actif en parallèle. Le couper
         // voulait donc dire « je préfère le raccourci ».
@@ -479,12 +380,6 @@ final class Preferences {
         let storedPrimary = defaults.string(forKey: Key.primaryLanguage)
         storedPrimaryLanguage = storedPrimary.flatMap { languages.contains($0) ? $0 : nil }
             ?? languages[0]
-        // La langue principale sert plus bas à choisir un moteur par défaut.
-        // Elle passe par une locale, et non par `selectedLanguages` : sous
-        // `@Observable`, relire une propriété stockée avant que toutes le
-        // soient est refusé — et le contournement serait un ordre
-        // d'initialisation fragile plutôt qu'une variable de trois caractères.
-        let primary = languages[0]
 
         // Un fichier supprimé ou renommé depuis la dernière session ne doit
         // pas rester proposé comme destination : la dictée y serait perdue.
@@ -509,23 +404,6 @@ final class Preferences {
         } else {
             dictateShortcut = .dictate
         }
-        // La version de macOS : celle explicitement rangée, sinon celle que
-        // l'ancien réglage unique (`caspr.engine`) désignait, sinon celle que
-        // cette machine sait faire tourner — mesuré, jamais déduit du numéro
-        // de version. La valeur de l'ancien moteur local ne se relit plus :
-        // `Migration` l'a déjà traduite, et un réglage qu'elle n'aurait pas
-        // encore vu retombe sur ce que la machine sait faire.
-        let resolvedApple = EngineChoice(rawValue: defaults.string(forKey: Key.finalAppleTechnology) ?? "")
-            ?? EngineChoice(rawValue: defaults.string(forKey: Key.engine) ?? "")
-            ?? Self.defaultEngine(for: primary)
-        finalAppleTechnology = resolvedApple
-        liveEngineTechnology = EngineChoice(rawValue: defaults.string(forKey: Key.liveTechnology) ?? "")
-            ?? Self.defaultEngine(for: primary)
-        // Au premier lancement, le dernier moteur valide est celui qu'on vient
-        // de retenir : rien n'a encore échoué, et démarrer sur un repli
-        // arbitraire ferait dicter avec autre chose que ce qui est affiché.
-        lastValidEngine = EngineChoice(rawValue: defaults.string(forKey: Key.lastValidEngine) ?? "")
-            ?? resolvedApple
 
         ignoredUpdateVersion = defaults.string(forKey: Key.ignoredUpdate)
         // Posée par `Migration` avant cette lecture. Un binaire lancé hors de

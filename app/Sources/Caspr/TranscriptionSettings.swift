@@ -17,6 +17,6 @@ struct TranscriptionSettings: View {
     var body: some View {
         // RELAIS — la carte enveloppe celle de macOS, dont elle décide
         // l'affichage : les deux s'excluent à l'écran comme en fonctionnement.
-        RelaisCard { AppleEngineCard(target: .final) }
+        RelaisCard { AppleEngineCard() }
     }
 }

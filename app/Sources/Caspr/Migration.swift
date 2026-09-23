@@ -37,9 +37,9 @@ enum Migration {
     /// `Preferences.shared`**.
     ///
     /// L'ordre n'est pas une précaution : `Preferences` lit ses clés une fois,
-    /// à sa création. Créée avant, elle lirait la version de macOS avant que
-    /// celle-ci ait remplacé l'ancien moteur, et retomberait sur un défaut
-    /// plutôt que sur la version mesurée ici.
+    /// à sa création. Créée avant, elle lirait la voie avant qu'elle ait été
+    /// déduite de l'interrupteur du relais, et dicterait par macOS quelqu'un
+    /// qui avait choisi ChatGPT.
     static func run() {
         // Un binaire lancé hors de son bundle — `swift run`, un test — lit un
         // autre domaine de réglages, et n'a aucune raison de vider les
@@ -97,9 +97,7 @@ enum Migration {
 
     private static func migrateSettings() {
         let defaults = UserDefaults.standard
-        let done = LegacyCleanup.migrateSettings(defaults) {
-            appleTechnology(defaults)
-        }
+        let done = LegacyCleanup.migrateSettings(defaults)
         for line in done { Log.notice("migration : \(line)") }
         // La voie est posée ici, une fois, et non déduite par `Preferences` à
         // chaque lecture : l'interrupteur du relais ne serait jamais devenu
@@ -107,37 +105,6 @@ enum Migration {
         if let voie = VoieDeDictee.migrer(defaults) {
             Log.notice("migration : voie de dictée posée — \(voie.rawValue)")
         }
-    }
-
-    /// La version de macOS qui remplace CrisperWhisper.
-    ///
-    /// `systemEngine` rend `nil` précisément là où CrisperWhisper avait le plus
-    /// de raisons d'avoir été choisi : Mac Intel, machine virtuelle, Mac sans
-    /// Apple Intelligence. La Dictée en dernier recours, parce que c'est elle
-    /// qui marche partout où la dictée du système marche. Si même elle ne
-    /// marche pas ici, la migration ne ment pas pour autant : elle pose le
-    /// réglage, et c'est l'accueil qui dit ce qui manque.
-    private static func appleTechnology(_ defaults: UserDefaults) -> String {
-        let current = defaults.string(forKey: LegacyCleanup.Key.appleTechnology)
-            .flatMap(EngineChoice.init(rawValue:)) ?? .apple
-        let chosen = EngineChoice.systemEngine(preferring: current,
-                                               for: primaryLanguage(defaults))
-        return (chosen ?? .appleLegacy).rawValue
-    }
-
-    /// La langue principale, relue comme `Preferences` la relit — sans passer
-    /// par elle, qui ne doit pas encore exister.
-    private static func primaryLanguage(_ defaults: UserDefaults) -> String {
-        let selected = defaults.stringArray(forKey: "caspr.languages.selected") ?? []
-        if let primary = defaults.string(forKey: "caspr.languages.primary"),
-           selected.contains(primary) {
-            return primary
-        }
-        if let first = selected.first { return first }
-        if let legacy = defaults.string(forKey: "caspr.language") {
-            return Language.preferred(for: legacy)
-        }
-        return Language.fallback
     }
 
     /// Le domaine de réglages de Sofler, si plus rien n'en a besoin.

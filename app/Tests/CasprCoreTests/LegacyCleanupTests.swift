@@ -35,59 +35,30 @@ struct LegacyCleanupTests {
         "caspr.history": Data([4, 5, 6]),
         "caspr.dictation.destination": "notes",
         "caspr.notes.file": "/tmp/notes.md",
+        "caspr.voie": "chatgpt",
     ]
 
-    @Test("CrisperWhisper devient macOS, famille et version ensemble")
-    func migratesFinalEngine() {
+    /// La version de macOS se choisit toute seule : un réglage qui en
+    /// désignait une, ou qui désignait CrisperWhisper, n'a plus rien à dire.
+    /// Ce que le système a répondu sur les langues, lui, n'est pas un choix.
+    @Test("Les choix de moteur partent, la réponse du système reste")
+    func removesEngineChoices() {
         Self.withDefaults { defaults in
             defaults.set("crisperwhisper", forKey: "caspr.engine.final")
-            LegacyCleanup.migrateSettings(defaults) { "apple-legacy" }
-            #expect(defaults.string(forKey: "caspr.engine.final") == "apple")
-            #expect(defaults.string(forKey: "caspr.engine.apple") == "apple-legacy")
-        }
-    }
-
-    /// Une installation qui ne s'est pas relancée depuis la séparation en deux
-    /// réglages n'a que l'ancienne clé : sans ce cas, `Preferences` la
-    /// relirait et reprendrait CrisperWhisper.
-    @Test("L'ancien réglage unique sur CrisperWhisper est repris aussi")
-    func migratesLegacyEngine() {
-        Self.withDefaults { defaults in
-            defaults.set("crisperwhisper", forKey: "caspr.engine")
-            LegacyCleanup.migrateSettings(defaults) { "apple" }
-            #expect(defaults.string(forKey: "caspr.engine.final") == "apple")
-            #expect(defaults.string(forKey: "caspr.engine.apple") == "apple")
-        }
-    }
-
-    /// La question « quelle version de macOS ? » interroge le système : un
-    /// utilisateur déjà sur macOS n'a pas à la payer à chaque lancement, ni à
-    /// voir sa version réécrite.
-    @Test("Qui est déjà sur macOS garde sa version, sans interroger le système")
-    func leavesAppleUsersAlone() {
-        Self.withDefaults { defaults in
-            defaults.set("apple", forKey: "caspr.engine.final")
             defaults.set("apple-legacy", forKey: "caspr.engine.apple")
-            var asked = false
-            let done = LegacyCleanup.migrateSettings(defaults) {
-                asked = true
-                return "apple"
-            }
-            #expect(!asked)
-            #expect(done.isEmpty)
-            #expect(defaults.string(forKey: "caspr.engine.apple") == "apple-legacy")
-        }
-    }
-
-    @Test("Le filet de sécurité ne retombe plus sur CrisperWhisper")
-    func migratesLastValidEngine() {
-        Self.withDefaults { defaults in
-            defaults.set("apple", forKey: "caspr.engine.final")
-            defaults.set("apple", forKey: "caspr.engine.apple")
+            defaults.set("apple", forKey: "caspr.engine.live")
             defaults.set("crisperwhisper", forKey: "caspr.engine.lastValid")
-            LegacyCleanup.migrateSettings(defaults) { "apple-legacy" }
-            // La version réglée, pas celle qu'on aurait choisie à sa place.
-            #expect(defaults.string(forKey: "caspr.engine.lastValid") == "apple")
+            defaults.set("crisperwhisper", forKey: "caspr.engine")
+            defaults.set(true, forKey: "caspr.schema.migrated")
+            defaults.set(["fr-FR": true], forKey: "caspr.engine.appleSupport")
+
+            LegacyCleanup.migrateSettings(defaults)
+
+            for key in ["caspr.engine.final", "caspr.engine.apple", "caspr.engine.live",
+                        "caspr.engine.lastValid", "caspr.engine", "caspr.schema.migrated"] {
+                #expect(defaults.object(forKey: key) == nil, "\(key)")
+            }
+            #expect(defaults.dictionary(forKey: "caspr.engine.appleSupport") != nil)
         }
     }
 
@@ -96,9 +67,8 @@ struct LegacyCleanupTests {
         Self.withDefaults { defaults in
             for (key, value) in Self.protected { defaults.set(value, forKey: key) }
             for key in LegacyCleanup.obsoleteKeys { defaults.set("x", forKey: key) }
-            defaults.set("crisperwhisper", forKey: "caspr.engine.final")
 
-            LegacyCleanup.migrateSettings(defaults) { "apple" }
+            LegacyCleanup.migrateSettings(defaults)
 
             for key in LegacyCleanup.obsoleteKeys {
                 #expect(defaults.object(forKey: key) == nil, "\(key)")
@@ -116,7 +86,7 @@ struct LegacyCleanupTests {
     func translatesOnboardingStep() {
         Self.withDefaults { defaults in
             defaults.set(2, forKey: "caspr.onboarding.step")
-            LegacyCleanup.migrateSettings(defaults) { "apple" }
+            LegacyCleanup.migrateSettings(defaults)
             #expect(defaults.string(forKey: "caspr.onboarding.screen") == "liveEngine")
             #expect(defaults.object(forKey: "caspr.onboarding.step") == nil)
         }
@@ -126,7 +96,7 @@ struct LegacyCleanupTests {
     func dropsUnknownOnboardingStep() {
         Self.withDefaults { defaults in
             defaults.set(9, forKey: "caspr.onboarding.step")
-            LegacyCleanup.migrateSettings(defaults) { "apple" }
+            LegacyCleanup.migrateSettings(defaults)
             #expect(defaults.object(forKey: "caspr.onboarding.screen") == nil)
             #expect(defaults.object(forKey: "caspr.onboarding.step") == nil)
         }
@@ -139,7 +109,7 @@ struct LegacyCleanupTests {
         Self.withDefaults { defaults in
             defaults.set("finalEngine", forKey: "caspr.onboarding.screen")
             defaults.set(0, forKey: "caspr.onboarding.step")
-            LegacyCleanup.migrateSettings(defaults) { "apple" }
+            LegacyCleanup.migrateSettings(defaults)
             #expect(defaults.string(forKey: "caspr.onboarding.screen") == "finalEngine")
             #expect(defaults.object(forKey: "caspr.onboarding.step") == nil)
         }
@@ -157,25 +127,9 @@ struct LegacyCleanupTests {
             defaults.set("crisperwhisper", forKey: "caspr.engine.lastValid")
             defaults.set(["fastapi"], forKey: "caspr.lexicon")
             defaults.set(true, forKey: "caspr.schema.migrated")
-            #expect(!LegacyCleanup.migrateSettings(defaults) { "apple" }.isEmpty)
-            #expect(LegacyCleanup.migrateSettings(defaults) { "apple" }.isEmpty)
-        }
-    }
-
-    /// Tant que `Preferences` n'a pas posé sa marque, l'ancienne clé est ce
-    /// qui distingue une installation existante d'une neuve.
-    @Test("L'ancien réglage unique reste tant qu'il sert encore à quelque chose")
-    func keepsLegacyKeyUntilSuperseded() {
-        Self.withDefaults { defaults in
-            defaults.set("apple-legacy", forKey: "caspr.engine")
-            LegacyCleanup.migrateSettings(defaults) { "apple" }
-            #expect(defaults.string(forKey: "caspr.engine") == "apple-legacy")
-
-            defaults.set("apple", forKey: "caspr.engine.final")
-            defaults.set("apple-legacy", forKey: "caspr.engine.apple")
-            defaults.set(true, forKey: "caspr.schema.migrated")
-            LegacyCleanup.migrateSettings(defaults) { "apple" }
-            #expect(defaults.object(forKey: "caspr.engine") == nil)
+            defaults.set(2, forKey: "caspr.onboarding.step")
+            #expect(!LegacyCleanup.migrateSettings(defaults).isEmpty)
+            #expect(LegacyCleanup.migrateSettings(defaults).isEmpty)
         }
     }
 

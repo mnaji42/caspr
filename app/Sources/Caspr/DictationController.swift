@@ -103,15 +103,9 @@ final class DictationController {
     /// très bien reparler avant de décider quoi faire de la précédente.
     private var pendingPreview: String?
 
-    /// Le moteur qui écrit réellement.
-    ///
-    /// Passe par `EngineSafetyManager` plutôt que de lire la préférence :
-    /// celle-ci peut désigner une version momentanément incapable d'écrire —
-    /// modèle Apple Intelligence pas encore téléchargé, Dictée éteinte. Le
-    /// repli est temporaire et n'est jamais réécrit dans les réglages : le
-    /// choix de l'utilisateur revient de lui-même dès que sa version sait de
-    /// nouveau écrire.
-    private var writerChoice: EngineChoice { EngineSafetyManager.shared.effectiveEngine }
+    /// La version de macOS qui écrit, choisie à l'instant sur ce que la
+    /// machine sait faire dans la langue (cf. `EngineSafetyManager`).
+    private var writerChoice: EngineChoice { EngineSafetyManager.effectiveEngine }
 
     /// La Dictée en dernier recours : elle existe partout, et c'est elle qui
     /// dira pourquoi elle ne peut pas écrire, plutôt qu'un moteur absent.
@@ -609,7 +603,7 @@ final class DictationController {
         let crete = samples.reduce(Float(0)) { max($0, abs($1)) }
         Log.info("fin d'enregistrement : \(String(format: "%.1f", seconds)) s capturées, "
                  + "crête \(String(format: "%.3f", crete)), "
-                 + "moteur \(Preferences.shared.engine.rawValue)")
+                 + "moteur \(writerChoice.rawValue)")
 
         // Un appui-relâché trop bref ne contient rien d'exploitable ; inutile
         // de réveiller le moteur. Un vrai VAD reste à faire (cf. README).
@@ -742,7 +736,7 @@ final class DictationController {
                 // entendu. La trace existait, mais dans un journal que
                 // personne n'a de raison d'ouvrir.
                 Log.error("le moteur a rendu un texte vide "
-                          + "(\(Preferences.shared.engine.rawValue), "
+                          + "(\(writerChoice.rawValue), "
                           + "\(Int(result.latency.wallMs)) ms)")
                 overlay.showFailure("Rien n'a été entendu",
                                     hint: Self.rescueHint(preview: previewText))
@@ -765,7 +759,7 @@ final class DictationController {
                 state = .failed(parRelais
                     ? "ChatGPT n'a rien transcrit — avez-vous parlé ?"
                     : "Le moteur a répondu sans rien transcrire "
-                      + "(\(Preferences.shared.engine.fullLabel)) — "
+                      + "(\(writerChoice.fullLabel)) — "
                       + "audio conservé, « Réessayer » ci-dessous.")
                 return
             }
@@ -793,14 +787,6 @@ final class DictationController {
             guard numero == cycle else { return }
             pendingAudio = nil
             pendingPreview = nil
-            // Ce moteur vient de prouver qu'il sait écrire ici : c'est sur lui
-            // que le repli se rabattra si un autre choix échoue plus tard. La
-            // preuve est l'insertion réussie, pas la disponibilité annoncée —
-            // un moteur qui répond « disponible » peut encore échouer à la
-            // première phrase.
-            // RELAIS — le repli ne doit rien apprendre d'un moteur qui n'est
-            // pas un choix de l'utilisateur.
-            if !parRelais { EngineSafetyManager.shared.confirmWorking(writerChoice) }
             Log.info("transcrit en \(Int(result.latency.wallMs)) ms, \(text.count) caractères")
             // RELAIS — la transformation a échoué et c'est le brut qui vient
             // d'être inséré : le dire, là où l'on regarde. Sans quoi un texte
@@ -954,13 +940,9 @@ final class DictationController {
     /// l'aperçu n'a donc aucun effet sur la dictée.
     private func startPreview() {
         guard Preferences.shared.livePreviewEnabled, preview == nil else { return }
-        // L'aperçu a **sa** version de macOS, réglée dans l'onglet Dictée.
-        // Elle se déduisait de celle du moteur d'écriture : le réglage existait
-        // dans l'interface et ne pilotait rien ici, si bien que choisir Dictée
-        // pour l'aperçu n'avait aucun effet sur ce qui s'affichait pendant
-        // qu'on parlait. Cf. `SpeechPreview.engine`.
+        // La version qui écrira, et nulle autre : cf. `SpeechPreview.engine`.
         guard let made = SpeechPreview.make(
-            using: Preferences.shared.liveEngineTechnology, for: language,
+            for: language,
             onText: { [weak self] text in
                 guard let self else { return }
                 if previewText.isEmpty, !text.isEmpty {

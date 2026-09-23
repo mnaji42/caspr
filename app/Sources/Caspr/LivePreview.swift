@@ -281,19 +281,18 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
 enum SpeechPreview {
     /// Quel moteur va montrer le texte pendant qu'on parle.
     ///
-    /// Il **suit le moteur d'écriture** dès que celui-ci vient de macOS, et ce
-    /// n'est pas qu'une question de cohérence d'affichage : chaque moteur
-    /// système a son autorisation — la reconnaissance vocale, que macOS compte
-    /// séparément du micro — et ses actifs, un modèle par locale à télécharger.
-    /// Faire tourner l'autre pour le seul aperçu réclamerait donc un droit ou
-    /// un téléchargement dont l'utilisateur n'a aucun usage.
-    ///
-    /// Quand la version voulue ne sait pas écrire cette langue ici, on prend
-    /// la plus fine disponible, Apple Intelligence d'abord, la Dictée sinon.
+    /// **Celui qui écrit**, et ce n'est pas qu'une question de cohérence
+    /// d'affichage : chaque version de macOS a son autorisation — la
+    /// reconnaissance vocale, que macOS compte séparément du micro — et ses
+    /// actifs, un modèle par locale à télécharger. Faire tourner l'autre pour
+    /// le seul aperçu réclamerait donc un droit ou un téléchargement dont
+    /// l'utilisateur n'a aucun usage.
     ///
     /// - Returns: `nil` si cette machine ne sait produire aucun aperçu.
-    static func engine(using wanted: EngineChoice, for language: String) -> EngineChoice? {
-        EngineChoice.systemEngine(preferring: wanted, for: language)
+    @MainActor
+    static func engine(for language: String) -> EngineChoice? {
+        let chosen = EngineSafetyManager.engine(for: language)
+        return chosen.isAvailable(for: language) ? chosen : nil
     }
 
     /// Choisit l'implémentation selon ce que la machine sait faire.
@@ -304,17 +303,17 @@ enum SpeechPreview {
     /// ça sans que le contrôleur de dictée en sache quoi que ce soit : il
     /// demande un aperçu, il en reçoit un.
     @MainActor
-    static func make(using wanted: EngineChoice, for language: String,
+    static func make(for language: String,
                      onText: @escaping @MainActor @Sendable (String) -> Void,
                      onFailure: @escaping @MainActor @Sendable (String) -> Void)
     -> (any SpeechPreviewing)? {
-        switch engine(using: wanted, for: language) {
+        switch engine(for: language) {
         case .apple:
             guard #available(macOS 26.0, *) else { return nil }
             return LivePreview(onText: onText, onFailure: onFailure)
         case .appleLegacy:
             return LegacyLivePreview(onText: onText, onFailure: onFailure)
-        default:
+        case nil:
             return nil
         }
     }

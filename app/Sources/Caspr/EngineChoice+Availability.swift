@@ -45,15 +45,4 @@ extension EngineChoice {
     static func availableSystemEngines(for language: String) -> [EngineChoice] {
         systemEngines.filter { $0.isAvailable(for: language) }
     }
-
-    /// La version de macOS à retenir quand on choisit « macOS ».
-    ///
-    /// Celle déjà réglée si elle fonctionne — changer de langue ou rouvrir les
-    /// réglages ne doit pas déplacer un choix explicite — sinon la plus fine
-    /// disponible. `nil` quand aucune ne marche ici.
-    static func systemEngine(preferring current: EngineChoice,
-                             for language: String) -> EngineChoice? {
-        if current.isAvailable(for: language) { return current }
-        return availableSystemEngines(for: language).first
-    }
 }

@@ -17,9 +17,10 @@ import Foundation
 /// qui varie à l'exécution, c'est sa *disponibilité* — modèle téléchargé ou
 /// non, version de macOS, Dictée allumée.
 ///
-/// Ce ne sont pas deux choix de même rang : c'est le même fournisseur, la même
-/// promesse et le même réglage, à une génération près. D'où `versionLabel`,
-/// qui nomme la version à l'intérieur de « macOS ».
+/// Ce ne sont pas deux choix de même rang, ni même un choix : c'est le même
+/// fournisseur et la même promesse, à une génération près, et Caspr prend
+/// tout seul celle qui sait écrire la langue (cf. `automatic`). D'où
+/// `versionLabel`, qui nomme la version à l'intérieur de « macOS ».
 public enum EngineChoice: String, CaseIterable, Sendable, Codable {
     /// Le moteur de macOS 26 : `SpeechTranscriber`, taillé pour la
     /// transcription longue. Exige Apple Intelligence.
@@ -49,6 +50,32 @@ public enum EngineChoice: String, CaseIterable, Sendable, Codable {
     /// Les versions, dans l'ordre de finesse attendue : c'est l'ordre dans
     /// lequel on les préfère quand les deux marchent.
     public static var systemEngines: [EngineChoice] { [.apple, .appleLegacy] }
+
+    /// La version qui écrit, choisie sur ce que la machine a **montré**.
+    ///
+    /// Plus un réglage : ils étaient deux — la passe finale et l'aperçu — et
+    /// ne désignaient deux choses que parce que la passe finale pouvait être
+    /// CrisperWhisper. Il reste une règle.
+    ///
+    /// - Apple Intelligence dès qu'elle est **prête** pour la langue : le
+    ///   système a répondu qu'il la propose. Pas avant — sur une machine
+    ///   virtuelle en macOS 26, elle se disait disponible sans aucun modèle
+    ///   et rendait une chaîne vide, pendant que la Dictée marchait.
+    /// - Sinon la Dictée, si elle est prête.
+    /// - Sinon aucune ne l'est, et l'on prend celle qui a encore une chance :
+    ///   Apple Intelligence si le système n'a simplement pas encore répondu,
+    ///   la Dictée autrement — c'est elle qui dira pourquoi elle ne peut pas
+    ///   écrire, plutôt qu'un moteur absent.
+    ///
+    /// La Dictée n'est donc jamais proposée comme choix : elle écrit là où
+    /// Apple Intelligence ne sait pas, et seulement là. Mesurée sur 129
+    /// dictées, elle avale environ 44 % des mots.
+    public static func automatic(appleReady: Bool, legacyReady: Bool,
+                                 appleUnanswered: Bool) -> EngineChoice {
+        if appleReady { return .apple }
+        if legacyReady { return .appleLegacy }
+        return appleUnanswered ? .apple : .appleLegacy
+    }
 
     /// Ce que change le choix de version, sous le sélecteur.
     ///

@@ -1,10 +1,11 @@
 import AppKit
+import CasprCore
 
 /// Le presse-papiers entier, pour le rendre tel quel.
 ///
 /// Il appartient à l'utilisateur, et Caspr s'en sert pour récupérer une
 /// réponse de ChatGPT — son bouton « copier » ne sait écrire que là : pendant
-/// une dictée (`RelaisPage.copierReponse`) comme pendant la calibration
+/// une dictée (`RelaisDictee.recuperer`) comme pendant la calibration
 /// automatique, qui l'essaie.
 ///
 /// Tous les éléments et tous leurs types, et non la seule chaîne : une image,
@@ -28,5 +29,16 @@ struct PressePapiers {
             return element
         }
         if !rendus.isEmpty { presse.writeObjects(rendus) }
+    }
+}
+
+/// Le presse-papiers du système, tel que le scénario d'une dictée s'en sert
+/// pour récupérer la réponse (cf. `RelaisDictee`).
+extension NSPasteboard: RelaisPressePapiers {
+    public func texte() -> String? { string(forType: .string) }
+
+    public func sauvegarder() -> () -> Void {
+        let garde = PressePapiers(self)
+        return { garde.rendre(self) }
     }
 }

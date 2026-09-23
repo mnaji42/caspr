@@ -120,7 +120,7 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
             Log.error("relais : le processus d'une fenêtre de connexion s'est arrêté")
             return
         }
-        morts += 1
+        epoque += 1
         echo.desarmer()
         // Un appel en suspens sur le processus mort peut ne jamais revenir,
         // et plus aucun délai ne le rattrape : rendu ici, l'attente qui le

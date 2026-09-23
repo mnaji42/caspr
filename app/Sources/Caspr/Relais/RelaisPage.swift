@@ -117,19 +117,15 @@ final class RelaisPage: NSObject {
     /// pression mémoire, le système finit par tuer son processus. Elle est
     /// alors rechargée — mais une dictée qui attendait sa transcription
     /// continuerait d'interroger sans fin la page neuve, qui n'en sait rien.
-    /// Le compteur, relevé au départ de la dictée, lui dit que la page qu'elle
-    /// attend n'existe plus.
-    var morts = 0
-    var mortsAuDepart = 0
+    /// L'époque, relevée à l'ouverture de l'écoute, lui dit que la page
+    /// qu'elle attend n'existe plus (cf. `RelaisDictee.pageMorte`).
+    var epoque = 0
     /// La dernière mort, pour ne pas recharger en boucle une page qui meurt à
     /// répétition (cf. `webViewWebContentProcessDidTerminate`).
     var derniereMort: Date?
     /// La page est morte et n'a pas été rechargée : le prochain appel au pont
     /// la recharge.
     var rechargementRetenu = false
-    /// L'appui a demandé de ne plus attendre la lecture à haute voix (cf.
-    /// `Relais.cesserDAttendreLaLecture`). Remis à zéro à chaque dictée.
-    var lectureInterrompue = false
     /// La marque de la dictée en cours (cf. `marquer`) ; `nil` tant qu'elle
     /// n'est pas posée, et chaque relevé tait alors réponse et échec.
     var marque: RelaisMarque?
@@ -270,7 +266,7 @@ final class RelaisPage: NSObject {
 
     /// Connecté ou non, vu depuis la page — **au repos** : l'étiquette de la
     /// fenêtre, la calibration, le diagnostic. La dictée attend la session à
-    /// sa façon, sans borne (cf. `demarrer`).
+    /// sa façon, sans borne (cf. `RelaisDictee.ouvrirLEcoute`).
     ///
     /// `.deconnecte` seulement quand la page l'a **dit** : un écran ou une
     /// invite de connexion (cf. `RelaisVeille.session`). Une page qui ne dit
@@ -312,14 +308,6 @@ final class RelaisPage: NSObject {
         case .inconnu:
             etiquette?.stringValue = "La page ne dit pas si vous êtes connecté — rechargez-la."
         }
-    }
-
-    /// La page que la dictée a prise est-elle morte depuis l'appui ?
-    var morteDepuisLeDepart: Bool { morts != mortsAuDepart }
-
-    /// Lève `pageInterrompue` si la page que la dictée attend n'existe plus.
-    func verifierLaPage() throws {
-        guard !morteDepuisLeDepart else { throw RelaisErreur.pageInterrompue }
     }
 
     /// La session que montre ce relevé (cf. `RelaisVeille.session`), dite à

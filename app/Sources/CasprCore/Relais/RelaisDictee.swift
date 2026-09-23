@@ -574,13 +574,17 @@ public enum RelaisPreparation {
         // Morte et laissée morte (cf. la récidive dans `RelaisPage`), elle se
         // recharge ici plutôt que dans la question, qui la verrait muette.
         case .morte: .recharger
-        // Une page qui se charge est déjà la page de départ neuve : il n'y a
-        // qu'à l'attendre. L'interroger tombait sur un pont pas encore
-        // injecté, pris pour une page figée, et la rechargeait par-dessus.
+        // Une page qui se charge est déjà la page de départ neuve —
+        // `charger()` ne mène que là : il n'y a qu'à l'attendre. L'interroger
+        // tombait sur un pont pas encore injecté, pris pour une page figée, et
+        // la rechargeait par-dessus — après la mort du processus, typiquement.
         case .enChargement: .attendreLeChargement
         // Recharger ne répare pas un fil JavaScript bloqué (mesuré) : on la
         // reconstruit, discussion comprise. Une page muette ne doit pas
-        // devenir la panne de la dictée suivante.
+        // devenir la panne de la dictée suivante. En discussion aussi : figée,
+        // le fil est perdu de toute façon, et la garder sous prétexte d'une
+        // discussion condamnait chaque appui au même échec, sous un message
+        // qui promettait un rechargement jamais fait.
         case .muette: .reconstruire
         // En discussion, le fil ouvert *est* la page prête — tant qu'elle
         // répond.

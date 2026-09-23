@@ -60,8 +60,9 @@ extension RelaisPage {
     /// page rend du JSON, qu'on décode ici.
     ///
     /// Un pont absent d'une page chargée est un échec prouvé
-    /// (`RelaisErreur.pontAbsent`) : le script ne s'y est pas installé, et rien ne
-    /// l'y installera. Attendre, sans échéance, ce serait attendre toujours.
+    /// (`RelaisErreur.pontAbsent`) : le script ne s'y est pas installé, et
+    /// rien ne l'y installera. Attendre, sans échéance, ce serait attendre
+    /// toujours.
     private func appeler(_ fonction: RelaisScripts.Fonction, _ args: [Any]) async throws -> Data {
         // Une tâche déjà annulée ne touche plus à la page : le clic qu'elle
         // demandait n'est plus voulu par personne.
@@ -136,6 +137,67 @@ extension RelaisPage {
         }
     }
 
+    // MARK: - Au repos
+
+    /// Ce que la page dit d'elle-même, au repos : l'arrêt après un abandon,
+    /// la préparation de la dictée suivante, le diagnostic.
+    ///
+    /// C'est la page qui fait foi, pas un drapeau tenu de notre côté. Qu'elle
+    /// écoute : un drapeau local se désynchronisait à la première erreur, et
+    /// le geste suivant relançait une dictée par-dessus au lieu de l'arrêter.
+    /// Qu'elle porte une conversation : une réorganisation qui échoue à
+    /// mi-chemin a tout de même envoyé son message, et c'est la page qui le
+    /// sait.
+    ///
+    /// `nil` quand elle ne répond pas, quelle qu'en soit la raison — page
+    /// muette, pont absent : ni oui ni non, et la seule préparation qui vaille
+    /// alors est de la reconstruire.
+    func auRepos() async -> RelaisInstantane? {
+        await sonder { try await self.instantane() }
+    }
+
+    /// Attend que la page rechargée soit prête, zone de saisie comprise — au
+    /// repos, borné.
+    ///
+    /// **Sans se fier au calibrage.** Une calibration s'appuyait sur les
+    /// repères qu'elle allait remplacer, et ceux-ci peuvent être absents —
+    /// c'est le premier lancement — ou faux, c'est-à-dire exactement la
+    /// raison pour laquelle on recalibre. On a ainsi « vidé » un bouton micro
+    /// que le calibrage désignait comme la zone de texte. Les heuristiques du
+    /// pont, elles, ne dépendent de rien.
+    func attendreComposeurPret(secondes: Double) async -> Bool {
+        let limite = Date.now.addingTimeInterval(secondes)
+        while Date.now < limite {
+            if Task.isCancelled { return false }
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !chargementEnCours else { continue }
+            if await sonder({ try await self.lire(sel: "") }) != nil { return true }
+        }
+        return false
+    }
+
+    /// Vide la zone de saisie, et s'assure qu'elle l'est restée — au repos.
+    ///
+    /// ChatGPT réinstalle le brouillon non envoyé après un rechargement, et
+    /// parfois après qu'on l'a effacé : vider une fois ne suffit pas. On relit
+    /// donc, et on recommence.
+    @discardableResult
+    func viderComposeur(selecteur: String? = nil) async -> Bool {
+        let sel = selecteur ?? selecteurs.composeur
+        // Le brouillon vit aussi dans le stockage de la page : l'effacer de la
+        // zone ne suffit pas, ChatGPT le réinstalle depuis là.
+        _ = await sonder { try await self.oublierBrouillon() }
+        let limite = Date.now.addingTimeInterval(6)
+        while Date.now < limite {
+            if Task.isCancelled { return false }
+            _ = await sonder { try await self.vider(sel: sel) }
+            try? await Task.sleep(for: .milliseconds(500))
+            if await sonder({ try await self.lire(sel: sel) })?.isEmpty == true { return true }
+        }
+        Log.error("relais : la zone de saisie n'a pas voulu se vider")
+        return false
+    }
+
     // MARK: - Les fonctions de la page
 
     func cliquer(_ cible: RelaisCible, sel: String) async throws -> Bool {
@@ -153,24 +215,11 @@ extension RelaisPage {
     /// Vide la zone : l'écrire vide, une seule règle pour les deux.
     func vider(sel: String) async throws { try await ecrire("", sel: sel) }
 
-    func encadrer(sel: String, avant: String, apres: String) async throws -> Bool {
-        try await (pont(.encadrer, sel, avant, apres) as Rendu).ok
-    }
-
     /// Clique « copier » ; rend la voie suivie — la paire, ou le repère seul
     /// autour de la dernière réponse —, `nil` quand rien n'a été cliqué.
     func copierLaReponse(parent: String, copier: String, reponse: String) async throws -> String? {
         let r: Rendu = try await pont(.copierLaReponse, parent, copier, reponse)
         return r.ok ? r.voie ?? "?" : nil
-    }
-
-    func cliquerBouton(parent: String, bouton: String) async throws -> Bool {
-        try await (pont(.cliquerBouton, parent, bouton) as Rendu).ok
-    }
-
-    /// Le texte de la dernière réponse ; `nil` quand elle est introuvable.
-    func lireReponse(sel: String) async throws -> String? {
-        try await texte(pont(.lireReponse, sel))
     }
 
     private func texte(_ r: Rendu) -> String? { r.ok ? r.texte ?? "" : nil }
@@ -220,7 +269,7 @@ extension RelaisPage {
     /// Ce que la page dit d'elle-même, en un aller-retour — par les repères du
     /// calibrage, sauf ceux qu'on donne (vides : le filet).
     func instantane(_ demande: RelaisDemande = [],
-                    reperes: RelaisSelecteurs? = nil) async throws -> RelaisInstantane {
+                    reperes: RelaisSelecteurs?) async throws -> RelaisInstantane {
         // Les repères sous leurs noms de toujours (`micro`, `copierParent`…).
         let r = try JSONSerialization.jsonObject(with: JSONEncoder().encode(reperes ?? selecteurs))
         let m = try marque.map { try JSONSerialization.jsonObject(with: JSONEncoder().encode($0)) }
@@ -228,4 +277,44 @@ extension RelaisPage {
                                               "reponse": demande.contains(.reponse),
                                               "alertes": demande.contains(.alertes)], m ?? NSNull())
     }
+}
+
+// Ce que le scénario d'une dictée demande à la page (cf. `RelaisDictee`), par
+// les repères du calibrage.
+extension RelaisPage: RelaisPageDictee {
+    func instantane(_ demande: RelaisDemande = []) async throws -> RelaisInstantane {
+        try await instantane(demande, reperes: nil)
+    }
+
+    func cliquer(_ cible: RelaisCible) async throws -> Bool {
+        let clique = try await cliquer(cible, sel: selecteurs[cible])
+        // La page écoute : la dictée aura sa ligne d'écho (cf. `RelaisEcho`).
+        if clique, cible == .micro { echo.ecouter() }
+        return clique
+    }
+
+    func vider() async throws { try await vider(sel: selecteurs.composeur) }
+
+    func encadrer(avant: String, apres: String) async throws -> Bool {
+        try await (pont(.encadrer, selecteurs.composeur, avant, apres) as Rendu).ok
+    }
+
+    func copier() async throws -> String? {
+        try await copierLaReponse(parent: selecteurs.copierParent, copier: selecteurs.copier,
+                                  reponse: selecteurs.reponse)
+    }
+
+    /// Sans cadrage quand un menu l'a ouvert : la page pose ses éléments de
+    /// menu ailleurs dans le document, hors du bloc de la réponse.
+    func cliquerLecture(menu: Bool) async throws -> Bool {
+        let s = selecteurs
+        let (parent, bouton) = menu ? (s.lectureMenuParent, s.lectureMenu)
+                                    : (s.lectureMenu.isEmpty ? s.lectureParent : "", s.lecture)
+        return try await (pont(.cliquerBouton, parent, bouton) as Rendu).ok
+    }
+
+    func lireReponse() async throws -> String? { try await texte(pont(.lireReponse, selecteurs.reponse)) }
+
+    func armerEcho() { echo.armer() }
+    func desarmerEcho() { echo.desarmer() }
 }

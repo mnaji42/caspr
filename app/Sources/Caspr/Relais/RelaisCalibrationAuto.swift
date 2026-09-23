@@ -358,8 +358,9 @@ struct RelaisCalibrationAuto {
     /// L'attente de la copie ne cède pas à l'abandon : le clic est parti, et sa
     /// copie atterrit quoi qu'il arrive, une fraction de seconde plus tard.
     /// Sortir avant, c'était rendre le presse-papiers avant qu'elle ne
-    /// l'écrase (cf. `copierReponse`). Un appel sans réponse — abandonné, ou
-    /// resté muet — a pu cliquer quand même : sa copie s'attend de même.
+    /// l'écrase (cf. `RelaisDictee.recuperer`). Un appel sans réponse —
+    /// abandonné, ou resté muet — a pu cliquer quand même : sa copie s'attend
+    /// de même.
     private func copier(parent: String, selecteur: String) async -> String? {
         let presse = NSPasteboard.general
         let avant = presse.changeCount

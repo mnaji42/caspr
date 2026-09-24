@@ -554,6 +554,8 @@ final class Relais: ObservableObject {
     /// `RelaisEcho`) — il survit à sa mort —, et ce son, pris pour le repli.
     var secondesEntendues: Double { page?.echo.secondes ?? 0 }
     func prendreLeSon() -> [Float] { page?.echo.prendre() ?? [] }
+    /// Chaque morceau de ce son, pour l'aperçu en direct ; `nil` le coupe.
+    func suivreLeSon(_ morceau: ((ArraySlice<Float>, Double) -> Void)?) { page?.echo.surMorceau = morceau }
 
     /// La page d'une dictée qui commence, et le scénario qui la pilotera.
     ///

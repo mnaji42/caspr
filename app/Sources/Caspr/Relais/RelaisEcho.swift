@@ -39,6 +39,16 @@ final class RelaisEcho {
     private var crete: Float = 0
     private var statut: [String: Any] = [:]
 
+    /// Chaque morceau reçu, et la fréquence du contexte de la page, pour
+    /// l'aperçu en direct (cf. `ApercuEnDirect.nourrir`) ; `nil` sans aperçu.
+    ///
+    /// Posé quand la page s'est mise à écouter, après le clic : le son déjà
+    /// reçu depuis l'armement part d'un bloc, sans quoi les premiers mots
+    /// manqueraient à l'aperçu.
+    var surMorceau: ((ArraySlice<Float>, Double) -> Void)? {
+        didSet { if !echantillons.isEmpty { surMorceau?(echantillons[...], taux) } }
+    }
+
     private static func nom() -> String {
         String((0..<16).map { _ in "abcdefghijklmnopqrstuvwxyz".randomElement()! })
     }
@@ -133,6 +143,7 @@ final class RelaisEcho {
     /// arrivait entre-temps restait en mémoire jusqu'à la dictée suivante.
     func liberer() {
         desarmer()
+        surMorceau = nil
         echantillons = []
     }
 
@@ -160,6 +171,7 @@ final class RelaisEcho {
             }
         } else if let octets = Data(base64Encoded: corps) {
             recus += octets.count / 2
+            let debut = echantillons.count
             octets.withUnsafeBytes { brut in
                 for i in stride(from: 0, to: brut.count - 1, by: 2) {
                     let n = Int16(littleEndian: brut.loadUnaligned(fromByteOffset: i, as: Int16.self))
@@ -167,6 +179,7 @@ final class RelaisEcho {
                     crete = max(crete, abs(Float(n) / 32768))
                 }
             }
+            surMorceau?(echantillons[debut...], taux)
         }
     }
 

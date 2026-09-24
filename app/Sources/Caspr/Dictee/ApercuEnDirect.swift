@@ -81,9 +81,23 @@ final class ApercuEnDirect {
         Task { await made.start(language: langue) }
     }
 
-    /// Un tampon de la source ; perdu quand aucun aperçu n'écoute.
+    /// Un tampon du micro, depuis le fil audio ; perdu quand aucun aperçu
+    /// n'écoute.
     nonisolated func nourrir(_ buffer: AVAudioPCMBuffer) {
         enCours.withLock { $0 }?.append(buffer)
+    }
+
+    /// Un morceau de l'écho de la page ChatGPT (cf. `RelaisEcho`), des
+    /// flottants mono à la fréquence de son contexte audio. Aucun tampon
+    /// n'est construit quand aucun aperçu n'écoute.
+    func nourrir(_ morceau: ArraySlice<Float>, taux: Double) {
+        guard ecoute, !morceau.isEmpty,
+              let format = AVAudioFormat(standardFormatWithSampleRate: taux, channels: 1),
+              let tampon = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(morceau.count)),
+              let canal = tampon.floatChannelData?[0] else { return }
+        morceau.withUnsafeBufferPointer { canal.update(from: $0.baseAddress!, count: $0.count) }
+        tampon.frameLength = tampon.frameCapacity
+        nourrir(tampon)
     }
 
     /// Cesse d'écouter ; le texte qu'il finit encore d'analyser compte.

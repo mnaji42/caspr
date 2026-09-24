@@ -98,14 +98,15 @@ final class DictationController {
         // fini, la page arrêtée ; la voie macOS transcrit le son de la page,
         // comme un « Réessayer ». Dans le même tour que le repos que la fin
         // du cycle vient de poser : un appui entre les deux ouvrirait une
-        // dictée par-dessus. Pas d'aperçu : la page avait le micro, macOS n'a
-        // rien écrit pendant qu'on parlait.
+        // dictée par-dessus. L'aperçu qu'on en a lu pendant l'écoute, s'il y
+        // en a eu un, reste le recours si macOS échoue.
         chatgpt.surRepliParMacOS = { [weak self] son, dictee, annonce, motif in
             guard let self else { return }
             voieDuCycle = .apple
             state = .processing
+            let apercu = chatgpt.apercu.texte
             Task {
-                await self.transcrireParMacOS(son, dictee, apercuConserve: "", annonce: annonce, motif: motif)
+                await self.transcrireParMacOS(son, dictee, apercuConserve: apercu, annonce: annonce, motif: motif)
             }
         }
         // Échap suit ce que le relais montre (cf. `ajusterEchap`).
@@ -127,12 +128,13 @@ final class DictationController {
         // moment-là. C'est donc le texte réellement inséré qui suit la
         // bascule. Seul l'aperçu en direct doit repartir sur le nouveau
         // moteur — son texte ne sert que de recours, et son échec n'a jamais
-        // d'effet sur la dictée.
+        // d'effet sur la dictée. Sous ChatGPT aussi : c'est la langue de
+        // l'aperçu, et celle d'un repli par macOS.
         overlay.onSelectLanguage = { [weak self] code in
             guard let self, Preferences.shared.primaryLanguage != code else { return }
             Preferences.shared.primaryLanguage = code
-            if state == .recording, voieDuCycle == .apple {
-                macOS.apercu.relancer(langue: language)
+            if state == .recording {
+                (voieDuCycle == .chatgpt ? chatgpt.apercu : macOS.apercu).relancer(langue: language)
             }
             refreshOverlay()
             onStateChange?(state)

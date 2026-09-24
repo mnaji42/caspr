@@ -61,10 +61,16 @@ final class VoieChatGPT {
     /// Option maintenue aussi — pendant la lecture ou la livraison jetait une
     /// réponse obtenue, et payée sur le quota.
     private var reponse: String?
+    /// L'aperçu en direct, nourri par le son que la page capte.
+    let apercu: ApercuEnDirect
+    /// Un morceau de ce son est arrivé depuis l'écoute : sans lui, l'aperçu
+    /// n'a rien à dire, et la barre le dit.
+    private var sonRecu = false
 
     init(overlay: RecordingOverlay, livraison: Livraison) {
         self.overlay = overlay
         self.livraison = livraison
+        apercu = ApercuEnDirect(overlay: overlay)
         // La page peut mourir pendant qu'on parle.
         relais.surPageInterrompue = { [weak self] in self?.pageInterrompue() }
     }
@@ -122,6 +128,13 @@ final class VoieChatGPT {
                      + "après \(String(format: "%.1f", Date.now.timeIntervalSince(depuis))) s")
             phase = nouvelle
             depuis = .now
+        }
+        // L'aperçu ne sert qu'à se relire en parlant : il cesse avec
+        // l'écoute, quelle qu'en soit l'issue, et le texte qu'il finit
+        // d'analyser compte encore pour le recours.
+        if avant == .ecoute, nouvelle != .ecoute {
+            relais.suivreLeSon(nil)
+            apercu.arreter()
         }
         if relais.dicteeEnCours != (nouvelle != nil) { relais.dicteeEnCours = nouvelle != nil }
         // L'attente se montre dès l'arrêt : sa phase, puis le chrono et la
@@ -324,10 +337,11 @@ final class VoieChatGPT {
     }
 
     /// Le son de la page au menu, sans message, s'il vaut une dictée :
-    /// « Réessayer » le transcrira par macOS.
+    /// « Réessayer » le transcrira par macOS, et « Insérer l'aperçu » rendra
+    /// ce que l'aperçu en avait écrit.
     private func garderLeSon() {
         guard relais.secondesEntendues >= RelaisRepli.secondesMinimales else { return }
-        livraison.conserver(audio: relais.prendreLeSon(), apercu: "", apresLeRelais: true, echec: nil)
+        livraison.conserver(audio: relais.prendreLeSon(), apercu: apercu.texte, apresLeRelais: true, echec: nil)
     }
 
     /// Le cycle en cours cesse de l'être.
@@ -398,6 +412,9 @@ final class VoieChatGPT {
         self.applicationVisee = applicationVisee
         arretDemande = false
         annoncee = false
+        // Dès l'appui : une croix pendant le démarrage garde le son déjà
+        // capté, et l'aperçu d'une dictée précédente irait au menu avec lui.
+        apercu.oublier()
         chrono = .now
         // Avant toute attente : un second appui pendant que la page se
         // prépare doit trouver le démarrage, et non le repos (11).
@@ -444,9 +461,7 @@ final class VoieChatGPT {
         // sélecteur serait impossible, et lit l'état pour le savoir.
         entrer(.ecoute)
         overlay.showRecording(statutDeLaBarre(peutChoisirLaNote: false))
-        // L'aperçu en direct est impossible ici : il faudrait un second flux
-        // micro, celui-là même qui prive la page de son.
-        overlay.setPreviewNotice("ChatGPT transcrit à la fin de la dictée")
+        ecouterLApercu(g)
         Feedback.recordingStarted()
 
         if !arretDemande { await withCheckedContinuation { arret = $0 } }
@@ -466,6 +481,29 @@ final class VoieChatGPT {
         entrer(.transcription)
         guard let issue = await transcrire(dictee, module, scenario, g), g == generation else { return }
         terminer(.livree(module, texteLaisse: issue.texteLaisse), echec: issue.echec)
+    }
+
+    /// L'aperçu en direct, sur le son que la page capte : macOS écrit ce
+    /// qu'il entend pendant que ChatGPT écoute (21, 102). Un second micro
+    /// l'aurait privée de son ; la copie de son propre flux ne lui retire
+    /// rien (cf. `RelaisEcho`). Coupé dans les réglages, aucun analyseur ne
+    /// démarre, et l'écho ne construit aucun tampon.
+    private func ecouterLApercu(_ g: Int) {
+        guard Preferences.shared.livePreviewEnabled else { return }
+        sonRecu = false
+        apercu.demarrer(langue: Preferences.shared.primaryLanguage)
+        relais.suivreLeSon { [weak self] morceau, taux in
+            self?.sonRecu = true
+            self?.apercu.nourrir(morceau, taux: taux)
+        }
+        // Délai d'affichage, et rien d'autre : sans un morceau de la page en
+        // deux secondes, « en écoute… » promettrait un texte qui ne viendra
+        // pas. La dictée, elle, n'attend rien de l'aperçu.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, g == generation, phase == .ecoute, !sonRecu else { return }
+            overlay.setPreviewNotice("aperçu indisponible : aucun son reçu de la page")
+        }
     }
 
     /// Le démarrage a échoué sur la page.

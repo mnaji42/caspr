@@ -14,8 +14,12 @@ protocol SpeechPreviewing: AnyObject, Sendable {
     /// de dictée du système se télécharge à la demande.
     func start(language: String) async
 
-    /// Tampon micro brut, tel que délivré par le matériel. Appelé depuis le
-    /// thread audio.
+    /// Tampon brut, au format de sa source — le matériel, ou le contexte
+    /// audio de la page ChatGPT. Appelé depuis le fil audio (le micro de
+    /// Caspr) ou depuis le fil principal (l'écho de la page, cf.
+    /// `RelaisEcho`) ; jamais des deux pour un même aperçu, chaque voie a le
+    /// sien. Le verrou de l'implémentation protège ce que `start` et `stop`
+    /// partagent avec lui, quel que soit ce fil.
     func append(_ buffer: AVAudioPCMBuffer)
 
     func stop()
@@ -221,7 +225,9 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
         onFailure(message)
     }
 
-    /// Appelé depuis le fil audio.
+    /// Appelé depuis le fil audio, ou le fil principal pour l'écho. Le
+    /// convertisseur suit le format du tampon : 16 kHz en flottants pour
+    /// l'écho, le format du matériel pour le micro.
     func append(_ buffer: AVAudioPCMBuffer) {
         let prepared: (AsyncStream<AnalyzerInput>.Continuation, AVAudioFormat,
                        AVAudioConverter)? = lock.withLock {

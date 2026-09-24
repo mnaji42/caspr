@@ -115,7 +115,7 @@ dictée pendant l'attente renonce à ChatGPT sans rien perdre : le brut s'il est
 lu, sinon ce son transcrit par macOS, s'insère là où l'on parlait
 (`RelaisRepli`) ; un refus, une session fermée ou une page morte y mènent
 aussi. La croix n'insère rien, et laisse le son au menu : « Réessayer » le
-transcrit par macOS. Quand un module a remanié le texte, l'historique garde le
+transcrit par macOS, « Insérer l'aperçu » rend ce que l'aperçu en avait écrit. Quand un module a remanié le texte, l'historique garde le
 brut à côté (sous ⌥ dans le menu, « Brut » dans les réglages) : une seconde
 passe qui aboutit peut quand même avoir perdu ce qu'on avait dit.
 
@@ -378,10 +378,12 @@ et le raccourci reste instantané.
 
 ## Ce qu'il ne fait délibérément pas
 
-**Aucun aperçu en direct.** Il faudrait un second flux micro — celui-là même
-qui casse tout. La barre le dit au lieu d'afficher une attente sans fin. Ce
-que l'aperçu apporte à la voie macOS quand la passe finale échoue — un texte à
-insérer malgré tout —, la voie ChatGPT le tient de sa transcription brute.
+**Aucun second micro, même pour l'aperçu.** Il casserait tout. L'aperçu en
+direct de la voie ChatGPT lit donc la copie du flux de la page, celle que
+garde l'écho (`RelaisEcho.surMorceau`, `ApercuEnDirect`) : macOS écrit ce qu'il
+entend pendant que ChatGPT écoute, et ce texte reste au menu (« Insérer
+l'aperçu ») quand un repli par macOS échoue. Si la page n'envoie rien, la
+barre le dit au bout de deux secondes, et la dictée n'en dépend pas.
 
 **Aucun banc d'essai.** Le relais n'accepte pas d'audio enregistré : la page
 veut un micro en direct. Rejouer des dictées enregistrées contre ChatGPT

@@ -85,7 +85,9 @@ final class LegacyLivePreview: SpeechPreviewing, @unchecked Sendable {
         self.request = request
     }
 
-    /// Appelé depuis le fil audio : on ne touche qu'à une référence protégée.
+    /// Appelé depuis le fil audio, ou le fil principal pour l'écho : on ne
+    /// touche qu'à une référence protégée. La requête accepte le format de
+    /// chaque source tel quel, elle convertit elle-même.
     func append(_ buffer: AVAudioPCMBuffer) {
         lock.lock()
         let request = self.request

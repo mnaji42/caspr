@@ -20,9 +20,6 @@ import CasprCore
 /// que c'est elle qui a ouvert le micro, la seconde parce que c'est là qu'on
 /// parlait.
 struct DicteeEnCours {
-    /// Le cycle qu'elle sert. Un cycle abandonné finit de se dérouler après
-    /// coup, et doit alors ne plus toucher à rien (cf. `DictationController`).
-    let cycle: Int
     let voie: VoieDeDictee
     /// Le module du relais, `nil` sous macOS : on y écrit ce qu'on a dit.
     let module: RelaisModule?

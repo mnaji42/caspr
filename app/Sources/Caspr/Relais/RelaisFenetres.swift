@@ -168,8 +168,10 @@ extension RelaisPage {
     /// L'afficher, même en barre, règle en prime un défaut ancien : le système
     /// diffère les rendus d'une fenêtre qu'il croit cachée, ce qui retardait
     /// l'apparition du bouton d'arrêt.
-    func afficherBarre() {
-        let module = RelaisCatalogue.courant
+    ///
+    /// `module` : celui du moment pendant l'écoute — changer de module en
+    /// parlant fait suivre son affichage —, le figé ensuite.
+    func afficherBarre(module: RelaisModule) {
         let affichage = module.affichageEffectif
 
         // La grande fenêtre, et pour deux conditions réunies.

@@ -26,7 +26,7 @@ structure des sélecteurs, modules livrés), rangés dans
 
 | Fichier | Responsabilité |
 |---|---|
-| `Relais.swift` | La façade et le cycle de vie. `apresLivraison` y tient la règle « la fin d'une dictée prépare la suivante ». |
+| `Relais.swift` | La façade et la vie de la page : l'occupation, dérivée de deux faits (une dictée a la page, une calibration l'a) ; la page au repos (`Repos` : prête, en préparation, gardée pour une récupération) ; et `finirLeCycle`, la seule sortie d'une dictée, qui tient la règle « la fin d'une dictée prépare la suivante ». |
 | `RelaisPage.swift` | La `WKWebView`, la session, le micro. Au premier montage de chaque lancement, elle vide le cache disque de WebKit — jamais les cookies ni le stockage de la page, qui portent la session. |
 | `RelaisPage+Pont.swift` | La façade du pont : un seul point d'appel, `pont(fonction, args…)`, qui décode le JSON que rend la page, et une méthode typée par fonction (`cliquer`, `lire`, `encadrer`, `copierLaReponse`…). Sans délai, et l'annulation le tranche sur-le-champ même quand la page ne répond jamais (`AppelAnnulable`, dans `CasprCore`) — le chemin d'une dictée. `sonder` l'enveloppe d'une borne, **au repos seulement** : son silence fait reconstruire la page, jamais échouer une dictée. Les noms des fonctions sont un type (`RelaisScripts.Fonction`), et un test vérifie que le pont les expose toutes, et elles seules. Un pont absent d'une page chargée — ni `charger()` en cours, ni `isLoading` de WebKit, qui couvre « Recharger » et les redirections de la page — est un échec prouvé (`pontAbsent`), pas une attente. Le pont vit dans un monde à lui (`RelaisPage.monde`, « caspr ») : il agit sur le DOM de chatgpt.com, mais la page ne le voit pas et ne peut pas l'écraser (éprouvé fonction par fonction contre le monde de la page : mêmes résultats) ; revenir au monde de la page tient en une ligne. |
 | `RelaisFenetres.swift` | Les **deux** fenêtres, et la vue web qui passe de l'une à l'autre (cf. « Les deux fenêtres » plus bas). |
@@ -38,7 +38,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisScripts.swift` (dans `CasprCore`) | Le JavaScript injecté — le pont (cliquer, lire, vider, calibrer) et l'écho —, en chaînes Swift pour que les tests l'atteignent : une faute de syntaxe casse `swift test` au lieu de laisser la page sans pont. |
 | `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `Relais` qui enregistre. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
-| `RelaisAttente.swift` | La phase en cours d'une dictée et son chrono, que la barre affiche. **Aucune échéance** (cf. la sixième règle). |
+| `RelaisCycle.swift` (dans `CasprCore`) | La machine d'une dictée, en table : ses phases (`RelaisPhase`), leur libellé et la sortie que la barre dit avec le chrono, et ce que valent la touche de dictée et la croix à chacune (`RelaisCycle.decider`). Aucune ligne ne vient de l'horloge. |
 | `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. La carte de session (`RelaisSession`) est aussi celle de l'accueil, et c'est elle qui dit ce que la voie exige pour dicter. |
 | `RelaisModuleCard.swift` | Le réglage d'un module : ses actions, sa sortie, son affichage. |
 | `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
@@ -199,16 +199,20 @@ distingue de la voie macOS, et pourquoi.
   de réglages. L'attente, elle, s'affiche avec sa phase et son chrono dès dix
   secondes, et la sortie par la touche de dictée
   (`showProcessing(_:progress:)`).
-- **`DictationController.swift`** — le cycle : la voie figée à l'appui
-  (`voieDuCycle`), le numéro qui dit si un cycle est encore le sien, l'état,
-  Échap, et l'abandon par la touche de dictée. Ce qui se passe sur chaque voie
-  vit dans son fichier.
-- **`VoieChatGPT.swift`** — le chemin de la voie ChatGPT : prendre la page,
-  attendre qu'elle écoute sans ouvrir le micro de Caspr, puis arrêter et lire,
-  transformer, ouvrir la discussion ou livrer, laisser le texte dans la page
-  quand ça échoue. Aucun audio à conserver, donc pas de « Réessayer » : le
-  recours est la transcription brute, gardée dès qu'elle est lue. Le
-  pendant de `VoieApple.swift`, qui ne partage avec elle que la livraison.
+- **`DictationController.swift`** — l'état commun, la voie figée à l'appui
+  (`voieDuCycle`), le cycle macOS, Échap et les recours du menu. Sous
+  ChatGPT, la touche et la croix ne font que passer le geste à la machine.
+- **`VoieChatGPT.swift`** — la machine d'une dictée ChatGPT, en marche : sa
+  phase, écrite par `entrer` seulement (le journal « a → b après x s », l'état
+  du contrôleur, l'occupation de la page, la barre) ; une tâche, `moteur`, qui
+  déroule tout de l'appui à la livraison — attendre la page, écouter sans
+  ouvrir le micro de Caspr, arrêter et lire, transformer, ouvrir la
+  discussion ou livrer — ; un numéro, `generation`, vérifié après chaque
+  attente, pour qu'un cycle abandonné ne touche plus rien ; et `geste`, qui
+  décide sur-le-champ par la table de `RelaisCycle`. Aucun audio à conserver,
+  donc pas de « Réessayer » : le recours est la transcription brute, gardée
+  dès qu'elle est lue. Le pendant de `VoieApple.swift`, qui ne partage avec
+  elle que la livraison.
 - **`DicteeEnCours.swift`** — le module et la destination, figés à l'arrêt de
   l'écoute et portés jusqu'à la livraison : `RelaisCatalogue.courant` relit
   les préférences à chaque accès, et l'aller-retour ChatGPT sépare les
@@ -255,7 +259,7 @@ message est parti, une zone de saisie vidée sinon. Rien ne se décide à l'appu
 ni fil neuf, ni nettoyage — donc changer de module en pleine phrase n'a aucun
 état à rattraper, et l'on ne paie jamais un rechargement pendant qu'on parle.
 Une seule exception : un échec qui laisse la transcription dans la fenêtre
-remet la préparation à plus tard (`preparationDifferee`), pour ne pas
+remet la préparation à plus tard (`Repos.recuperation`), pour ne pas
 détruire sous les yeux le texte à récupérer. Elle se fait à la fermeture de
 cette fenêtre (`fenetreFermee`) ou, si l'on rappuie sans l'avoir fermée, à
 l'appui (`attendreLaPreparation`) : la barre l'annonce par « ChatGPT se

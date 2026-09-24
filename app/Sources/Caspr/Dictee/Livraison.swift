@@ -160,7 +160,7 @@ final class Livraison {
     /// ## Abandonnable
     ///
     /// La touche de dictée abandonne une dictée ChatGPT jusqu'ici (cf.
-    /// `DictationController.abandonnerLeCycleRelais`). L'attente ne la voyait
+    /// `RelaisCycle.decider`, phase `livraison`). L'attente ne la voyait
     /// pas : elle tournait à vide jusqu'à la seconde, puis mettait devant, par
     /// l'accessibilité, une application où plus rien ne serait écrit. Elle
     /// rend donc la main dès l'abandon, et `ecrire` le constate aussitôt.

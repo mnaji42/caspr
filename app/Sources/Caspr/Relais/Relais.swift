@@ -42,7 +42,7 @@ final class Relais: ObservableObject {
     /// Sauf pendant une dictée, dans un sens comme dans l'autre : la voie est
     /// figée à l'appui, et basculer vaut pour la suivante.
     /// - Une dictée ChatGPT va au bout sur la page qu'elle a prise ; c'est la
-    ///   fin du cycle qui la détruit alors (cf. `rendreLaMain`) — ou, si elle
+    ///   fin du cycle qui la détruit alors (cf. `finirLeCycle`) — ou, si elle
     ///   y a laissé un texte à récupérer, la fermeture de la fenêtre ou la
     ///   dictée macOS suivante (cf. `libererLaPageGardee`).
     /// - Une dictée macOS garde le micro pour elle : la page n'est construite
@@ -95,7 +95,7 @@ final class Relais: ObservableObject {
     /// réclame.
     ///
     /// Celle qu'un échec a gardée sur la voie macOS pour qu'on y récupère son
-    /// texte (cf. `rendreLaMain`) : vivante, elle tient le micro, et la dictée
+    /// texte (cf. `finirLeCycle`) : vivante, elle tient le micro, et la dictée
     /// macOS n'enregistrerait que du silence. Rappuyer, c'est dire qu'on en a
     /// fini avec ce texte, comme sur la voie ChatGPT (cf.
     /// `attendreLaPreparation`).
@@ -171,39 +171,30 @@ final class Relais: ObservableObject {
         }
     }
 
-    /// Publiée, pour que l'écran de réglages ne montre jamais un état périmé.
+    /// Dérivée de deux faits, chacun écrit par un seul propriétaire — la
+    /// calibration l'emporte.
     ///
-    /// Il lisait l'occupation une fois, à sa création, et gardait ce qu'il avait
-    /// vu : le message « une dictée est en cours » restait affiché après la fin
-    /// de la dictée, et seul un aller-retour vers un autre onglet le remettait
-    /// d'aplomb. C'est la troisième fois que cet écran affiche un état figé —
-    /// le publier supprime la classe entière plutôt que le symptôme.
-    @Published private(set) var occupation: Occupation = .libre
-
-    /// Marque le début d'une dictée, ou refuse si la place est prise.
-    func prendreLaMainPourDictee() -> Bool {
-        guard occupation == .libre else { return false }
-        occupation = .dictee
-        return true
+    /// Elle était prise et rendue à la main, chemin par chemin, et il en
+    /// suffisait d'un qui l'oublie : un second appui pendant le démarrage la
+    /// rendait pour un cycle qui n'était pas le sien, et toute dictée ChatGPT
+    /// échouait ensuite sur « Une dictée est en cours » jusqu'au redémarrage
+    /// (60d7f38). Une dictée qui a la page, c'est une phase en cours (cf.
+    /// `VoieChatGPT.entrer`) ; il n'y a plus rien à rendre.
+    ///
+    /// Publiée par ses deux faits, pour que l'écran de réglages ne montre
+    /// jamais un état périmé : il lisait l'occupation une fois, et « une
+    /// dictée est en cours » restait affiché après la fin de la dictée.
+    var occupation: Occupation {
+        calibrationEnCours ? .calibration : dicteeEnCours ? .dictee : .libre
     }
 
-    /// Rend la main à la fin d'un cycle de dictée, quelle qu'en soit l'issue.
-    ///
-    /// C'est aussi là que part la page quand on a choisi macOS pendant la
-    /// dictée : elle attendait que celle-ci s'achève (cf. `suivreLaVoie`).
-    /// Sauf si la dictée vient d'y laisser son texte, la fenêtre ouverte pour
-    /// qu'on l'y copie (cf. `preparationDifferee`) : la détruire là effaçait
-    /// sous les yeux ce que le message d'échec disait récupérable. Elle part
-    /// alors avec sa fenêtre (cf. `fenetreFermee`), ou à l'appui de la dictée
-    /// macOS suivante (cf. `libererLaPageGardee`).
-    func rendreLaMain() {
-        guard occupation == .dictee else { return }
-        occupation = .libre
-        switch Preferences.shared.voie {
-        case .chatgpt: break
-        case .apple: if page != nil, !preparationDifferee { quitterLaPage() }
-        }
-    }
+    /// Une dictée ChatGPT a la page, de l'appui à la fin de son cycle — écrit
+    /// par `VoieChatGPT.entrer`, et par lui seul.
+    @Published var dicteeEnCours = false
+
+    /// Une calibration a la page — écrit par ses deux parcours et leur
+    /// abandon, ici seulement.
+    @Published private(set) var calibrationEnCours = false
 
     /// Le parcours de calibration en cours, retenu pour pouvoir y renoncer.
     ///
@@ -230,7 +221,7 @@ final class Relais: ObservableObject {
         numeroCalibration &+= 1
         calibration?.cancel()
         calibration = nil
-        occupation = .libre
+        calibrationEnCours = false
         Task {
             await page?.abandonnerCalibration()
             page?.cacher()
@@ -297,11 +288,6 @@ final class Relais: ObservableObject {
     /// depuis : elle compte dès que la page l'a montrée.
     var saitDicter: Bool { estCalibre && sessionVue != .deconnecte }
 
-    /// Les deux sélecteurs supplémentaires de l'aller-retour sont-ils connus ?
-    var saitDialoguer: Bool { RelaisSelecteurs.charger().saitDialoguer }
-    /// Vrai quand la réponse est récupérée par le bouton de ChatGPT.
-    var saitCopier: Bool { RelaisSelecteurs.charger().saitCopier }
-
     /// Charge la page au lancement quand la voie est déjà ChatGPT.
     ///
     /// Sans elle, la toute première dictée d'une session crée la vue, lance le
@@ -317,14 +303,7 @@ final class Relais: ObservableObject {
         _ = try? pageActive()
     }
 
-    // MARK: - Cycle de dictée
-
-    private var debut = Date()
-    var secondesEcoulees: Double { Date().timeIntervalSince(debut) }
-
-    /// Le scénario de la dictée en cours, ou de la dernière (cf.
-    /// `RelaisDictee`) ; oublié avec la page.
-    private var dictee: RelaisDictee?
+    // MARK: - La page au repos
 
     /// Un scénario neuf sur `page`, qui écrit au journal et dit la session vue.
     private func scenario(_ page: RelaisPage) -> RelaisDictee {
@@ -334,81 +313,41 @@ final class Relais: ObservableObject {
         return dictee
     }
 
-    /// L'attente de la dictée qui s'achève, ouverte à l'arrêt de l'écoute.
-    ///
-    /// Retenue ici pour que la barre la lise : c'est elle qui sait ce qu'on
-    /// attend et depuis quand. Oubliée à l'appui suivant, pour qu'une barre
-    /// ne montre jamais le chrono de la dictée d'avant.
-    private(set) var attente: RelaisAttente?
+    /// Ce que fait la page entre deux dictées.
+    enum Repos {
+        case prete
+        /// La page se prépare pour la dictée suivante.
+        ///
+        /// Retenue pour pouvoir l'attendre : elle tourne au repos, donc elle est
+        /// finie depuis longtemps quand on rappuie — mais « longtemps » n'est
+        /// pas « toujours », et rappuyer dans la seconde ne doit pas recharger
+        /// la page sous une dictée qui commence. Remise à `.prete` par la
+        /// tâche elle-même quand elle se termine : c'est ce que l'appui observe.
+        case preparation(Task<Void, Never>)
+        /// Un échec a laissé son texte dans la page, et la grande fenêtre est
+        /// ouverte pour qu'on l'y copie. Préparer tout de suite, c'était vider
+        /// ou recharger cette page sous les yeux de qui venait la chercher —
+        /// l'inverse de ce que le message d'échec promettait. La préparation
+        /// attend donc que l'utilisateur en ait fini : qu'il ferme la fenêtre,
+        /// ou qu'il rappuie sur la touche.
+        case recuperation
 
-    /// Le message d'une sortie qui n'écrit nulle part est chez ChatGPT.
-    ///
-    /// Passé ce point, il n'y a plus rien à abandonner : l'envoi ne se défait
-    /// pas, et ChatGPT répond déjà. La touche de dictée cesse alors seulement
-    /// d'attendre la lecture à haute voix, et la discussion s'ouvre. Traitée
-    /// en abandon, elle laissait la discussion fermée, et la fin du cycle
-    /// rechargeait la page — la conversation effacée pendant que ChatGPT y
-    /// répondait, au moment même où l'on appuyait pour lui répondre.
-    private(set) var messageParti = false
-
-    /// La réponse d'un module qui écrit est en main, et n'attend plus pour
-    /// s'insérer que le clic « lire à haute voix ».
-    ///
-    /// Même règle que `messageParti` : traité en abandon, l'appui jetait une
-    /// réponse obtenue — et payée sur le quota —, et la fin du cycle
-    /// rechargeait la page sous elle.
-    private(set) var reponseObtenue = false
-
-    /// Plus rien à abandonner : la touche de dictée ne fait plus que cesser
-    /// d'attendre la lecture à haute voix (cf. `cesserDAttendreLaLecture`).
-    var seuleLaLectureEnAttente: Bool { messageParti || reponseObtenue }
-
-    /// Fait taire l'attente de la lecture, et elle seule.
-    ///
-    /// Pas en annulant la tâche de la dictée : elle a encore à ouvrir la
-    /// discussion ou à insérer le texte, et une tâche annulée n'insère rien.
-    func cesserDAttendreLaLecture() {
-        dictee?.cesserDAttendreLaLecture()
+        var estRecuperation: Bool { if case .recuperation = self { true } else { false } }
     }
 
-    /// Ce que la barre affiche pendant l'attente, `nil` avant qu'elle ne
-    /// commence.
-    var avancement: RecordingOverlay.ProcessingProgress? {
-        guard let attente else { return nil }
-        return .init(label: attente.phase.libelle, elapsed: attente.ecoule,
-                     exitHint: seuleLaLectureEnAttente
-                        ? "touche de dictée pour ne plus attendre"
-                        : "touche de dictée pour abandonner")
-    }
-
-    /// La préparation de la page pour la dictée suivante, s'il y en a une en
-    /// cours.
-    ///
-    /// Retenue pour pouvoir l'attendre : elle tourne au repos, donc elle est
-    /// finie depuis longtemps quand on rappuie — mais « longtemps » n'est pas
-    /// « toujours », et rappuyer dans la seconde ne doit pas recharger la page
-    /// sous une dictée qui commence. Remise à `nil` par la tâche elle-même
-    /// quand elle se termine : c'est ce que l'appui observe.
-    private var preparation: Task<Void, Never>?
-    private var numeroPreparation = 0
-
-    /// Une préparation décidée à la fin d'un échec, et remise à plus tard.
-    ///
-    /// Un échec de lecture laisse la transcription dans la page et ouvre la
-    /// grande fenêtre pour qu'on l'y copie. Préparer tout de suite, c'était
-    /// vider ou recharger cette page sous les yeux de qui venait la chercher —
-    /// l'inverse de ce que le message d'échec promettait. La préparation
-    /// attend donc que l'utilisateur en ait fini : qu'il ferme la fenêtre, ou
-    /// qu'il rappuie sur la touche.
-    private var preparationDifferee = false {
+    private var repos = Repos.prete {
         // La fenêtre de récupération tient le clavier : Échap y revient au
         // système tant qu'elle attend (cf. `discussionAffichee`).
-        didSet { if preparationDifferee != oldValue { surAffichageChange?() } }
+        didSet { if enRecuperation != (oldValue.estRecuperation) { surAffichageChange?() } }
     }
+    private var numeroPreparation = 0
+    private var enRecuperation: Bool { repos.estRecuperation }
 
-    /// L'appui devra-t-il attendre la page ? La barre de Caspr le dit alors,
-    /// plutôt que de laisser l'écran muet pendant qu'elle se prépare.
-    var preparationEnCours: Bool { preparation != nil || preparationDifferee }
+    /// Abandonne la préparation en vol, s'il y en a une ; l'annulation
+    /// interrompt aussi un appel au pont resté en suspens.
+    private func annulerLaPreparation() {
+        if case .preparation(let tache) = repos { tache.cancel() }
+    }
 
     /// Laisse la page prête pour la prochaine dictée, maintenant qu'on ne s'en
     /// sert plus.
@@ -443,7 +382,7 @@ final class Relais: ObservableObject {
     /// l'ouverture de l'écoute vide de toute façon la zone avant d'écouter.
     ///
     /// `apresEchec` remet la préparation à plus tard (cf.
-    /// `preparationDifferee`).
+    /// `Repos.recuperation`).
     ///
     /// Chaque étape est bornée — c'est le repos, où un silence se constate
     /// (cf. `RelaisPage.sonder`) —, parce que l'appui attend cette tâche avant
@@ -451,9 +390,8 @@ final class Relais: ObservableObject {
     /// « chargeait » indéfiniment, avant que rien n'ait été enregistré.
     func preparerLaProchaine(apresEchec: Bool = false) {
         guard !apresEchec else {
-            preparation?.cancel()
-            preparation = nil
-            preparationDifferee = true
+            annulerLaPreparation()
+            repos = .recuperation
             return
         }
         lancerPreparation { [weak self] page in
@@ -516,7 +454,6 @@ final class Relais: ObservableObject {
         guard let ancienne = page else { return }
         Log.error("relais : la page ne répond plus — reconstruite")
         page = nil
-        dictee = nil
         enDiscussion = false
         await ancienne.rendreLeMicro()
         ancienne.detruire()
@@ -531,22 +468,21 @@ final class Relais: ObservableObject {
         // la sortie d'une discussion — et la seconde doit simplement prendre la
         // place de la première. L'annulation interrompt aussi un appel au pont
         // resté en suspens.
-        preparation?.cancel()
-        preparationDifferee = false
+        annulerLaPreparation()
         numeroPreparation &+= 1
         let numero = numeroPreparation
         // Voie macOS : il n'y a plus de page à préparer, et surtout pas une
         // neuve à construire (cf. `pageActive`) — ni celle qu'on s'apprête à
         // détruire, que la fin d'une dictée demanderait sinon de préparer.
         guard pageVoulue, let page = try? pageActive() else {
-            preparation = nil
+            repos = .prete
             return
         }
-        preparation = Task { [weak self] in
+        repos = .preparation(Task { [weak self] in
             await travail(page)
             guard let self, numeroPreparation == numero else { return }
-            preparation = nil
-        }
+            repos = .prete
+        })
     }
 
     /// Attend que la page soit prête, sans jamais retenir la touche de dictée.
@@ -561,8 +497,8 @@ final class Relais: ObservableObject {
     /// Une préparation différée après un échec s'exécute ici : rappuyer, c'est
     /// dire qu'on en a fini avec le texte laissé dans la page.
     private func attendreLaPreparation() async throws {
-        if preparationDifferee { preparerLaProchaine() }
-        while preparation != nil {
+        if enRecuperation { preparerLaProchaine() }
+        while case .preparation = repos {
             try await Task.sleep(for: .milliseconds(100))
         }
     }
@@ -574,8 +510,8 @@ final class Relais: ObservableObject {
     /// l'a récupéré.
     private func fenetreFermee() {
         abandonnerCalibration()
-        guard preparationDifferee, occupation == .libre else { return }
-        // Gardée sur la voie macOS pour ce seul texte (cf. `rendreLaMain`) :
+        guard enRecuperation, occupation == .libre else { return }
+        // Gardée sur la voie macOS pour ce seul texte (cf. `finirLeCycle`) :
         // il n'y a rien à préparer, la page part.
         guard pageVoulue else { quitterLaPage(); return }
         preparerLaProchaine()
@@ -607,67 +543,33 @@ final class Relais: ObservableObject {
     /// au-dessus du travail, sans autre sortie qu'une entrée du menu. Pas la
     /// barre transparente de « Rien » : il n'y a rien sous les yeux.
     var discussionAffichee: Bool {
-        guard enDiscussion, !preparationDifferee, let page else { return false }
+        guard enDiscussion, !enRecuperation, let page else { return false }
         return page.estVisible || page.barreEnVue
     }
 
     /// Appelé quand la page meurt pendant que la dictée écoute.
     var surPageInterrompue: (() -> Void)?
 
-    /// `patienter` : la page n'est pas prête sur-le-champ — une préparation
-    /// en cours, une session pas encore dite, une page qui ne se met pas à
-    /// écouter. La barre le dit alors, avec la sortie : aucune de ces attentes
-    /// n'a de fin, et seule la touche de dictée les interrompt.
+    /// La page d'une dictée qui commence, et le scénario qui la pilotera.
     ///
-    /// Une page figée au démarrage ne lève plus rien : l'appui l'attend
-    /// jusqu'à la touche, et l'arrêt qui suit la trouve muette — la
-    /// préparation la reconstruit alors pour l'appui suivant (cf.
-    /// `interrompre`).
-    func demarrer(patienter: @escaping @MainActor () -> Void) async throws {
-        // La page a été préparée quand la dictée précédente s'est achevée : il
-        // n'y a rien à décider ici, seulement à s'assurer que ce travail est
-        // fini. Il l'est, sauf si l'on rappuie dans la seconde.
-        let dejaDit = preparationEnCours
-        if dejaDit { patienter() }
+    /// La page a été préparée quand la dictée précédente s'est achevée : il
+    /// n'y a rien à décider ici, seulement à s'assurer que ce travail est
+    /// fini. Il l'est, sauf si l'on rappuie dans la seconde — `patienter` le
+    /// dit alors dans la barre, avec la sortie : cette attente n'a pas de fin
+    /// ailleurs que sous la touche de dictée.
+    ///
+    /// Une page figée au démarrage ne lève rien : l'appui l'attend jusqu'à la
+    /// touche, et l'arrêt qui suit la trouve muette — la préparation la
+    /// reconstruit alors pour l'appui suivant (cf. `interrompre`).
+    func pagePourDictee(patienter: () -> Void) async throws -> RelaisDictee {
+        if case .prete = repos {} else { patienter() }
         let avant = page
         try await attendreLaPreparation()
         // La préparation a reconstruit une page muette : la barre que l'appui
         // avait ouverte était celle de l'ancienne, et la neuve, rangée hors
         // champ, verrait ses rendus différés — le bouton d'arrêt avec eux.
-        if let avant, page !== avant { afficherBarre() }
-        debut = Date()
-        attente = nil
-        messageParti = false
-        reponseObtenue = false
-        avertissement = nil
-        let page = try pageActive()
-        let dictee = scenario(page)
-        self.dictee = dictee
-        do {
-            // Déjà affichée, la barre n'est pas redessinée : le chrono part de
-            // l'appui et continue.
-            try await dictee.ouvrirLEcoute(siElleTarde: dejaDit ? {} : patienter)
-        } catch let erreur as RelaisErreur where [.pasConnecte, .ecouteNonOuverte].contains(erreur) {
-            // La page a montré l'écran de connexion : la grande fenêtre
-            // s'ouvre pour qu'on s'y connecte. Ou le micro a été cliqué sans
-            // qu'elle écoute : elle peut encore s'y mettre, hors champ, une
-            // fois la dictée échouée, et elle est arrêtée comme après un appui
-            // abandonné juste après ce clic.
-            if erreur == .pasConnecte { page.montrer() } else { interrompre(ecouteQuiDemarre: true) }
-            throw erreur
-        }
-    }
-
-    /// Arrête l'écoute et rend la transcription, en ouvrant l'attente que
-    /// la suite de la dictée partage — la transformation comprise : sa phase
-    /// et son chrono, que la barre affiche. Aucune échéance (cf. RELAIS.md,
-    /// sixième règle).
-    func arreterEtLire() async throws -> String {
-        let attente = RelaisAttente()
-        self.attente = attente
-        Log.info("relais : attente ouverte, sans échéance")
-        guard let dictee else { throw RelaisErreur.relaisEteint }
-        return try await dictee.arreterEtLire()
+        if let avant, page !== avant { afficherBarre(module: RelaisCatalogue.courant) }
+        return scenario(try pageActive())
     }
 
     /// Détruit la page, quand on passe à la voie macOS.
@@ -683,8 +585,6 @@ final class Relais: ObservableObject {
     func libererPage() async {
         guard let ancienne = page else { return }
         page = nil
-        // Le scénario retient la page : oublié, il la laisse partir.
-        dictee = nil
         // « Se déconnecter » passe aussi par ici, voie ChatGPT : sans cela,
         // une discussion affichée gardait Échap pris après la destruction de
         // sa fenêtre, et avalait la frappe dans n'importe quelle application.
@@ -700,9 +600,8 @@ final class Relais: ObservableObject {
     /// et une préparation en vol aurait continué de piloter la page qu'on
     /// libère.
     private func oublierCeQuiVitSurLaPage() {
-        preparation?.cancel()
-        preparation = nil
-        preparationDifferee = false
+        annulerLaPreparation()
+        repos = .prete
         enDiscussion = false
     }
 
@@ -749,15 +648,16 @@ final class Relais: ObservableObject {
     /// Échap n'est pas pris ici : il suit la fenêtre (cf. `discussionAffichee`).
     ///
     /// `module` est celui de la dictée qui s'achève, figé à l'arrêt de
-    /// l'écoute, et non celui qu'on relirait maintenant.
-    func entrerEnDiscussion(_ module: RelaisModule) {
+    /// l'écoute, et non celui qu'on relirait maintenant. `pageMorte` : la page
+    /// que cette dictée a prise est morte depuis (cf. `RelaisDictee.pageMorte`).
+    func entrerEnDiscussion(_ module: RelaisModule, pageMorte: Bool) {
         // Choisir macOS pendant la dictée condamne la page à sa fin : un fil
         // ouvert dessus n'aurait nulle part où continuer.
         guard voieChatGPT else { return }
         // La page est morte pendant la dictée : rechargée, elle porte une
         // conversation vierge, et un fil « ouvert » dessus enverrait la suite
         // sans son contexte, sans que rien le signale.
-        guard dictee?.pageMorte != true else {
+        guard !pageMorte else {
             enDiscussion = false
             return
         }
@@ -777,7 +677,7 @@ final class Relais: ObservableObject {
         // qu'on l'y copie : ni la cacher, ni la recharger. C'est sa fermeture
         // qui fera la préparation remise (cf. `fenetreFermee`) — la faire ici
         // effaçait le texte que le message d'échec disait récupérable.
-        guard !preparationDifferee else {
+        guard !enRecuperation else {
             Log.info("relais : discussion terminée, page laissée à sa récupération")
             return
         }
@@ -838,184 +738,87 @@ final class Relais: ObservableObject {
         return page?.possede(cle) ?? false
     }
 
-    /// Renvoie le texte à ChatGPT et rend ce qu'il répond, quand le module le
-    /// demande.
-    ///
-    /// Le module est celui de la dictée, figé à l'arrêt de l'écoute : c'est
-    /// ce que la pastille promet — comme pour « Curseur | Notes », le choix
-    /// qui compte est le dernier fait, y compris pendant qu'on parle.
-    ///
-    /// **En cas d'échec, la transcription brute est rendue telle quelle.** Une
-    /// dictée de dix minutes ne doit pas se perdre parce que la seconde passe
-    /// n'a pas abouti : cette application s'interdit partout ailleurs de faire
-    /// tout redire, et ce n'est pas ici qu'elle commencerait. La raison part
-    /// dans le journal, et la conversation reste ouverte dans la fenêtre du
-    /// relais pour qu'on puisse voir ce qui s'est passé.
-    func transformer(_ brut: String, module: RelaisModule) async throws -> String {
-        // Ce que le module exige, et non un drapeau global : c'est lui qui
-        // sait de quoi il a besoin, et lui seul.
-        guard module.demandeUnAllerRetour,
-              module.estUtilisable(RelaisSelecteurs.charger()),
-              !brut.isEmpty
-        else { return brut }
-        // L'attente ouverte à l'arrêt de l'écoute : la barre y lit la phase,
-        // et le chrono continue d'une phase à l'autre.
-        let attente = self.attente ?? RelaisAttente()
-        guard let dictee else { throw RelaisErreur.relaisEteint }
-        attente.entrer(.envoi)
-        // Une sortie qui n'écrit nulle part n'a rien à rapatrier : on envoie,
-        // et l'on s'arrête là. La réponse s'affichera dans la page, que
-        // l'utilisateur a sous les yeux. Et **sans ouvrir de fil neuf** : le
-        // contexte de la conversation est précisément ce qu'on veut garder.
-        if module.sortieParDefaut == .aucune {
-            do {
-                try await dictee.envoyer(avant: module.avant, apres: module.apres, brut: brut)
-            } catch is CancellationError { throw CancellationError() }
-            catch {
-                // Abandonné avant l'envoi : rien n'est parti, et c'est un
-                // abandon, pas un échec à afficher.
-                if Task.isCancelled { throw CancellationError() }
-                Log.error("relais : \(module.identifiant) n'a pas pu envoyer "
-                          + "(\(error.localizedDescription))")
-                avertissement = (error as? RelaisErreur)?.raisonCourte
-                    ?? "\(module.nom) n'a pas pu envoyer"
-                return ""
-            }
-            messageParti = true
-            Log.info("relais : \(module.identifiant) — envoyé, réponse à l'écran")
-            // Un refus — un quota —, une session fermée se disent dans la
-            // barre : sans quoi on attend une voix qui ne viendra pas, et
-            // l'on redemande.
-            if module.ditLaReponse {
-                attente.entrer(.reponse)
-                avertissement = await dictee.faireLire(dejaFinie: false) { attente.entrer(.lecture) }?.raisonCourte
-            }
-            // WebKit a tué la page après l'envoi : rechargée, elle porte une
-            // conversation vierge. Le message est parti, mais ni la voix ni
-            // le fil ne sont plus là, et il faut le dire plutôt que finir sur
-            // une réussite muette. La discussion ne s'ouvre pas sur la page
-            // neuve (cf. `entrerEnDiscussion`). « Dictée perdue » serait
-            // faux : ChatGPT a reçu le message.
-            if dictee.pageMorte {
-                avertissement = "La page ChatGPT s'est fermée — la réponse est "
-                    + "dans l'historique de ChatGPT"
-            }
-            // Interrompue, la lecture se tait sans lever, et c'est voulu :
-            // le message est parti, l'appui a seulement cessé d'attendre (cf.
-            // `messageParti`). Rendre "" ouvre la discussion sur le fil que
-            // ChatGPT est en train de remplir.
-            if dictee.lectureInterrompue {
-                Log.info("relais : attente de la lecture interrompue, discussion conservée")
-            }
-            return ""
-        }
-
-        do {
-            try await dictee.envoyer(avant: module.avant, apres: module.apres, brut: brut)
-            attente.entrer(.reponse)
-            let texte = try await dictee.recuperer()
-            try Task.checkCancellation()
-            guard !texte.isEmpty else {
-                Log.error("relais : réponse vide, transcription brute conservée")
-                avertissement = "ChatGPT a rendu une réponse vide"
-                return brut
-            }
-            if module.ditLaReponse {
-                // La réponse est déjà là, finie et copiée : ce qui fait défaut
-                // ici, c'est le son seul, et le texte remanié s'insère quand
-                // même. Il attend ce clic pour s'insérer : aucune stabilité à
-                // reprouver (cf. `dejaFinie`). L'appui, désormais, ne fait
-                // plus que cesser d'attendre (cf. `reponseObtenue`).
-                reponseObtenue = true
-                await dictee.faireLire(dejaFinie: true) { attente.entrer(.lecture) }
-            }
-            Log.info("relais : \(module.identifiant) — \(brut.count) → \(texte.count) caractères")
-            return texte
-        } catch is CancellationError {
-            // Annuler veut dire annuler. Rendre le brut ici insérerait un texte
-            // dont on vient de demander l'abandon.
-            throw CancellationError()
-        } catch {
-            // Une attente interrompue peut finir sur une autre erreur que
-            // l'annulation — un appel au pont coupé, une copie jamais venue.
-            // Ce n'est pas un échec de la transformation : le brut ne se
-            // rend pas plus ici qu'ailleurs.
-            if Task.isCancelled { throw CancellationError() }
-            Log.error("relais : \(module.identifiant) a échoué (\(error.localizedDescription)) "
-                      + "— transcription brute conservée")
-            // Le brut est rendu, mais pas en silence : il s'insère là où l'on
-            // attendait un texte remanié, et rien ne distinguait l'un de
-            // l'autre. Un quota atteint surtout doit se lire — sans quoi on
-            // relance, et le même refus revient. Une session fermée aussi :
-            // « n'a pas abouti » ne dit pas qu'il faut se reconnecter. Un
-            // envoi sans effet non plus : le message attend dans la page.
-            switch error as? RelaisErreur {
-            case .refusParChatGPT?, .pasConnecte?, .envoiSansEffet?:
-                avertissement = (error as? RelaisErreur)?.raisonCourte
-            default:
-                avertissement = "\(module.nom) n'a pas abouti"
-            }
-            return brut
-        }
+    /// Comment une dictée ChatGPT a fini, pour ce qu'il reste à faire de la
+    /// page.
+    enum Fin {
+        /// Allée au bout — réussite, texte vide ou échec —, avec le module
+        /// figé à l'arrêt de l'écoute. `texteLaisse` : l'échec a laissé la
+        /// transcription dans la fenêtre, ouverte pour qu'on l'y récupère.
+        case livree(RelaisModule, texteLaisse: Bool)
+        /// Abandonnée : la page est arrêtée, puis préparée. `ecouteQuiDemarre`
+        /// : l'appui a été défait pendant le démarrage, peut-être juste après
+        /// le clic du micro (cf. `RelaisDictee.arreterApresAbandon`).
+        case abandonnee(quitterLaDiscussion: Bool, ecouteQuiDemarre: Bool)
+        /// Le démarrage a échoué sur cette erreur ; `nil` quand la page n'a
+        /// pas encore été touchée — une permission refusée.
+        case demarrageManque(RelaisErreur?)
     }
 
-    /// La fin d'une dictée ChatGPT, quelle qu'en soit l'issue — réussite,
-    /// texte vide, échec : rendre la page, et la laisser prête pour la
-    /// suivante.
+    /// LA sortie d'une dictée ChatGPT, quelle qu'en soit l'issue — réussite,
+    /// texte vide, échec, abandon, démarrage manqué. La dictée a déjà quitté
+    /// sa phase (cf. `VoieChatGPT.entrer`) : l'occupation est libre.
     ///
     /// C'est **la fin d'une dictée qui prépare la suivante**, jamais l'appui
-    /// (cf. `preparerLaProchaine`) : cette méthode est l'endroit où cette
-    /// règle se tient. Un seul appel, à la sortie commune de tous les
-    /// chemins : le faire à chaque chemin serait la promesse d'en oublier un,
-    /// et un oubli condamne la page jusqu'au redémarrage. Une dictée abandonnée
-    /// ne passe pas par ici — l'abandon fait le même travail à sa place (cf.
-    /// `interrompre`).
-    ///
-    /// `module` est celui de la dictée, figé à l'arrêt de l'écoute.
-    /// `texteLaisseDansLaPage` : l'échec a laissé la transcription dans la
-    /// fenêtre, ouverte pour qu'on l'y récupère.
-    func apresLivraison(_ module: RelaisModule, texteLaisseDansLaPage: Bool) {
-        // La page est rendue prête pour la prochaine, pendant qu'on ne s'en
-        // sert pas. Sauf si l'on vient d'y laisser un texte à récupérer : la
-        // préparer maintenant le détruirait sous les yeux de qui vient le
-        // chercher. Elle attend alors qu'on en ait fini.
-        //
-        // Le report avant de rendre la main : c'est lui qui dit à
-        // `rendreLaMain` de garder la page quand on a choisi macOS pendant la
-        // dictée. Et avant de quitter la discussion : c'est encore lui qui dit
-        // à sa sortie de laisser la fenêtre ouverte sur le texte.
-        if texteLaisseDansLaPage { preparerLaProchaine(apresEchec: true) }
-        rendreLaMain()
-        if !texteLaisseDansLaPage { preparerLaProchaine() }
-        // Délivrer ailleurs, c'est quitter la discussion.
-        //
-        // Basculer de « Discuter » vers un module qui écrit au curseur referme
-        // la fenêtre : l'état devait suivre. Il ne suivait pas, et Caspr
-        // poursuivait alors un fil que plus personne ne voyait — la dictée
-        // suivante arrivait dans la conversation d'avant.
-        if module.sortieParDefaut != .aucune {
-            terminerDiscussion()
+    /// (cf. `preparerLaProchaine`) ; cette méthode est l'endroit où cette
+    /// règle se tient. Elle se tenait en cinq endroits — la fin d'une dictée,
+    /// l'occupation rendue, l'abandon, l'abandon du démarrage, le démarrage
+    /// manqué —, et chacun devait penser à tout : un oubli condamnait la page
+    /// jusqu'au redémarrage.
+    func finirLeCycle(_ fin: Fin) {
+        // Le report d'abord : c'est lui qui dit de garder la page quand on a
+        // choisi macOS pendant la dictée, et à la sortie de la discussion de
+        // laisser la fenêtre ouverte sur le texte.
+        if case .livree(_, texteLaisse: true) = fin { preparerLaProchaine(apresEchec: true) }
+        // Choisir macOS pendant la dictée condamnait la page à sa fin (cf.
+        // `suivreLaVoie`). Sauf si la dictée vient d'y laisser son texte : la
+        // détruire effaçait sous les yeux ce que le message d'échec disait
+        // récupérable. Elle part alors avec sa fenêtre (cf. `fenetreFermee`),
+        // ou à l'appui de la dictée macOS suivante (cf. `libererLaPageGardee`).
+        if !pageVoulue, page != nil, !enRecuperation {
+            quitterLaPage()
+            return
         }
-        // La barre de ChatGPT se range à la fin de la dictée, quelle qu'en
-        // soit l'issue.
-        //
-        // Seules la réussite et un échec sur deux la rangeaient : un texte
-        // vide la laissait flotter au-dessus du travail, sans rapport avec le
-        // message affiché. Deux exceptions, qui sont ce que la dictée laisse
-        // délibérément à l'écran — la discussion qui continue, et la fenêtre
-        // ouverte pour qu'on y récupère son texte.
-        if !texteLaisseDansLaPage, !enDiscussion {
-            masquerBarre()
+        switch fin {
+        case .livree(let module, let texteLaisse):
+            if !texteLaisse { preparerLaProchaine() }
+            // Délivrer ailleurs, c'est quitter la discussion. Basculer de
+            // « Discuter » vers un module qui écrit referme la fenêtre, et
+            // Caspr poursuivait sinon un fil que plus personne ne voyait.
+            if module.sortieParDefaut != .aucune { terminerDiscussion() }
+            // La barre se range quelle que soit l'issue : un texte vide la
+            // laissait flotter au-dessus du travail. Sauf ce que la dictée
+            // laisse délibérément à l'écran — la discussion qui continue, la
+            // fenêtre ouverte sur le texte à récupérer.
+            if !texteLaisse, !enDiscussion { masquerBarre() }
+        case .abandonnee(let quitter, let ecouteQuiDemarre):
+            // Encore dans l'attente de la préparation, rien n'a été cliqué.
+            // Arrêter abandonnait le rechargement en cours pour en recommencer
+            // un : jusqu'à quarante secondes de plus au prochain appui, et
+            // autant à chaque renoncement. On range ce que l'appui a ouvert ;
+            // la préparation continue.
+            if ecouteQuiDemarre, case .preparation = repos {
+                if let page { ranger(page) }
+                return
+            }
+            interrompre(quitterLaDiscussion: quitter, ecouteQuiDemarre: ecouteQuiDemarre)
+        case .demarrageManque(let erreur):
+            guard let page, let erreur else { return }
+            switch erreur {
+            // La page a montré l'écran de connexion : la grande fenêtre
+            // s'ouvre pour qu'on s'y connecte.
+            case .pasConnecte: page.montrer()
+            // Le micro a été cliqué sans qu'elle écoute : elle peut encore s'y
+            // mettre, hors champ. Elle est arrêtée comme après un appui
+            // abandonné juste après ce clic, et c'est l'arrêt qui la range —
+            // rangée avant, elle serait suspendue, et l'arrêt n'aboutirait pas.
+            case .ecouteNonOuverte: interrompre(ecouteQuiDemarre: true)
+            // Toute autre grande fenêtre a été ouverte par l'appui lui-même :
+            // épargnée parce que visible, elle restait devant avec le clavier,
+            // et les frappes suivantes partaient dans ChatGPT. Sauf celle
+            // d'une discussion en cours.
+            default: if !(enDiscussion && page.estVisible) { ranger(page) }
+            }
         }
-    }
-
-    /// Pourquoi la dernière transformation a rendu le brut, s'il y a lieu.
-    private var avertissement: String?
-
-    /// Rend l'avertissement de la dictée qui s'achève, et l'oublie.
-    func prendreAvertissement() -> String? {
-        defer { avertissement = nil }
-        return avertissement
     }
 
     /// Adopte la page ouverte dans la fenêtre comme point de départ.
@@ -1055,29 +858,10 @@ final class Relais: ObservableObject {
 
     func ouvrirFenetre() { try? pageActive().montrer() }
 
-    /// La petite fenêtre pendant la dictée, et son retrait après.
-    func afficherBarre() { try? pageActive().afficherBarre() }
+    /// La petite fenêtre pendant la dictée, selon ce que demande `module` —
+    /// celui du moment pendant l'écoute —, et son retrait après.
+    func afficherBarre(module: RelaisModule) { try? pageActive().afficherBarre(module: module) }
     func masquerBarre() { page?.cacher() }
-
-    /// Range ce que l'appui a ouvert, quand le démarrage échoue.
-    ///
-    /// Deux fenêtres restent : celle qui vient de s'ouvrir pour qu'on se
-    /// connecte, et celle d'une discussion en cours. Toute autre grande
-    /// fenêtre a été ouverte par l'appui lui-même (cf. `afficherBarre`) :
-    /// épargnée parce que visible, elle restait devant avec le clavier, et les
-    /// frappes suivantes partaient dans ChatGPT au lieu de l'éditeur.
-    ///
-    /// Rien à ranger non plus quand ChatGPT n'a pas ouvert son micro :
-    /// `interrompre` s'en charge, **après** l'arrêt. Rangée ici, avant que la
-    /// tâche de l'arrêt n'ait commencé, la page était suspendue hors champ, et
-    /// ChatGPT, qui peut justement se mettre à écouter en retard, restait en
-    /// enregistrement : l'appui suivant échouait sur un micro introuvable.
-    func rangerApresUnDemarrageManque(_ erreur: Error) {
-        guard let page else { return }
-        if let e = erreur as? RelaisErreur, [.pasConnecte, .ecouteNonOuverte].contains(e) { return }
-        if enDiscussion, page.estVisible { return }
-        ranger(page)
-    }
 
     /// Range la page, et rend le premier plan si c'est elle qui le tenait.
     ///
@@ -1118,8 +902,8 @@ final class Relais: ObservableObject {
     /// l'arrêt n'ait cliqué — ChatGPT aurait continué d'écouter hors champ —
     /// puis lance une préparation que celle-ci remplacerait, arrêt compris.
     ///
-    /// `ecouteQuiDemarre` : cf. `interrompreLeDemarrage`.
-    func interrompre(quitterLaDiscussion: Bool = false, ecouteQuiDemarre: Bool = false) {
+    /// `ecouteQuiDemarre` : cf. `Fin.abandonnee`.
+    private func interrompre(quitterLaDiscussion: Bool = false, ecouteQuiDemarre: Bool = false) {
         if quitterLaDiscussion { enDiscussion = false }
         lancerPreparation { [weak self] page in
             // Borné, comme tout ce qui se fait au repos : un relevé, puis trois
@@ -1138,24 +922,6 @@ final class Relais: ObservableObject {
             if occupation == .libre { ranger(page) }
             await preparer(page)
         }
-    }
-
-    /// L'appui a été abandonné avant que la page n'écoute.
-    ///
-    /// Encore dans l'attente de la préparation, rien n'a été cliqué, et il
-    /// n'y a rien à arrêter. Passer par `interrompre` abandonnait pourtant le
-    /// rechargement en cours pour en recommencer un : jusqu'à quarante
-    /// secondes de plus au prochain appui, et autant à chaque renoncement. On
-    /// range seulement ce que l'appui a ouvert ; la préparation continue.
-    ///
-    /// Plus tard, le clic du micro a pu partir : l'arrêt attend alors que la
-    /// page écoute (cf. `RelaisDictee.arreterApresAbandon`).
-    func interrompreLeDemarrage() {
-        guard preparation == nil else {
-            if let page { ranger(page) }
-            return
-        }
-        interrompre(ecouteQuiDemarre: true)
     }
 
     /// Apprendre les boutons de la page sans les faire montrer : Caspr les
@@ -1198,7 +964,7 @@ final class Relais: ObservableObject {
         // préparation en cours n'y survivraient pas, et le croire encore
         // ouvert ferait poursuivre une conversation disparue.
         oublierCeQuiVitSurLaPage()
-        occupation = .calibration
+        calibrationEnCours = true
         calibrationAutomatique = true
         numeroCalibration &+= 1
         let numero = numeroCalibration
@@ -1213,7 +979,7 @@ final class Relais: ObservableObject {
             }
             calibration = nil
             calibrationAutomatique = false
-            occupation = .libre
+            calibrationEnCours = false
             guard !aLaMain else { calibrerTout(termine); return }
             // La fin d'une calibration prépare la dictée suivante, comme celle
             // d'une dictée : le parcours a oublié discussion et préparation
@@ -1452,14 +1218,14 @@ final class Relais: ObservableObject {
             termine?()
             return
         }
-        occupation = .calibration
+        calibrationEnCours = true
         numeroCalibration &+= 1
         let numero = numeroCalibration
         page.montrer()
         calibration = Task {
             defer {
                 // Même règle que le parcours automatique (cf. `numeroCalibration`).
-                if numeroCalibration == numero { calibration = nil; occupation = .libre }
+                if numeroCalibration == numero { calibration = nil; calibrationEnCours = false }
                 termine?()
             }
 

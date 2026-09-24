@@ -403,7 +403,7 @@ public final class RelaisDictee {
         // Sans délai, même pour une réponse qu'on vient de copier et que le
         // texte attend pour s'insérer : elle a été vue à l'instant, et une
         // page qui ne la montrerait plus se quitte par la touche de dictée,
-        // que la barre indique (cf. `Relais.reponseObtenue`).
+        // que la barre indique (cf. `RelaisPhase.lecture`).
         var finie = RelaisVeille.ReponseFinie(seuil: dejaFinie ? 0 : 8)
         do {
             try await observer(.reponse) { finie.juger($0.reponse) ? () : nil }

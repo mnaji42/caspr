@@ -25,9 +25,11 @@ final class VoieChatGPT {
     /// L'état commun, projeté par chaque phase (cf. `entrer`).
     var surEtat: (DictationController.State) -> Void = { _ in }
     /// Le repli par macOS, une fois la dictée ChatGPT finie : le son de la
-    /// page, la dictée figée, et ce que la barre dira s'il aboutit (cf.
+    /// page, la dictée figée, ce que la barre dira s'il aboutit, et pourquoi
+    /// on s'est passé de ChatGPT, que le menu gardera s'il échoue (cf.
     /// `replier`).
-    var surRepliParMacOS: (_ son: [Float], _ dictee: DicteeEnCours, _ annonce: String?) -> Void = { _, _, _ in }
+    var surRepliParMacOS: (_ son: [Float], _ dictee: DicteeEnCours, _ annonce: String?,
+                           _ motif: String) -> Void = { _, _, _, _ in }
 
     /// La phase de la dictée en cours ; `nil` hors d'une dictée ChatGPT.
     private(set) var phase: RelaisPhase?
@@ -213,11 +215,12 @@ final class VoieChatGPT {
     private func replier(apres cause: RelaisErreur? = nil) -> Bool {
         let dictee = self.dictee ?? figer()
         let ecrit = !dictee.nEcritNullePart
-        let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: relais.secondesEntendues, ecrit: ecrit)
-        let annonce = RelaisRepli.annonce(repli, apres: cause)
+        let son = relais.secondesEntendues
+        let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: son, ecrit: ecrit)
+        let annonce = RelaisRepli.annonce(repli, apres: cause, son: son, parle: dictee.duree)
         Log.info("relais : repli après \(cause?.localizedDescription ?? "la touche") — "
-                 + "\(annonce ?? "rien à livrer"), "
-                 + "\(String(format: "%.1f", relais.secondesEntendues)) s de son")
+                 + "\(annonce ?? "rien à livrer"), \(String(format: "%.1f", son)) s de son "
+                 + "pour \(String(format: "%.1f", dictee.duree)) s parlées")
         // Une page morte porte une conversation vierge : une discussion
         // restée ouverte y enverrait la suite sans son contexte.
         let pageMorte = cause == .pageInterrompue
@@ -243,11 +246,15 @@ final class VoieChatGPT {
             // n'aboutirait pas. Puis la voie macOS prend la suite, comme un
             // « Réessayer » — sa transcription dure quelques secondes, et ne
             // s'interrompt pas plus que celle d'une dictée macOS.
-            let son = relais.prendreLeSon()
+            // La raison se lit dès maintenant : si macOS échoue à son tour, la
+            // barre dira son échec à lui, et un quota atteint ne se lirait
+            // plus qu'au menu.
+            let motif = RelaisRepli.motif(apres: cause)
+            let echantillons = relais.prendreLeSon()
             couper()
             terminer(fin)
-            overlay.showProcessing("Transcription par macOS…")
-            surRepliParMacOS(son, dictee, annonce)
+            overlay.showProcessing("\(motif) — transcription par macOS…")
+            surRepliParMacOS(echantillons, dictee, annonce, motif)
         case .inserer(let brut):
             couper()
             let g = generation
@@ -358,7 +365,7 @@ final class VoieChatGPT {
         guard phase == .ecoute else { return }
         let erreur = RelaisErreur.pageInterrompue
         Log.error("relais : la page est morte pendant l'écoute")
-        if replier(apres: erreur) { return }
+        if RelaisCycle.replie(apres: erreur, en: .ecoute), replier(apres: erreur) { return }
         couper()
         // Rangée sur-le-champ, et non après l'arrêt de l'abandon : une page
         // morte n'écoute plus rien, et sa barre ne doit pas flotter sur

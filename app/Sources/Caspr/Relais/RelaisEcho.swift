@@ -64,7 +64,6 @@ final class RelaisEcho {
     /// Arme l'écho, juste avant le clic du micro — sur un son vide : celui
     /// d'une dictée précédente ne doit jamais passer pour celui-ci.
     func armer() {
-        desarmer()
         liberer()
         recus = 0
         crete = 0
@@ -128,7 +127,14 @@ final class RelaisEcho {
     }
 
     /// Oublie le son reçu : la dictée est livrée, ou le repli l'a pris.
-    func liberer() { echantillons = [] }
+    ///
+    /// Désarmé d'abord : pris pendant l'écoute — la croix, une page morte —,
+    /// le son laissait l'écho armé jusqu'à l'arrêt de la page, et ce qui
+    /// arrivait entre-temps restait en mémoire jusqu'à la dictée suivante.
+    func liberer() {
+        desarmer()
+        echantillons = []
+    }
 
     /// Tiré sans attendre : rien ne s'attend, sur le chemin d'une dictée,
     /// qu'une page pourrait retenir.

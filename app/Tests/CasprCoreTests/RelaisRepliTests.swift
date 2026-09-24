@@ -64,6 +64,35 @@ struct RelaisRepliTests {
                 == "La page ChatGPT s'est fermée — gardé dans le menu de Caspr")
     }
 
+    @Test("Un son qui ne couvre pas la dictée se dit : le texte de macOS n'en est qu'une partie")
+    func couverture() {
+        // Le contexte de la page parti un instant après la preuve d'écoute.
+        #expect(RelaisRepli.couvre(son: 12.4, parle: 12.6))
+        #expect(RelaisRepli.couvre(son: 55, parle: 60))
+        #expect(!RelaisRepli.couvre(son: 40, parle: 60))
+        #expect(!RelaisRepli.couvre(son: 2, parle: 5))
+        // Rien à comparer : une page morte avant l'arrêt figé.
+        #expect(RelaisRepli.couvre(son: 3, parle: 0))
+        #expect(RelaisRepli.annonce(.transcrireParMacOS, apres: nil, son: 55, parle: 60)
+                == "Transcrit par macOS — ChatGPT abandonné")
+        #expect(RelaisRepli.annonce(.transcrireParMacOS, apres: nil, son: 12.4, parle: 60)
+                == "Transcrit par macOS (12 s de son sur 60 s) — ChatGPT abandonné")
+        #expect(RelaisRepli.annonce(.transcrireParMacOS, apres: .pasConnecte, son: 12.4, parle: 60)
+                == "ChatGPT : session déconnectée — transcrit par macOS (12 s de son sur 60 s)")
+        // Le brut de ChatGPT vient de tout le son de la page : le tee n'y est
+        // pour rien.
+        #expect(RelaisRepli.annonce(.inserer("x"), apres: nil, son: 0, parle: 60)
+                == "Transcription brute insérée — ChatGPT abandonné")
+    }
+
+    @Test("Le motif du repli : ce que le menu garde si macOS échoue à son tour")
+    func motifs() {
+        #expect(RelaisRepli.motif(apres: nil) == "ChatGPT abandonné")
+        #expect(RelaisRepli.motif(apres: .refusParChatGPT("Limite atteinte")) == "ChatGPT : Limite atteinte")
+        #expect(RelaisRepli.motif(apres: .pageInterrompue) == "La page ChatGPT s'est fermée")
+        #expect(RelaisRepli.motif(apres: .pontAbsent) == "Caspr est incomplet : réinstallez-le")
+    }
+
     @Test("La touche replie pendant l'attente, la croix annule : le brut, sinon le son")
     func gestes() {
         // Pendant « ChatGPT transcrit… », le brut n'est pas lu : macOS (93).
@@ -79,5 +108,7 @@ struct RelaisRepliTests {
         // Un échec prouvé pendant l'écoute ou la transcription replie (96–98).
         #expect(RelaisCycle.replie(apres: .pageInterrompue, en: .ecoute))
         #expect(RelaisCycle.replie(apres: .refusParChatGPT("Limite atteinte"), en: .transcription))
+        // Après, la seconde passe rend le brut elle-même (48).
+        #expect(!RelaisCycle.replie(apres: .refusParChatGPT("Limite atteinte"), en: .reponse))
     }
 }

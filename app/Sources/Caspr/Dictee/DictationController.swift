@@ -100,11 +100,13 @@ final class DictationController {
         // du cycle vient de poser : un appui entre les deux ouvrirait une
         // dictée par-dessus. Pas d'aperçu : la page avait le micro, macOS n'a
         // rien écrit pendant qu'on parlait.
-        chatgpt.surRepliParMacOS = { [weak self] son, dictee, annonce in
+        chatgpt.surRepliParMacOS = { [weak self] son, dictee, annonce, motif in
             guard let self else { return }
             voieDuCycle = .apple
             state = .processing
-            Task { await self.transcrireParMacOS(son, dictee, apercuConserve: "", annonce: annonce) }
+            Task {
+                await self.transcrireParMacOS(son, dictee, apercuConserve: "", annonce: annonce, motif: motif)
+            }
         }
         // Échap suit ce que le relais montre (cf. `ajusterEchap`).
         Relais.partage.surAffichageChange = { [weak self] in self?.ajusterEchap() }
@@ -362,15 +364,20 @@ final class DictationController {
 
     /// `apercuConserve` : cf. `VoieApple.transcrireEtLivrer`. `annonce` : ce
     /// que la barre dit d'un texte inséré — d'où il vient, quand ce n'est pas
-    /// de là où l'on croit (cf. `RelaisRepli.annonce`).
+    /// de là où l'on croit (cf. `RelaisRepli.annonce`). `motif` : pourquoi
+    /// ChatGPT n'a pas rendu ce texte, que le menu garde avant l'échec de
+    /// macOS — la barre, elle, dit ce qui reste à faire (cf. `Livraison.conserver`).
     private func transcrireParMacOS(_ samples: [Float], _ dictee: DicteeEnCours,
-                                    apercuConserve: String? = nil, annonce: String? = nil) async {
+                                    apercuConserve: String? = nil, annonce: String? = nil,
+                                    motif: String? = nil) async {
         state = .processing
         // Le micro est déjà rendu, à l'arrêt du magnétophone.
         let echec = await macOS.transcrireEtLivrer(samples, dictee, langue: language,
                                                    apercuConserve: apercuConserve)
         if echec == nil, let annonce { overlay.showFailure(annonce) }
-        state = echec.map { .failed($0) } ?? .idle
+        state = echec.map { echec in
+            .failed(motif.map { "\($0). Repli par macOS : \(echec)" } ?? echec)
+        } ?? .idle
         voieDuCycle = nil
     }
 

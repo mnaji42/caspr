@@ -102,20 +102,23 @@ public enum RelaisCycle {
     /// introuvable laisse une page qui a peut-être encore le texte — elle
     /// s'ouvre pour qu'on l'y prenne, et le son reste au menu.
     ///
-    /// Au démarrage, rien n'a encore été dit : la dictée échoue. Pendant
-    /// l'envoi ou la réponse, le brut est lu, et c'est lui qui s'insère —
-    /// par la seconde passe, qui le rend quand elle échoue. En lecture, la
-    /// réponse est en main, seule la voix manque : la dictée continue, avec
-    /// un avertissement. En livraison, la page n'y est plus pour rien : un
-    /// échec d'insertion a son propre chemin (cf. `Livraison.EchecDInsertion`).
+    /// Seulement tant que le brut n'est pas lu : pendant l'écoute ou la
+    /// transcription. Au démarrage, rien n'a encore été dit : la dictée
+    /// échoue. Pendant l'envoi ou la réponse, c'est la seconde passe qui
+    /// rend le brut quand elle échoue, avec la raison (cf.
+    /// `VoieChatGPT.transformer`) : le même repli, fait là où l'erreur
+    /// tombe, et aucune ne remonte jusqu'ici. En lecture, la réponse est en
+    /// main, seule la voix manque : la dictée continue, avec un
+    /// avertissement. En livraison, la page n'y est plus pour rien : un échec
+    /// d'insertion a son propre chemin (cf. `Livraison.EchecDInsertion`).
     public static func replie(apres erreur: RelaisErreur, en phase: RelaisPhase) -> Bool {
         switch phase {
-        case .ecoute, .transcription, .envoi, .reponse:
+        case .ecoute, .transcription:
             switch erreur {
             case .refusParChatGPT, .pasConnecte, .pageInterrompue, .pontAbsent: true
             default: false
             }
-        case .demarrage, .lecture, .livraison: false
+        case .demarrage, .envoi, .reponse, .lecture, .livraison: false
         }
     }
 }

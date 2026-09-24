@@ -42,21 +42,47 @@ public enum RelaisRepli: Equatable, Sendable {
     ///
     /// Sans quoi un texte de macOS passe pour celui de ChatGPT, et un quota
     /// atteint pour une transcription médiocre.
-    public static func annonce(_ repli: RelaisRepli, apres cause: RelaisErreur?) -> String? {
-        let issue: String
+    ///
+    /// `son`, `parle` : les secondes que l'écho a reçues, et celles qu'on a
+    /// parlé. Un contexte audio parti tard, des morceaux perdus, et macOS ne
+    /// transcrit qu'une partie de la dictée : le texte s'insère quand même —
+    /// une partie vaut mieux que rien —, mais pas pour le tout.
+    public static func annonce(_ repli: RelaisRepli, apres cause: RelaisErreur?,
+                               son: Double = 0, parle: Double = 0) -> String? {
+        var issue: String
         switch repli {
         case .inserer: issue = "transcription brute insérée"
         case .transcrireParMacOS: issue = "transcrit par macOS"
         case .garder: issue = "gardé dans le menu de Caspr"
         case .rien: return nil
         }
+        if repli == .transcrireParMacOS, !couvre(son: son, parle: parle) {
+            issue += " (\(Int(son.rounded())) s de son sur \(Int(parle.rounded())) s)"
+        }
         guard let cause else {
             return issue.prefix(1).uppercased() + issue.dropFirst()
-                + (repli == .garder ? "" : " — ChatGPT abandonné")
+                + (repli == .garder ? "" : " — \(motif(apres: nil))")
         }
+        return "\(motif(apres: cause)) — \(issue)"
+    }
+
+    /// Pourquoi on s'est passé de ChatGPT : ce que la barre montre pendant
+    /// que macOS transcrit, et ce que le menu garde si macOS échoue à son
+    /// tour — sans quoi un quota atteint ne se lirait nulle part.
+    public static func motif(apres cause: RelaisErreur?) -> String {
+        guard let cause else { return "ChatGPT abandonné" }
         // « Dictée perdue », que la barre dit d'une page morte, serait faux ici.
-        let motif = cause == .pageInterrompue ? "La page ChatGPT s'est fermée"
+        return cause == .pageInterrompue ? "La page ChatGPT s'est fermée"
             : cause.raisonCourte ?? "ChatGPT a échoué"
-        return "\(motif) — \(issue)"
+    }
+
+    /// Le son reçu couvre-t-il ce qu'on a dit ? Une seconde de jeu, ou un
+    /// dixième d'une longue dictée : l'écho s'arme avant le clic du micro,
+    /// la durée parlée se compte depuis la preuve d'écoute, et le contexte
+    /// audio de la page met un instant à tourner. Un seuil à éprouver sur la
+    /// ligne de l'écho, qui compare les deux à chaque dictée (cf.
+    /// `RelaisEcho.desarmer`). `parle` nul : rien à comparer.
+    public static func couvre(son: Double, parle: Double) -> Bool {
+        parle - son <= max(1, parle / 10)
     }
 }

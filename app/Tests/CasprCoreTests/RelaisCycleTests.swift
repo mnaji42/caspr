@@ -27,7 +27,7 @@ struct RelaisCycleTests {
         }
     }
 
-    @Test("Un échec prouvé replie de l'écoute à la réponse, et seulement un échec prouvé")
+    @Test("Un échec prouvé replie tant que le brut n'est pas lu, et seulement un échec prouvé")
     func echec() {
         let prouves: [RelaisErreur] = [.refusParChatGPT("Limite atteinte"), .pasConnecte,
                                        .pageInterrompue, .pontAbsent]
@@ -35,7 +35,9 @@ struct RelaisCycleTests {
         // prenne.
         let autres: [RelaisErreur] = [.introuvable(.stop), .ecouteNonOuverte, .pasDeReponse,
                                       .envoiSansEffet]
-        let repliees: Set<RelaisPhase> = [.ecoute, .transcription, .envoi, .reponse]
+        // Le brut lu, c'est la seconde passe qui le rend, et aucune erreur ne
+        // remonte : la table ne promet pas un chemin que l'app ne prend pas.
+        let repliees: Set<RelaisPhase> = [.ecoute, .transcription]
         for phase in RelaisPhase.allCases {
             for erreur in prouves {
                 #expect(RelaisCycle.replie(apres: erreur, en: phase) == repliees.contains(phase),

@@ -65,8 +65,8 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     /// Sauf la publication du texte : ce que l'analyseur finalise après
     /// l'arrêt — le dernier volatil promu en définitif, la dernière seconde
     /// de parole — est la fin de la dictée, et c'est ce texte que garde le
-    /// recours « Insérer l'aperçu ». C'est `VoieApple` qui écarte les textes
-    /// d'un aperçu remplacé ou annulé.
+    /// recours « Insérer l'aperçu ». C'est `ApercuEnDirect` qui écarte les
+    /// textes d'un aperçu remplacé ou annulé.
     private var stopped = false
 
     private var isStopped: Bool { lock.withLock { stopped } }
@@ -85,8 +85,8 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     ///
     /// Elle reste nécessaire parce que le framework la réclame, pas parce
     /// qu'on lui a mesuré un effet : des textes d'aperçu très courts lui
-    /// avaient été imputés, et c'était en fait une course sur `previewText`,
-    /// corrigée ailleurs.
+    /// avaient été imputés, et c'était en fait une course sur le texte de
+    /// l'aperçu, corrigée ailleurs.
     ///
     /// Le nombre de réservations est plafonné par le système
     /// (`maximumReservedLocales`) : on libère les autres avant de prendre

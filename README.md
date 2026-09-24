@@ -184,7 +184,8 @@ caspr/
 │           ├── App/          launch, menu bar, logs, permissions, migration
 │           ├── Dictee/       the cycle and where the text lands
 │           │   ├── DictationController.swift  hotkey, state, Escape
-│           │   ├── VoieApple.swift            macOS: mic, live preview, transcription
+│           │   ├── VoieApple.swift            macOS: mic, transcription
+│           │   ├── ApercuEnDirect.swift       the live preview, by the macOS engine
 │           │   ├── VoieChatGPT.swift          ChatGPT: the page listens and answers
 │           │   ├── Livraison.swift            insert, history, retry
 │           │   └── Barre/                     the floating bar

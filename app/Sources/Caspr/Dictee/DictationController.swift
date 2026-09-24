@@ -132,8 +132,7 @@ final class DictationController {
             guard let self, Preferences.shared.primaryLanguage != code else { return }
             Preferences.shared.primaryLanguage = code
             if state == .recording, voieDuCycle == .apple {
-                macOS.arreterApercu()
-                macOS.demarrerApercu(langue: language)
+                macOS.apercu.relancer(langue: language)
             }
             refreshOverlay()
             onStateChange?(state)
@@ -302,7 +301,7 @@ final class DictationController {
             // Échap est pris au passage (cf. `ajusterEchap`).
             state = .recording
             overlay.showRecording(overlayStatus)
-            macOS.demarrerApercu(langue: language)
+            macOS.apercu.demarrer(langue: language)
             Feedback.recordingStarted()
         } catch {
             state = .failed(error.localizedDescription)

@@ -31,22 +31,8 @@ final class VoieApple {
     /// Intel et macOS antérieurs compris.
     private let dicteeSysteme: any TranscripteurMacOS
 
-    /// Aperçu en direct, quand le système sait le faire et que l'utilisateur
-    /// le veut. `nil` le reste du temps.
-    private var preview: (any SpeechPreviewing)?
-
-    /// Dernier texte rendu par l'aperçu pour la dictée en cours : le recours
-    /// qui reste quand la passe finale échoue (cf. `Livraison`).
-    private(set) var previewText = ""
-
-    /// Le numéro de l'aperçu dont on accepte encore le texte.
-    ///
-    /// Pas seulement celui qui écoute : un aperçu arrêté finit son analyse,
-    /// et ce qu'il rend alors est la fin de la dictée, celle que le recours
-    /// « Insérer l'aperçu » doit contenir. Il cesse de compter quand un autre
-    /// le remplace — dictée suivante, changement de langue — ou qu'on annule :
-    /// le numéro change.
-    private var apercuRetenu = 0
+    /// L'aperçu en direct, nourri par le micro de Caspr.
+    let apercu: ApercuEnDirect
 
     private let overlay: RecordingOverlay
     private let livraison: Livraison
@@ -54,6 +40,10 @@ final class VoieApple {
     init(overlay: RecordingOverlay, livraison: Livraison) {
         self.overlay = overlay
         self.livraison = livraison
+        apercu = ApercuEnDirect(overlay: overlay)
+        // Branché une fois pour toutes : sans aperçu qui écoute, les tampons
+        // sont simplement perdus.
+        recorder.onBuffer = { [apercu] in apercu.nourrir($0) }
         if #available(macOS 26.0, *) {
             intelligence = AppleSpeechEngine()
         } else {
@@ -109,8 +99,7 @@ final class VoieApple {
         // micro : elle part avant que le magnétophone n'écoute.
         await Relais.partage.libererLaPageGardee()
         try recorder.start()
-        apercuRetenu &+= 1
-        previewText = ""
+        apercu.oublier()
     }
 
     /// Arrête d'écouter et rend ce qui a été enregistré.
@@ -119,7 +108,7 @@ final class VoieApple {
     /// après la dernière seconde enregistrée, jamais pendant.
     func arreter() -> [Float] {
         let samples = recorder.stop()
-        arreterApercu()
+        apercu.arreter()
         rendreLeMicro()
         let seconds = Double(samples.count) / AudioRecorder.targetSampleRate
         // Le niveau crête, et pas seulement la durée. Un compte
@@ -135,8 +124,7 @@ final class VoieApple {
 
     func annuler() {
         recorder.cancel()
-        arreterApercu()
-        apercuRetenu &+= 1
+        apercu.annuler()
         rendreLeMicro()
     }
 
@@ -180,7 +168,7 @@ final class VoieApple {
                 // vide aussi sûrement qu'un micro coupé, et dans ce cas jeter
                 // la dictée oblige à tout redire.
                 livraison.conserver(audio: samples,
-                                    apercu: apercuConserve ?? previewText,
+                                    apercu: apercuConserve ?? apercu.texte,
                                     apresLeRelais: dictee.voie == .chatgpt,
                                     echec: "Rien n'a été entendu")
                 // Un échec et non un retour au repos : la barre renvoie au
@@ -210,7 +198,7 @@ final class VoieApple {
             Log.error("échec de transcription : \(error.localizedDescription) — "
                       + "\(String(format: "%.1f", minutes)) min conservées")
             livraison.conserver(audio: samples,
-                                apercu: apercuConserve ?? previewText,
+                                apercu: apercuConserve ?? apercu.texte,
                                 apresLeRelais: dictee.voie == .chatgpt)
             return "\(error.localizedDescription) — audio conservé, "
                 + "« Réessayer » dans le menu."
@@ -227,55 +215,5 @@ final class VoieApple {
         case .appleLegacy: dicteeSysteme
         }
         return try await transcripteur.transcribe(samples, language: langue)
-    }
-
-    // MARK: - Aperçu en direct
-
-    /// Branche l'aperçu sur le flux micro, si le système et l'utilisateur le
-    /// permettent.
-    ///
-    /// Rien de ceci ne touche à la transcription : l'aperçu lit les mêmes
-    /// tampons, en parallèle, et son texte n'est gardé que comme recours. Un
-    /// échec de l'aperçu n'a donc aucun effet sur la dictée.
-    func demarrerApercu(langue: String) {
-        guard Preferences.shared.livePreviewEnabled, preview == nil else { return }
-        apercuRetenu &+= 1
-        let jeton = apercuRetenu
-        // La version qui écrira, et nulle autre : cf. `SpeechPreview.engine`.
-        guard let made = SpeechPreview.make(
-            for: langue,
-            onText: { [weak self] text in
-                guard let self, apercuRetenu == jeton else { return }
-                if previewText.isEmpty, !text.isEmpty {
-                    Log.info("aperçu : premier texte reçu")
-                }
-                // Retenu pour le recours : si la passe finale échoue, c'est
-                // un texte de macOS sur exactement le même audio.
-                previewText = text
-                // Arrêté, l'aperçu n'a plus de barre où s'afficher : elle est
-                // passée au traitement.
-                if preview != nil { overlay.setPreviewText(text) }
-            },
-            onFailure: { [weak self] reason in
-                Log.error("aperçu indisponible : \(reason)")
-                self?.overlay.setPreviewNotice(reason)
-            })
-        else {
-            overlay.setPreviewNotice("aperçu indisponible sur cette machine")
-            return
-        }
-        preview = made
-        recorder.onBuffer = { [weak preview = made] buffer in
-            preview?.append(buffer)
-        }
-        // Détaché : le premier lancement peut télécharger le modèle système,
-        // et la dictée ne doit pas attendre.
-        Task { await made.start(language: langue) }
-    }
-
-    func arreterApercu() {
-        recorder.onBuffer = nil
-        preview?.stop()
-        preview = nil
     }
 }

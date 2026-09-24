@@ -137,6 +137,26 @@ extension RelaisPage {
         }
     }
 
+    /// Observe `condition` jusqu'à ce qu'elle tienne ; faux à la borne. Lève
+    /// à l'annulation : ce qu'on attendait n'a plus d'objet, et l'appelant ne
+    /// doit rien conclure du temps passé.
+    ///
+    /// **Au repos et en calibration seulement**, comme `sonder` : une page
+    /// qui se charge, une main qui se connecte, un geste dont on guette
+    /// l'effet. Jamais sur le chemin d'une dictée, dont les attentes n'ont
+    /// pas d'échéance (cf. `RelaisDictee.observer`). Chacune de ces attentes
+    /// recopiait sa boucle, avec sa manière de compter et de céder.
+    func observer(auPlus duree: Duration, toutes pas: Duration = .milliseconds(250),
+                  _ condition: () async -> Bool) async throws -> Bool {
+        let limite = ContinuousClock.now + duree
+        repeat {
+            try Task.checkCancellation()
+            if await condition() { return true }
+            try await Task.sleep(for: pas)
+        } while ContinuousClock.now < limite
+        return false
+    }
+
     // MARK: - Au repos
 
     /// Ce que la page dit d'elle-même, au repos : l'arrêt après un abandon,
@@ -166,14 +186,10 @@ extension RelaisPage {
     /// que le calibrage désignait comme la zone de texte. Les heuristiques du
     /// pont, elles, ne dépendent de rien.
     func attendreComposeurPret(secondes: Double) async -> Bool {
-        let limite = Date.now.addingTimeInterval(secondes)
-        while Date.now < limite {
-            if Task.isCancelled { return false }
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !chargementEnCours else { continue }
-            if await sonder({ try await self.lire(sel: "") }) != nil { return true }
-        }
-        return false
+        (try? await observer(auPlus: .seconds(secondes)) {
+            guard !chargementEnCours else { return false }
+            return await sonder({ try await self.lire(sel: "") }) != nil
+        }) == true
     }
 
     /// Vide la zone de saisie, et s'assure qu'elle l'est restée — au repos.
@@ -187,16 +203,14 @@ extension RelaisPage {
         // Le brouillon vit aussi dans le stockage de la page : l'effacer de la
         // zone ne suffit pas, ChatGPT le réinstalle depuis là.
         _ = await sonder { try await self.oublierBrouillon() }
-        let limite = Date.now.addingTimeInterval(6)
-        while Date.now < limite {
-            if Task.isCancelled { return false }
+        let vide = try? await observer(auPlus: .seconds(6), toutes: .zero) {
             // Vider, c'est écrire vide : une seule règle pour les deux.
             _ = await sonder { try await self.ecrire("", sel: sel) }
             try? await Task.sleep(for: .milliseconds(500))
-            if await sonder({ try await self.lire(sel: sel) })?.isEmpty == true { return true }
+            return await sonder({ try await self.lire(sel: sel) })?.isEmpty == true
         }
-        Log.error("relais : la zone de saisie n'a pas voulu se vider")
-        return false
+        if vide == false { Log.error("relais : la zone de saisie n'a pas voulu se vider") }
+        return vide == true
     }
 
     // MARK: - Les fonctions de la page

@@ -892,12 +892,7 @@ final class Relais: ObservableObject {
 
     // MARK: - La calibration (cf. `RelaisCalibration`)
 
-    /// Le parcours ne touche au relais que par ces deux portes : ce que la
-    /// page doit au départ et à la sortie d'une calibration reste ici, à côté
-    /// de ce qu'il protège — l'occupation, la préparation, le premier plan.
-    private lazy var calibration = RelaisCalibration(
-        prendre: { [unowned self] in prendrePourCalibrer() },
-        rendre: { [unowned self] in rendreApresCalibration($0, rangee: $1) })
+    private lazy var calibration = RelaisCalibration(relais: self)
 
     /// Apprendre les boutons de la page sans les faire montrer : Caspr les
     /// essaie lui-même, et ne retient que ceux dont il a vu l'effet.
@@ -913,12 +908,17 @@ final class Relais: ObservableObject {
     /// La page, prise pour une calibration ; `nil` quand ce n'est pas le
     /// moment, dit à l'utilisateur.
     ///
+    /// L'une des deux portes par lesquelles le parcours touche au relais (cf.
+    /// `RelaisCalibration`) : ce que la page doit au départ et à la sortie
+    /// d'une calibration reste ici, à côté de ce qu'il protège —
+    /// l'occupation, la préparation, le premier plan —, qui reste privé.
+    ///
     /// Une dictée macOS n'occupe pas la page, elle interdit qu'elle naisse :
     /// le magnétophone n'entendrait plus que du silence. Le parcours recharge
     /// la page : un fil de discussion ou une préparation en vol n'y
     /// survivraient pas, et la préparation pouvait même la recharger sous la
     /// main qui désigne le micro.
-    private func prendrePourCalibrer() -> RelaisPage? {
+    func prendrePourCalibrer() -> RelaisPage? {
         if let refus = ecouteMacOS ? "Une dictée macOS est en cours." : occupation.raison {
             RelaisDialogues.alerter("Pas maintenant", refus + " Terminez-la avant de calibrer.")
             return nil
@@ -933,9 +933,10 @@ final class Relais: ObservableObject {
     }
 
     /// La sortie d'une calibration, quelle qu'en soit l'issue : l'occupation
-    /// rendue, la page rangée — sauf quand une alerte y renvoie (`rangee`
-    /// faux) —, puis la préparation d'une dictée, après avoir remis la page
-    /// d'aplomb.
+    /// rendue, la page rangée, puis la préparation d'une dictée, après avoir
+    /// remis la page d'aplomb. Rangée toujours, « ne répond pas » compris :
+    /// laissée à l'écran, la préparation qui suit pouvait la reconstruire
+    /// sous les yeux, et l'alerte renvoyait à une page qui n'était plus là.
     ///
     /// Le guetteur de clic est retiré d'abord : resté sur la page, il
     /// retiendrait le prochain clic de l'utilisateur, n'importe où dans
@@ -944,9 +945,9 @@ final class Relais: ObservableObject {
     /// son micro et son arrêt — est rechargée : vider sa zone n'arrêterait
     /// rien. Dans la préparation et non à part : c'est elle que l'appui
     /// suivant attend avant de cliquer le micro.
-    private func rendreApresCalibration(_ page: RelaisPage, rangee: Bool) {
+    func rendreApresCalibration(_ page: RelaisPage) {
         calibrationEnCours = false
-        if rangee { ranger(page) }
+        ranger(page)
         lancerPreparation { [weak self] page in
             await page.abandonnerCalibration()
             let ecoute = page.microOuvert

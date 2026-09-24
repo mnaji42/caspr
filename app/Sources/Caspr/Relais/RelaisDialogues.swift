@@ -119,11 +119,10 @@ enum RelaisDialogues {
     static func pageMuette(relance: String) -> String {
         """
         Elle ne s'est pas chargée en trente secondes : Caspr ne peut pas savoir \
-        si vous êtes connecté. Elle vient d'être rechargée, dans la fenêtre \
-        ouverte derrière ce message.
+        si vous êtes connecté. Elle vient d'être rechargée.
 
-        Vérifiez votre connexion à Internet. Une fois la conversation affichée, \
-        relancez \(relance) \(ouRelancer).
+        Vérifiez votre connexion à Internet, puis relancez \(relance) \(ouRelancer) : \
+        la fenêtre ChatGPT se rouvrira.
         """
     }
 

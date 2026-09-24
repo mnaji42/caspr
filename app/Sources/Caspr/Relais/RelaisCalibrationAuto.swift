@@ -133,7 +133,7 @@ struct RelaisCalibrationAuto {
             }
             // Quinze secondes : la première fois, macOS demande l'accès au
             // micro, et il faut le temps de lire la question.
-            let ecoute = try await observer(pendant: 15) {
+            let ecoute = try await page.observer(auPlus: .seconds(15)) {
                 await vu(micro: sel, composeur: composeur)?.enregistrement == true
             }
             if ecoute {
@@ -170,7 +170,7 @@ struct RelaisCalibrationAuto {
             }
             // Trente secondes : la zone revient après la transcription, qui
             // suit la durée parlée — ici, une seconde ou deux.
-            let revenue = try await observer(pendant: 30) {
+            let revenue = try await page.observer(auPlus: .seconds(30)) {
                 await vu(micro: micro, stop: sel, composeur: composeur)?.composeur == true
             }
             if revenue {
@@ -230,7 +230,7 @@ struct RelaisCalibrationAuto {
                 issue.preuves.manque(.envoi, Self.clicPerdu)
                 continue
             }
-            let parti = try await observer(pendant: 15) {
+            let parti = try await page.observer(auPlus: .seconds(15)) {
                 await vu(micro: micro, stop: stop, composeur: composeur)?.conversation == true
             }
             if parti {
@@ -294,24 +294,12 @@ struct RelaisCalibrationAuto {
 
     // MARK: - Attentes
 
-    /// Observe une condition jusqu'à ce qu'elle tienne, ou jusqu'à la borne.
-    private func observer(pendant secondes: Double,
-                          _ condition: () async -> Bool) async throws -> Bool {
-        let limite = Date.now.addingTimeInterval(secondes)
-        repeat {
-            try Task.checkCancellation()
-            if await condition() { return true }
-            try await Task.sleep(for: .milliseconds(250))
-        } while Date.now < limite
-        return false
-    }
-
     /// Attend que ce que la page a transcrit cesse d'arriver dans la zone —
     /// une seconde sans changement, cinq au plus.
     private func attendreQueLaZoneSeTaise(_ composeur: String) async throws {
         var precedent: String?
         var stable = 0
-        _ = try await observer(pendant: 5) {
+        _ = try await page.observer(auPlus: .seconds(5)) {
             let texte = await vu(.texte, composeur: composeur)?.texte
             stable = texte == precedent ? stable + 1 : 0
             precedent = texte
@@ -325,7 +313,7 @@ struct RelaisCalibrationAuto {
     /// calibrage en place : le filet seul.
     private func attendreLaReponse() async throws -> Bool {
         var finie = RelaisVeille.ReponseFinie(seuil: 8)
-        return try await observer(pendant: 120) {
+        return try await page.observer(auPlus: .seconds(120)) {
             let vu = await page.sonder { try await self.page.instantane(.reponse, reperes: RelaisSelecteurs()) }
             return finie.juger(vu?.reponse)
         }

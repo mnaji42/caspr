@@ -281,19 +281,16 @@ final class RelaisPage: NSObject {
     /// monté. `reperes` : le calibrage par défaut ; vides, le filet — celui
     /// que suit la calibration, qui remplace peut-être un calibrage faux.
     func connexion(secondes: Double = 5, reperes: RelaisSelecteurs? = nil) async -> Connexion {
-        let limite = Date.now.addingTimeInterval(secondes)
-        while !Task.isCancelled {
+        var vue = Connexion.inconnu
+        _ = try? await observer(auPlus: .seconds(secondes), toutes: .milliseconds(400)) {
             // Une zone de texte vue pendant la navigation est celle de la page
             // qu'on quitte. Un silence ne conclut rien : la borne s'en charge.
-            if !chargementEnCours,
-               let vu = await sonder({ try await self.instantane(reperes: reperes) }),
-               let connexion = session(vu) {
-                return connexion
-            }
-            guard Date.now < limite else { break }
-            try? await Task.sleep(for: .milliseconds(400))
+            guard !chargementEnCours, let vu = await sonder({ try await self.instantane(reperes: reperes) }),
+                  let connexion = session(vu) else { return false }
+            vue = connexion
+            return true
         }
-        return .inconnu
+        return vue
     }
 
     func rafraichirEtiquette() async {

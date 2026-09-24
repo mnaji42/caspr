@@ -32,7 +32,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisFenetres.swift` | Les **deux** fenêtres, et la vue web qui passe de l'une à l'autre (cf. « Les deux fenêtres » plus bas). |
 | `RelaisDictee.swift` (dans `CasprCore`) | Le scénario d'une dictée : écouter, rendre la transcription, envoyer, récupérer la réponse, la faire lire, arrêter la page après un abandon. Écrit sur ce qu'il demande à la page (`RelaisPageDictee`, dont `RelaisPage` est la vraie) et au presse-papiers, il se rejoue en test contre une page factice et une horloge qu'on avance à la main. Toutes ses attentes passent par une seule primitive, `observer` : un relevé par quart de seconde, **aucune échéance**, les échecs que la page prouve jugés avant tout. `RelaisPreparation` y décide ce que la fin d'une dictée fait de la page, selon ce qu'elle est au repos — morte, en chargement, muette, ou qui répond. |
 | `RelaisObservation.swift` (dans `CasprCore`) | Le temps du scénario : l'horloge, `RelaisDelai` — la liste, et la seule, des délais de geste qui restent sur le chemin d'une dictée, chacun avec ce qu'il prouve —, et `AppelAnnulable`. |
-| `RelaisCalibration.swift` | La calibration, un seul cycle de vie pour ses deux parcours : les gardes (dictée en cours, dictée macOS), au départ la discussion et la préparation oubliées, et à **toute** sortie — fin, abandon, fenêtre fermée, passage à macOS — l'occupation rendue, la page rangée (sauf quand l'alerte « ne répond pas » y renvoie) et la dictée suivante préparée, par un numéro qui empêche un parcours abandonné de rendre la main d'un autre. Il ne touche au relais que par deux portes, `prendrePourCalibrer` et `rendreApresCalibration`, restées dans `Relais` à côté de l'état qu'elles protègent. Une seule attente de session, jugée par le filet ; le parcours manuel, une boucle sur ses étapes ; le message d'essai, écrit et relu. |
+| `RelaisCalibration.swift` | La calibration, un seul cycle de vie pour ses deux parcours : les gardes (dictée en cours, dictée macOS), au départ la discussion et la préparation oubliées, et à **toute** sortie — fin, abandon, fenêtre fermée, passage à macOS — l'occupation rendue, la page rangée et la dictée suivante préparée, par un numéro qui empêche un parcours abandonné de rendre la main d'un autre. Il ne touche au relais que par deux portes, `prendrePourCalibrer` et `rendreApresCalibration`, restées dans `Relais` à côté de l'état qu'elles protègent, qui reste privé. Une seule attente de session, jugée par le filet ; le parcours manuel, une boucle sur ses étapes ; le message d'essai, écrit et relu. |
 | `RelaisEtape.swift` (dans `CasprCore`) | Le parcours manuel en données : ses étapes dans l'ordre où les boutons existent, celle qui écrit d'abord le message d'essai, celle qui est facultative. |
 | `RelaisDialogues.swift` | Ce que le relais dit dans une alerte : les consignes et le rapport de la calibration, le diagnostic. |
 | `RelaisPage+Navigation.swift` | Les délégués WebKit : l'autorisation du micro, les popups de connexion, les navigations échouées, le processus tué. |
@@ -172,8 +172,8 @@ Ce que l'automate s'interdit, et pourquoi :
   page l'a **dit** (un bouton de connexion, une page d'authentification), vu
   par le filet et non par le calibrage peut-être faux, après l'avoir laissée
   se charger. Une page qui ne dit rien en trente secondes « ne répond pas » :
-  elle est rechargée, laissée sous les yeux — l'alerte y renvoie —, et
-  personne n'est envoyé chercher un mot de passe.
+  elle est rechargée, puis rangée comme à toute sortie, et personne n'est
+  envoyé chercher un mot de passe.
 - **Écrire avant la fin.** Le parcours manuel enregistre repère par repère,
   sous une main qui voit ce qu'elle clique. Un automate qui ferait de même et
   échouerait à mi-chemin remplacerait en silence la moitié d'un calibrage qui

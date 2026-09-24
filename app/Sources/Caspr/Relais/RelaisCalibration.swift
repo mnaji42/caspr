@@ -31,11 +31,10 @@ final class RelaisCalibration {
     /// autrement.
     static let empreinte = "Caspr pour repérer les boutons"
 
-    /// Les deux portes du relais (cf. `Relais.prendrePourCalibrer`) : la page
-    /// prise au départ, ou `nil` et le refus dit ; la page rendue à la sortie,
-    /// rangée ou laissée sous les yeux.
-    private let prendre: () -> RelaisPage?
-    private let rendre: (RelaisPage, _ rangee: Bool) -> Void
+    /// Le relais, par ses deux portes seulement : `prendrePourCalibrer` au
+    /// départ, `rendreApresCalibration` à la sortie. Ce qu'elles gardent —
+    /// l'occupation, la préparation, le premier plan — reste privé chez lui.
+    private unowned let relais: Relais
 
     /// Le parcours en cours et sa page, retenus pour pouvoir y renoncer.
     ///
@@ -53,14 +52,7 @@ final class RelaisCalibration {
     /// l'ancienne tâche la lui retirait.
     private var numero = 0
 
-    /// Une alerte renvoie à la page — « La page ChatGPT ne répond pas » : elle
-    /// y a été rechargée, et c'est là qu'on voit si elle revient, ou ce qui
-    /// l'en empêche. La ranger derrière l'alerte démentait celle-ci.
-    private var laisserLaPage = false
-
-    init(prendre: @escaping () -> RelaisPage?, rendre: @escaping (RelaisPage, Bool) -> Void) {
-        (self.prendre, self.rendre) = (prendre, rendre)
-    }
+    init(relais: Relais) { self.relais = relais }
 
     // MARK: - Le cycle de vie
 
@@ -70,11 +62,10 @@ final class RelaisCalibration {
     /// L'automatique cède au manuel dans la même course, quand son rapport le
     /// propose : même numéro, même page, une seule sortie.
     func lancer(_ parcours: Parcours, termine: (() -> Void)?) {
-        guard let page = prendre() else {
+        guard let page = relais.prendrePourCalibrer() else {
             termine?()
             return
         }
-        laisserLaPage = false
         numero &+= 1
         let jeton = numero
         page.montrer()
@@ -108,9 +99,8 @@ final class RelaisCalibration {
     /// macOS.
     ///
     /// L'occupation rendue, pour que la dictée et les réglages repartent ; la
-    /// page rangée — sauf quand une alerte y renvoie (cf. `laisserLaPage`) —,
-    /// et le premier plan rendu s'il était à elle ; puis la
-    /// dictée suivante préparée comme après une dictée : le parcours a oublié
+    /// page rangée, toujours, et le premier plan rendu s'il était à elle ;
+    /// puis la dictée suivante préparée comme après une dictée : le parcours a oublié
     /// discussion et préparation en partant, et plusieurs de ses sorties —
     /// l'annonce refusée, une page qui ne répond pas, une connexion jamais
     /// venue — ne rechargent pas la page. La dictée suivante partait alors
@@ -121,7 +111,7 @@ final class RelaisCalibration {
     private func sortir() {
         guard let page = enCours?.page else { return }
         enCours = nil
-        rendre(page, !laisserLaPage)
+        relais.rendreApresCalibration(page)
     }
 
     // MARK: - La session
@@ -144,7 +134,6 @@ final class RelaisCalibration {
         case .inconnu:
             guard !Task.isCancelled else { return false }
             page.charger()
-            laisserLaPage = true
             RelaisDialogues.alerter("La page ChatGPT ne répond pas", RelaisDialogues.pageMuette(relance: relance))
             return false
         case .deconnecte:
@@ -157,12 +146,10 @@ final class RelaisCalibration {
         // minutes : le temps de retrouver un mot de passe, ou de créer un
         // compte. Fermer la fenêtre abandonne la calibration, et l'attente
         // avec elle.
-        let limite = Date.now.addingTimeInterval(600)
-        while Date.now < limite {
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return false }
-            if await page.connexion(secondes: 2, reperes: RelaisSelecteurs()) == .connecte { return true }
-        }
+        if (try? await page.observer(auPlus: .seconds(600), toutes: .seconds(1)) {
+            await page.connexion(secondes: 2, reperes: RelaisSelecteurs()) == .connecte
+        }) == true { return true }
+        guard !Task.isCancelled else { return false }
         // L'alerte a promis une reprise : s'arrêter sans le dire laissait
         // attendre, connecté, une suite qui ne viendrait plus.
         RelaisDialogues.alerter("Toujours pas connecté", RelaisDialogues.toujoursPasConnecte(relance: relance))
@@ -287,7 +274,17 @@ final class RelaisCalibration {
     /// le clic n'a rien copié. Le bon genre ne suffit pas à le reconnaître —
     /// le pouce, sous la même réponse, est un bouton aussi, et appris là, il
     /// ferait échouer chaque dictée à la récupération. Comme l'automatique,
-    /// la main est jugée à l'effet : le presse-papiers a changé.
+    /// la main est jugée à l'effet : le presse-papiers a changé, dans les
+    /// trois secondes. La copie atterrit une fraction de seconde après le
+    /// clic : c'est le délai d'un geste, et non d'une réponse.
+    ///
+    /// Relevé avant l'attente du clic, et non à l'instant du clic : Caspr
+    /// entend le clic par un aller-retour, et la copie du bon bouton peut le
+    /// précéder — un relevé pris alors l'absorberait, et refuserait ce
+    /// bouton à chaque essai, bloquant le parcours. En échange, une copie
+    /// faite ailleurs pendant qu'on cherche le bouton passerait pour la
+    /// sienne ; il faudrait encore qu'elle tombe avec un clic sur un autre
+    /// bouton du tour de la réponse, que la page a déjà seul admis.
     private func apprendre(_ page: RelaisPage, _ cible: RelaisCible) async throws {
         while true {
             let reponse = page.selecteurs.reponse
@@ -302,7 +299,10 @@ final class RelaisCalibration {
             guard let r = issue else { throw CancellationError() }
             let refus = cible != .copier ? nil
                 : r.selecteur.isEmpty ? RelaisDialogues.copierAilleurs
-                : await Self.aCopie(depuis: copies) ? nil : RelaisDialogues.copierRien
+                : (try? await page.observer(auPlus: .seconds(3), toutes: .milliseconds(100)) {
+                    NSPasteboard.general.changeCount != copies
+                }) == true ? nil : RelaisDialogues.copierRien
+            try Task.checkCancellation()
             if let refus {
                 guard RelaisDialogues.demander("Pas ce bouton-là", refus) else { throw CancellationError() }
                 continue
@@ -324,18 +324,6 @@ final class RelaisCalibration {
         }
     }
 
-    /// Le presse-papiers a-t-il changé depuis `compte` ? Le clic atteint la
-    /// page après que le guetteur l'a retenu, et la copie atterrit une
-    /// fraction de seconde plus tard : trois secondes, le délai d'un geste,
-    /// et non d'une réponse — au-delà, ce clic n'a rien copié.
-    private static func aCopie(depuis compte: Int) async -> Bool {
-        let fin = Date.now.addingTimeInterval(3)
-        while NSPasteboard.general.changeCount == compte, Date.now < fin, !Task.isCancelled {
-            try? await Task.sleep(for: .milliseconds(100))
-        }
-        return NSPasteboard.general.changeCount != compte
-    }
-
     /// Écrit le message d'essai dans `composeur` (vide : le filet), et
     /// s'assure qu'il y est ; faux s'il n'y a pas tenu en `secondes`.
     ///
@@ -347,13 +335,11 @@ final class RelaisCalibration {
     static func ecrireLEssai(_ page: RelaisPage, dans composeur: String, pendant secondes: Double = 6) async -> Bool {
         var reperes = RelaisSelecteurs()
         reperes.composeur = composeur
-        let limite = Date.now.addingTimeInterval(secondes)
-        repeat {
+        return (try? await page.observer(auPlus: .seconds(secondes), toutes: .zero) {
             _ = await page.sonder { try await page.ecrire(essai, sel: composeur) }
             try? await Task.sleep(for: .milliseconds(500))
             let vu = await page.sonder { try await page.instantane(.texte, reperes: reperes) }
-            if vu?.texte?.contains(empreinte) == true { return true }
-        } while !Task.isCancelled && Date.now < limite
-        return false
+            return vu?.texte?.contains(empreinte) == true
+        }) == true
     }
 }

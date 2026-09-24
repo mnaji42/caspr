@@ -49,6 +49,12 @@ final class VoieChatGPT {
     /// La transcription de ChatGPT, dès qu'elle est lue : c'est elle que
     /// livre un repli (cf. `replier`).
     private var brut: String?
+    /// La réponse d'un module qui écrit, dès qu'elle est lue : c'est elle
+    /// qu'une annulation garde au menu, à la place du brut (cf.
+    /// `abandonner`). Elle ne vivait que dans la seconde passe, et la croix —
+    /// Option maintenue aussi — pendant la lecture ou la livraison jetait une
+    /// réponse obtenue, et payée sur le quota.
+    private var reponse: String?
 
     init(overlay: RecordingOverlay, livraison: Livraison) {
         self.overlay = overlay
@@ -231,7 +237,13 @@ final class VoieChatGPT {
     /// s'en déroulera encore ne touchera plus à rien. La page est arrêtée puis
     /// préparée, jusqu'à quitter la discussion quand la dictée devait écrire
     /// ailleurs, comme sa fin l'aurait fait (cf. `Relais.finirLeCycle`).
+    ///
+    /// Rien n'est inséré, mais rien de ce qui est en main ne se perd : la
+    /// réponse va au menu, sinon le brut, qui y est depuis sa lecture. La
+    /// page préparée ensuite n'a plus la réponse — seul l'historique de
+    /// ChatGPT l'aurait gardée.
     private func abandonner(ecouteQuiDemarre: Bool) {
+        if let reponse { livraison.garderLaReponse(reponse) }
         // Pendant l'écoute, rien n'est encore figé : c'est le module du
         // moment qui dit où la dictée devait aller.
         let ecrit = !(dictee?.nEcritNullePart ?? (RelaisCatalogue.courant.sortieParDefaut == .aucune))
@@ -394,6 +406,7 @@ final class VoieChatGPT {
         scenario = nil
         dictee = nil
         brut = nil
+        reponse = nil
         applicationVisee = nil
         relais.finirLeCycle(fin)
     }
@@ -414,12 +427,6 @@ final class VoieChatGPT {
                             _ scenario: RelaisDictee, _ g: Int) async -> Issue? {
         Log.info("fin de dictée relais : \(String(format: "%.1f", dictee.duree)) s")
         let debut = ContinuousClock.now
-        // La transcription de ChatGPT a-t-elle été gardée pour le menu ?
-        var brutGarde = false
-        // La réponse de ChatGPT, quand elle diffère du brut : le menu ne
-        // garde que ce dernier, et un échec d'insertion doit savoir s'il
-        // reste autre chose à sauver (cf. le `catch` plus bas).
-        var remanie: String?
         do {
             let brut = try await scenario.arreterEtLire()
             guard g == generation else { return nil }
@@ -436,7 +443,6 @@ final class VoieChatGPT {
             // ce qui échoue ensuite — l'insertion, une attente abandonnée à la
             // touche — ne le perd plus.
             livraison.garderLeBrut(brut)
-            brutGarde = true
             self.brut = brut
             // Une dictée qui n'écrit nulle part s'arrête sur la page.
             if dictee.nEcritNullePart { return await discuter(brut, module, scenario, g) }
@@ -445,7 +451,6 @@ final class VoieChatGPT {
             // si elle échoue : rien de ce qui a été dit ne se perd.
             let (texte, avertissement) = try await transformer(brut, module, scenario, g)
             guard g == generation else { return nil }
-            if texte != brut { remanie = texte }
             relais.masquerBarre()
             overlay.hide()
             _ = avancer(g, .livraison)
@@ -473,7 +478,7 @@ final class VoieChatGPT {
             // L'historique a gardé le texte, ou il n'y avait que le brut, que
             // le menu garde : pas de fenêtre à ouvrir, la page est préparée
             // pour la suivante comme après une réussite.
-            guard !echec.enHistorique, remanie != nil else {
+            guard !echec.enHistorique, let reponse, reponse != brut else {
                 overlay.showFailure("Insertion impossible", hint: echec.enHistorique
                     ? "Le texte est dans l'historique, menu de Caspr."
                     : "La transcription brute est dans le menu de Caspr.")
@@ -492,44 +497,34 @@ final class VoieChatGPT {
         } catch {
             // L'abandon a tout défait (cf. `abandonner`).
             guard g == generation, !(error is CancellationError) else { return nil }
-            return echecDeLaPage(error, brutGarde: brutGarde)
+            return echecDeLaPage(error)
         }
     }
 
-    /// La page a prouvé un échec après l'arrêt : le dire, et ce qui reste à
-    /// reprendre — le texte resté dans la fenêtre du relais, sauf quand la
-    /// page est morte : celle qu'on ouvrirait est neuve, et le texte a
-    /// disparu avec l'ancienne.
+    /// La page a prouvé un échec avant que le brut soit lu — seule la
+    /// lecture lève encore passé l'arrêt : la seconde passe rend le brut, et
+    /// l'insertion a son `catch`. Le dire, et ce qui reste à reprendre — le
+    /// texte resté dans la fenêtre du relais, sauf quand la page est morte :
+    /// celle qu'on ouvrirait est neuve, et le texte a disparu avec l'ancienne.
     ///
     /// Pas de « Réessayer » : il n'y a pas d'audio de ce côté-ci, et proposer
     /// un recours qui ne peut pas marcher est pire que de n'en proposer aucun.
-    private func echecDeLaPage(_ error: Error, brutGarde: Bool) -> Issue {
+    private func echecDeLaPage(_ error: Error) -> Issue {
         Log.error("échec de transcription : \(error.localizedDescription)")
         let recuperable = (error as? RelaisErreur)?.laissePeutEtreLeTexte ?? true
         // Un refus de ChatGPT porte sa raison, un quota par exemple : la
-        // barre la montre telle quelle. Et quand le brut a été lu, rien
-        // n'est perdu : c'est le recours qu'on nomme d'abord, celui qui ne
-        // demande pas d'aller fouiller une page.
-        let recours: String? = brutGarde
-            ? "Rien n'est perdu : insérer la transcription brute, dans le menu de Caspr."
-            : recuperable ? "Le texte est peut-être encore dans la fenêtre de ChatGPT."
-                          : nil
+        // barre la montre telle quelle.
         overlay.showFailure((error as? RelaisErreur)?.raisonCourte ?? "Transcription impossible",
-                            hint: recours)
-        let dansLeMenu = "la transcription brute est dans le menu de Caspr"
-        guard recuperable else {
-            return (brutGarde ? "\(error.localizedDescription) — \(dansLeMenu)."
-                              : error.localizedDescription, false)
-        }
+                            hint: recuperable ? "Le texte est peut-être encore dans la fenêtre de ChatGPT." : nil)
+        guard recuperable else { return (error.localizedDescription, false) }
         // La fenêtre du relais s'ouvre sur la page : quand la lecture échoue,
         // le texte y est encore, et c'est le seul moyen de le récupérer. Elle
         // redevient donc utilisable au clavier, pour qu'un ⌘C y soit
         // possible. Rien n'est rechargé, et rien ne se collera à la dictée
         // suivante — celle-ci vide la zone avant d'écouter.
         relais.ouvrirFenetre()
-        return ("\(error.localizedDescription) — "
-                + (brutGarde ? "\(dansLeMenu), et le texte " : "le texte est ")
-                + "peut-être encore dans la fenêtre du relais.", true)
+        return ("\(error.localizedDescription) — le texte est peut-être encore dans la "
+                + "fenêtre du relais.", true)
     }
 
     /// Renvoie le brut à ChatGPT avec la consigne d'un module qui écrit, et
@@ -556,6 +551,7 @@ final class VoieChatGPT {
                 Log.error("relais : réponse vide, transcription brute conservée")
                 return (brut, "ChatGPT a rendu une réponse vide")
             }
+            reponse = texte
             if module.ditLaReponse {
                 // La réponse est en main, finie et copiée : ce qui fait défaut
                 // ici, c'est le son seul, et le texte remanié s'insère quand
@@ -623,9 +619,6 @@ final class VoieChatGPT {
                 // Un refus — un quota —, une session fermée se disent dans la
                 // barre : sans quoi on attend une voix qui ne viendra pas.
                 avertissement = await scenario.faireLire(dejaFinie: false)?.raisonCourte
-                if scenario.lectureInterrompue {
-                    Log.info("relais : attente de la lecture interrompue, discussion conservée")
-                }
             }
             // WebKit a tué la page après l'envoi : rechargée, elle porte une
             // conversation vierge. « Dictée perdue » serait faux : ChatGPT a

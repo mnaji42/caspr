@@ -431,7 +431,7 @@ struct RelaisDicteeTests {
         #expect(!rendue)
         dictee.cesserDAttendreLaLecture()
         #expect(await tache.value == nil)
-        #expect(dictee.lectureInterrompue && page.lectures == 0)
+        #expect(page.lectures == 0)
     }
 
     @Test("La touche cesse d'attendre la lecture, sur-le-champ, sans rien lever")
@@ -448,7 +448,7 @@ struct RelaisDicteeTests {
         dictee.cesserDAttendreLaLecture()
         #expect(await tache.value == nil)
         #expect(ContinuousClock.now - debut < .milliseconds(200))
-        #expect(dictee.lectureInterrompue && page.lectures == 0)
+        #expect(page.lectures == 0)
     }
 
     // MARK: - L'écoute

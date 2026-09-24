@@ -282,6 +282,9 @@ final class Livraison {
     /// transcription brute de ChatGPT. Le menu les nomme différemment, et
     /// seule la seconde a pu laisser la fenêtre du relais devant.
     private(set) var voieDuRecours: VoieDeDictee = .apple
+    /// Le recours de ChatGPT est sa réponse, et non sa transcription : le
+    /// menu doit nommer ce qu'il insérera (cf. `garderLaReponse`).
+    private(set) var recoursEstLaReponse = false
 
     /// Garde de quoi reprendre une dictée ratée, et le dit dans la barre.
     ///
@@ -298,6 +301,7 @@ final class Livraison {
         pendingAudio = audio
         pendingPreview = apercu
         voieDuRecours = .apple
+        recoursEstLaReponse = false
         overlay.showFailure(echec, hint: Self.rescueHint(preview: apercu))
     }
 
@@ -319,6 +323,15 @@ final class Livraison {
         pendingAudio = nil
         pendingPreview = brut
         voieDuRecours = .chatgpt
+        recoursEstLaReponse = false
+    }
+
+    /// Garde la réponse de ChatGPT à la place du brut, quand la dictée est
+    /// annulée après l'avoir obtenue : c'est le meilleur texte en main, et
+    /// annuler ne veut pas dire la jeter (cf. `VoieChatGPT.abandonner`).
+    func garderLaReponse(_ reponse: String) {
+        garderLeBrut(reponse)
+        recoursEstLaReponse = true
     }
 
     /// Insère ce que l'aperçu en direct avait écrit, faute de mieux.
@@ -357,6 +370,7 @@ final class Livraison {
         pendingAudio = nil
         pendingPreview = nil
         voieDuRecours = .apple
+        recoursEstLaReponse = false
     }
 
     var hasPendingAudio: Bool { pendingAudio != nil }

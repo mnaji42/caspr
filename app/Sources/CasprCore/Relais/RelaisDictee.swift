@@ -75,9 +75,6 @@ public final class RelaisDictee {
     private var empreinte = ""
     private var lecture: Task<RelaisErreur?, Never>?
 
-    /// L'appui a demandé de ne plus attendre la lecture à haute voix.
-    public private(set) var lectureInterrompue = false
-
     /// La page que cette dictée a prise est-elle morte depuis ?
     public var pageMorte: Bool { epoque.map { $0 != page.epoque } ?? false }
 
@@ -378,7 +375,7 @@ public final class RelaisDictee {
     @discardableResult
     public func faireLire(dejaFinie: Bool,
                           quandFinie: @escaping @MainActor () -> Void = {}) async -> RelaisErreur? {
-        guard page.selecteurs.saitLire, !lectureInterrompue else { return nil }
+        guard page.selecteurs.saitLire else { return nil }
         // Une tâche à elle, la seule que la touche de dictée fait taire : la
         // dictée a encore à ouvrir la discussion ou à insérer le texte, et une
         // tâche annulée n'insère rien.
@@ -389,8 +386,11 @@ public final class RelaisDictee {
     }
 
     /// L'appui ne fait plus que cesser d'attendre la lecture à haute voix.
+    ///
+    /// Sans drapeau à retenir : la touche ne le demande qu'en phase de
+    /// lecture (cf. `RelaisCycle.decider`), où la machine entre dans le même
+    /// tour qu'elle appelle `faireLire` — la lecture est déjà là à couper.
     public func cesserDAttendreLaLecture() {
-        lectureInterrompue = true
         lecture?.cancel()
     }
 

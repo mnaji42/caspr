@@ -520,6 +520,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     insert.toolTip = "Écrit ce que macOS avait transcrit pendant que "
                         + "vous parliez, moins soigné que la transcription "
                         + "finale.\n\n\(preview)"
+                case .chatgpt where controller.pendingPreviewIsReponse:
+                    insert = NSMenuItem(title: "Insérer la réponse de ChatGPT",
+                                        action: #selector(insertPreview), keyEquivalent: "")
+                    insert.toolTip = "Écrit la réponse de ChatGPT à la dictée "
+                        + "annulée.\n\n\(preview)"
                 case .chatgpt:
                     insert = NSMenuItem(title: "Insérer la transcription brute de ChatGPT",
                                         action: #selector(insertPreview), keyEquivalent: "")
@@ -754,7 +759,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     /// L'audio est jeté, rien n'est transcrit ni inséré : quelqu'un qui tient
     /// la touche deux secondes ne demande pas qu'on écrive ce qu'il vient de
-    /// dire, il demande les réglages.
+    /// dire, il demande les réglages. Sous ChatGPT, c'est la croix : une
+    /// réponse déjà obtenue n'est pas écrite par-dessus les réglages qui
+    /// s'ouvrent, mais elle reste au menu.
     private func openSettingsFromHold() {
         controller.cancel()
         Log.info("Option maintenue — ouverture des réglages")

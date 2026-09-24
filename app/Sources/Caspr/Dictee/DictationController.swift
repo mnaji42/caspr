@@ -223,7 +223,9 @@ final class DictationController {
         }
     }
 
-    /// Échap, la croix de la barre, et Option maintenue.
+    /// Échap, la croix de la barre, et Option maintenue — qui, sous ChatGPT,
+    /// vaut la croix à toute phase : rien n'est inséré, et ce qui est déjà en
+    /// main va au menu (cf. `VoieChatGPT.abandonner`).
     func cancel() {
         if voieDuCycle == .chatgpt {
             chatgpt.geste(.croix)
@@ -439,6 +441,7 @@ final class DictationController {
     var pendingPreviewText: String? { livraison.pendingPreviewText }
     /// L'aperçu de macOS, ou la transcription brute de ChatGPT.
     var pendingPreviewVoie: VoieDeDictee { livraison.voieDuRecours }
+    var pendingPreviewIsReponse: Bool { livraison.recoursEstLaReponse }
     var pendingDuration: TimeInterval { livraison.pendingDuration }
 
     /// Met fin à la discussion ChatGPT depuis le menu.

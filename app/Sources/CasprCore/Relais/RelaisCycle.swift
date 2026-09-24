@@ -39,7 +39,8 @@ public enum RelaisPhase: String, CaseIterable, Sendable {
     /// dit pas sa sortie se lit comme un gel.
     public var sortie: String? {
         switch self {
-        case .demarrage, .transcription, .envoi, .reponse: "touche de dictée pour abandonner"
+        case .demarrage, .transcription, .envoi, .reponse:
+            "touche de dictée pour abandonner, × pour tout annuler"
         // Rien n'est plus à abandonner : la touche ne fait que cesser
         // d'attendre la voix.
         case .lecture: "touche de dictée pour ne plus attendre"

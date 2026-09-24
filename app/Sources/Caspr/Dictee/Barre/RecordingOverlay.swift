@@ -115,6 +115,12 @@ final class RecordingOverlay {
     let targetControl = PillSelector(
         labels: ["Curseur", "Notes…"], accent: accent)
     let micButton = FirstMouseButton()
+    /// La croix : tout annuler, sans rien insérer. Pendant l'écoute, dans sa
+    /// rangée ; pendant une attente de ChatGPT, qui peut durer des minutes,
+    /// dans la carte, où la rangée de l'écoute est cachée. Le texte déjà en
+    /// main reste au menu de Caspr.
+    let cancelButton = FirstMouseButton()
+    let waitCancelButton = FirstMouseButton()
     let languageBadge = NSTextField(labelWithString: "")
     /// Les pastilles de bascule, sous macOS multilingue.
     let languageControl = PillSelector(labels: [], accent: accent)
@@ -150,6 +156,7 @@ final class RecordingOverlay {
     var onSelectTarget: ((Bool) -> Void)?
     var onSelectLanguage: ((String) -> Void)?
 
+    /// La croix de la barre — le sens d'Échap pendant l'écoute.
     var onCancel: (() -> Void)?
 
     var startedAt: Date?
@@ -240,6 +247,7 @@ final class RecordingOverlay {
         stopProcessingProgress()
         card?.layer?.borderColor = Self.accent.withAlphaComponent(0.35).cgColor
         statusLabel.isHidden = true
+        waitCancelButton.isHidden = true
         container?.isHidden = false
         textRow?.isHidden = false
         cardAlone?.isActive = false
@@ -301,6 +309,9 @@ final class RecordingOverlay {
         // message qui n'en occupe qu'une.
         statusLabel.maximumNumberOfLines = 1
         statusLabel.stringValue = label
+        // Seulement devant une attente qui peut durer : celle de macOS dure
+        // une seconde, et rien ne l'interrompt.
+        waitCancelButton.isHidden = progress == nil
         panel.setContentSize(NSSize(width: Self.cardWidth,
                                     height: 2 * Self.padding + 20))
         cardSheen?.frame = card?.bounds ?? .zero
@@ -345,9 +356,11 @@ final class RecordingOverlay {
                 .foregroundColor: NSColor.secondaryLabelColor,
                 .paragraphStyle: centred,
             ])
+        // La sortie en 11 pt : elle nomme la croix, et la ligne doit tenir
+        // à côté d'elle — 448 pt mesurés pour la plus longue, sur 520.
         if let hint = progress.exitHint {
             text.append(NSAttributedString(string: " — " + hint, attributes: [
-                .font: NSFont.systemFont(ofSize: 12),
+                .font: NSFont.systemFont(ofSize: 11),
                 .foregroundColor: NSColor.tertiaryLabelColor,
                 .paragraphStyle: centred,
             ]))
@@ -401,6 +414,7 @@ final class RecordingOverlay {
         cardBelowModules?.isActive = false
         cardAtTop?.isActive = true
         statusLabel.isHidden = false
+        waitCancelButton.isHidden = true
         // Un message venu d'ailleurs peut ne pas tenir sur une ligne — le
         // refus de ChatGPT, dont la fin dit quand réessayer. Il prend alors
         // la seconde ligne, plutôt que de perdre justement cette fin.

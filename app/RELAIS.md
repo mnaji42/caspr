@@ -197,8 +197,10 @@ distingue de la voie macOS, et pourquoi.
 - **`Dictee/Barre/RecordingOverlay.swift`** — la pastille des modules (`moduleLabels`,
   `onSelectModule`) : le choix se fait au moment de parler, pas dans un écran
   de réglages. L'attente, elle, s'affiche avec sa phase et son chrono dès dix
-  secondes, et la sortie par la touche de dictée
-  (`showProcessing(_:progress:)`).
+  secondes, et la sortie (`showProcessing(_:progress:)`). La croix, pendant
+  l'écoute et pendant une attente de ChatGPT, annule tout sans rien insérer
+  (`onCancel`) ; la touche de dictée, elle, renonce à ChatGPT en insérant la
+  transcription brute si elle est déjà lue (cf. `RelaisCycle`).
 - **`DictationController.swift`** — l'état commun, la voie figée à l'appui
   (`voieDuCycle`), le cycle macOS, Échap et les recours du menu. Sous
   ChatGPT, la touche et la croix ne font que passer le geste à la machine.
@@ -275,7 +277,8 @@ inachevée » à qui vient de la terminer. C'est arrivé en 0.13.0.
 
 **Aucune attente de ChatGPT ne finit parce que le temps passe.** Sur le
 chemin d'une dictée, une attente ne finit que par un geste de l'utilisateur —
-la touche de dictée, Échap pendant l'écoute — ou par un échec que la page
+la touche de dictée, la croix de la barre, Échap pendant l'écoute — ou par
+un échec que la page
 **prouve** : une alerte de refus apparue depuis la demande, le processus
 WebKit mort, l'écran d'authentification montré, le pont de Caspr absent d'une
 page chargée (le script ne s'y est pas installé, rien ne l'y installera :

@@ -71,7 +71,7 @@ extension RecordingOverlay {
         buildIndicators()
         buildControls()
 
-        let recording = makeRow([dot, timeLabel, meter, NSView(), micButton])
+        let recording = makeRow([dot, timeLabel, meter, NSView(), micButton, cancelButton])
         let tabs = makeSpacedRow([moduleControl, targetControl])
         recordingRow = recording
         textRow = tabs
@@ -84,6 +84,8 @@ extension RecordingOverlay {
         container = inner
 
         card.addSubview(inner)
+        card.addSubview(waitCancelButton)
+        waitCancelButton.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(tabs)
         root.addSubview(statusLabel)
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -143,6 +145,10 @@ extension RecordingOverlay {
             recording.heightAnchor.constraint(equalToConstant: Self.rowHeight),
             recording.widthAnchor.constraint(equalTo: inner.widthAnchor),
             previewLabel.widthAnchor.constraint(equalTo: inner.widthAnchor),
+
+            waitCancelButton.trailingAnchor.constraint(equalTo: card.trailingAnchor,
+                                                       constant: -Self.padding),
+            waitCancelButton.centerYAnchor.constraint(equalTo: card.centerYAnchor),
 
             statusLabel.centerXAnchor.constraint(equalTo: card.centerXAnchor),
             statusLabel.centerYAnchor.constraint(equalTo: card.centerYAnchor),
@@ -318,6 +324,18 @@ extension RecordingOverlay {
             // Réagit sans que Caspr passe au premier plan.
             button.setButtonType(.momentaryChange)
         }
+        for button in [cancelButton, waitCancelButton] {
+            button.isBordered = false
+            button.bezelStyle = .inline
+            button.setButtonType(.momentaryChange)
+            button.image = NSImage(systemSymbolName: "xmark.circle.fill",
+                                   accessibilityDescription: "Tout annuler")
+            button.contentTintColor = .tertiaryLabelColor
+            button.toolTip = "Tout annuler — rien n'est inséré\nLe texte déjà transcrit reste dans le menu de Caspr"
+            button.target = self
+            button.action = #selector(annulerDepuisLaBarre)
+        }
+        waitCancelButton.isHidden = true
 
         moduleControl.onSelect = { [weak self] index in
             self?.onSelectModule?(index)
@@ -376,6 +394,10 @@ extension RecordingOverlay {
         let frame = screen.visibleFrame
         panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2,
                                      y: frame.minY + 90))
+    }
+
+    @objc private func annulerDepuisLaBarre() {
+        onCancel?()
     }
 
     @objc private func openMicrophoneModes() {

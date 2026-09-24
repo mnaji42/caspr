@@ -47,7 +47,7 @@ struct RelaisCycleTests {
             // Toute phase affichée a sa sortie : aucune n'a de fin (30).
             #expect((phase.libelle == nil) == (phase.sortie == nil), "\(phase)")
         }
-        #expect(RelaisPhase.transcription.sortie == "touche de dictée pour abandonner")
+        #expect(RelaisPhase.transcription.sortie == "touche de dictée pour abandonner, × pour tout annuler")
         #expect(RelaisPhase.lecture.sortie == "touche de dictée pour ne plus attendre")
     }
 }

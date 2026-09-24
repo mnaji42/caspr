@@ -162,8 +162,24 @@ final class DictationController {
     /// dictée s'écrivait alors dans la fenêtre où l'on était passé.
     private var applicationVisee: NSRunningApplication?
 
+    /// Le dernier appui retenu, pour absorber les rebonds.
+    ///
+    /// Un seul anti-rebond, ici, pour tous les déclencheurs — il n'y en avait
+    /// qu'un, dans le guetteur d'Option, et le raccourci n'en avait pas. Un
+    /// `CGEventTap` peut recevoir deux `flagsChanged` pour un seul relâchement,
+    /// et un double appui nerveux à l'arrêt d'une dictée ChatGPT tomberait
+    /// sinon sur la transcription — où la touche renonce à ChatGPT. Deux appuis
+    /// volontaires à moins de 400 ms ne correspondent à aucune dictée réelle.
+    private var dernierAppui = Date.distantPast
+
     /// Appelé par le raccourci global : démarre ou termine la dictée.
     func toggle() {
+        let maintenant = Date.now
+        guard maintenant.timeIntervalSince(dernierAppui) > 0.4 else {
+            Log.info("appui rebondi, ignoré")
+            return
+        }
+        dernierAppui = maintenant
         // Sous ChatGPT, c'est la phase qui décide (cf. `RelaisCycle.decider`).
         if voieDuCycle == .chatgpt {
             chatgpt.geste(.touche)

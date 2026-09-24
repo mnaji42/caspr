@@ -72,16 +72,6 @@ final class ModifierKeyMonitor {
     /// maintenue : le relâchement ne doit alors rien déclencher.
     private var usedAsModifier = false
 
-    /// Instant du dernier déclenchement, pour absorber les rebonds.
-    ///
-    /// Précaution, pas correctif : aucun double déclenchement n'a été observé
-    /// à l'usage. Mais un `CGEventTap` peut recevoir deux `flagsChanged` pour
-    /// un seul relâchement — clavier externe, changement de disposition, tap
-    /// réarmé au mauvais moment — et le coût est nul : deux appuis volontaires
-    /// séparés de moins de 400 ms ne correspondent à aucune dictée réelle.
-    private var lastTrigger = Date.distantPast
-    private let debounce: TimeInterval = 0.4
-
     /// Arme le décompte : au bout du délai, les réglages s'ouvrent d'eux-mêmes.
     private func armHoldTimer() {
         cancelHoldTimer()
@@ -187,12 +177,8 @@ final class ModifierKeyMonitor {
                 // ouverts, ce relâchement ne doit pas lancer une dictée.
                 guard !didHold else { return }
                 guard !usedAsModifier else { return }
-                let now = Date()
-                guard now.timeIntervalSince(lastTrigger) > debounce else {
-                    NSLog("caspr: rebond ignoré")
-                    return
-                }
-                lastTrigger = now
+                // Les rebonds sont absorbés par le contrôleur, pour tous les
+                // déclencheurs (cf. `DictationController.toggle`).
                 DispatchQueue.main.async { [weak self] in self?.onTrigger() }
             }
 

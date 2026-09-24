@@ -46,6 +46,9 @@ final class VoieChatGPT {
     private var applicationVisee: NSRunningApplication?
     /// La dictée, figée à l'arrêt de l'écoute ; `nil` avant.
     private var dictee: DicteeEnCours?
+    /// La transcription de ChatGPT, dès qu'elle est lue : c'est elle que
+    /// livre un repli (cf. `replier`).
+    private var brut: String?
 
     init(overlay: RecordingOverlay, livraison: Livraison) {
         self.overlay = overlay
@@ -170,8 +173,55 @@ final class VoieChatGPT {
             scenario?.cesserDAttendreLaLecture()
         case .annulerLeDemarrage:
             abandonner(ecouteQuiDemarre: true)
-        case .replier, .annuler:
+        case .replier:
+            replier()
+        case .annuler:
             abandonner(ecouteQuiDemarre: false)
+        }
+    }
+
+    /// La touche pendant que ChatGPT travaille : renoncer à lui, sans perdre
+    /// ce qui a été dit (48, 94).
+    ///
+    /// La transcription déjà lue s'insère là où l'on parlait, à la
+    /// destination figée à l'arrêt : on renonce à la réponse, pas à la
+    /// dictée. Abandonner la jetait au menu, et il fallait aller l'y
+    /// chercher — alors que c'est exactement ce que la touche voulait dire.
+    /// La page est arrêtée puis préparée une fois le texte écrit, comme
+    /// après un abandon.
+    ///
+    /// Sans transcription lue — ChatGPT transcrit encore —, ou pour un module
+    /// qui n'écrit nulle part, c'est l'abandon : le brut éventuel reste au
+    /// menu.
+    private func replier() {
+        guard let brut, let dictee, !dictee.nEcritNullePart else {
+            abandonner(ecouteQuiDemarre: false)
+            return
+        }
+        couper()
+        let g = generation
+        overlay.hide()
+        // La touche et la croix y annulent encore : rien n'est activé ni
+        // écrit (63).
+        entrer(.livraison)
+        Log.info("relais : ChatGPT abandonné — transcription brute insérée")
+        moteur = Task {
+            var echec: String?
+            do {
+                try await livraison.livrer(brut, dictee)
+                guard g == generation else { return }
+                overlay.showFailure("Transcription brute insérée — ChatGPT abandonné")
+            } catch {
+                guard g == generation else { return }
+                // Le brut reste au menu : rien n'a été écrit.
+                Log.error("échec d'insertion : \(error.localizedDescription)")
+                let enHistorique = (error as? Livraison.EchecDInsertion)?.enHistorique == true
+                overlay.showFailure("Insertion impossible", hint: enHistorique
+                    ? "Le texte est dans l'historique, menu de Caspr."
+                    : "La transcription brute est dans le menu de Caspr.")
+                echec = error.localizedDescription
+            }
+            terminer(.abandonnee(quitterLaDiscussion: true, ecouteQuiDemarre: false), echec: echec)
         }
     }
 
@@ -305,8 +355,9 @@ final class VoieChatGPT {
         // Échap est rendu pendant l'attente, et c'est délibéré : c'est un
         // raccourci global, et le garder armé une minute pendant que
         // quelqu'un travaille ailleurs annulait des réorganisations que
-        // personne n'avait voulu annuler (mesuré). La sortie reste la touche
-        // de dictée (cf. `DictationController.ajusterEchap`).
+        // personne n'avait voulu annuler (mesuré). Les sorties restent la
+        // touche de dictée et la croix de la barre (cf.
+        // `DictationController.ajusterEchap`).
         Feedback.recordingStopped()
         // Ce qui est dit à l'arrêt : le module et la destination du moment.
         // La voie et l'application visée restent celles de l'appui (29).
@@ -342,6 +393,7 @@ final class VoieChatGPT {
         moteur = nil
         scenario = nil
         dictee = nil
+        brut = nil
         applicationVisee = nil
         relais.finirLeCycle(fin)
     }
@@ -385,6 +437,7 @@ final class VoieChatGPT {
             // touche — ne le perd plus.
             livraison.garderLeBrut(brut)
             brutGarde = true
+            self.brut = brut
             // Une dictée qui n'écrit nulle part s'arrête sur la page.
             if dictee.nEcritNullePart { return await discuter(brut, module, scenario, g) }
 

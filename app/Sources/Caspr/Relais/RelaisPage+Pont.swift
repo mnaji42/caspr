@@ -242,16 +242,14 @@ extension RelaisPage {
         try await (pont(.candidatsCopier, reponse) as Liste<Repere>).candidats ?? []
     }
 
-    /// Guette un clic de l'utilisateur sur un élément de ce genre ; `nil` à
-    /// l'abandon (cf. `abandonnerCalibration`).
-    func calibrer(genre: String) async throws -> Repere? { try await repere(pont(.calibrer, genre)) }
-
-    /// Guette un clic, ouvre-menu compris (cf. `calibrerAvecMenu` du pont).
-    func calibrerAvecMenu() async throws -> Repere? { try await repere(pont(.calibrerAvecMenu)) }
-
-    private func repere(_ r: Rendu) -> Repere? {
-        r.ok ? Repere(selecteur: r.selecteur ?? "", parent: r.parent ?? "",
-                      menu: r.menu ?? "", menuParent: r.menuParent ?? "") : nil
+    /// Guette le clic de l'utilisateur sur `cible` (cf. `guetter` du pont) ;
+    /// `nil` à l'abandon (cf. `abandonnerCalibration`). Un repère vide : la
+    /// page a refusé ce clic — un « copier » qui n'est pas celui de la
+    /// dernière réponse, cherchée par `reponse`.
+    func guetter(_ cible: RelaisCible, reponse: String) async throws -> Repere? {
+        let r: Rendu = try await pont(.guetter, cible.rawValue, reponse)
+        return r.ok ? Repere(selecteur: r.selecteur ?? "", parent: r.parent ?? "",
+                             menu: r.menu ?? "", menuParent: r.menuParent ?? "") : nil
     }
 
     /// Fait renoncer une calibration qui attend un clic — au repos.

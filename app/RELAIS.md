@@ -32,11 +32,13 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisFenetres.swift` | Les **deux** fenêtres, et la vue web qui passe de l'une à l'autre (cf. « Les deux fenêtres » plus bas). |
 | `RelaisDictee.swift` (dans `CasprCore`) | Le scénario d'une dictée : écouter, rendre la transcription, envoyer, récupérer la réponse, la faire lire, arrêter la page après un abandon. Écrit sur ce qu'il demande à la page (`RelaisPageDictee`, dont `RelaisPage` est la vraie) et au presse-papiers, il se rejoue en test contre une page factice et une horloge qu'on avance à la main. Toutes ses attentes passent par une seule primitive, `observer` : un relevé par quart de seconde, **aucune échéance**, les échecs que la page prouve jugés avant tout. `RelaisPreparation` y décide ce que la fin d'une dictée fait de la page, selon ce qu'elle est au repos — morte, en chargement, muette, ou qui répond. |
 | `RelaisObservation.swift` (dans `CasprCore`) | Le temps du scénario : l'horloge, `RelaisDelai` — la liste, et la seule, des délais de geste qui restent sur le chemin d'une dictée, chacun avec ce qu'il prouve —, et `AppelAnnulable`. |
-| `RelaisPage+Calibration.swift` | Le message d'essai et les guetteurs de clic, pour les deux calibrations. |
+| `RelaisCalibration.swift` | La calibration, un seul cycle de vie pour ses deux parcours : les gardes (dictée en cours, dictée macOS), au départ la discussion et la préparation oubliées, et à **toute** sortie — fin, abandon, fenêtre fermée, passage à macOS — l'occupation rendue, la page rangée (sauf quand l'alerte « ne répond pas » y renvoie) et la dictée suivante préparée, par un numéro qui empêche un parcours abandonné de rendre la main d'un autre. Il ne touche au relais que par deux portes, `prendrePourCalibrer` et `rendreApresCalibration`, restées dans `Relais` à côté de l'état qu'elles protègent. Une seule attente de session, jugée par le filet ; le parcours manuel, une boucle sur ses étapes ; le message d'essai, écrit et relu. |
+| `RelaisEtape.swift` (dans `CasprCore`) | Le parcours manuel en données : ses étapes dans l'ordre où les boutons existent, celle qui écrit d'abord le message d'essai, celle qui est facultative. |
+| `RelaisDialogues.swift` | Ce que le relais dit dans une alerte : les consignes et le rapport de la calibration, le diagnostic. |
 | `RelaisPage+Navigation.swift` | Les délégués WebKit : l'autorisation du micro, les popups de connexion, les navigations échouées, le processus tué. |
 | `RelaisErreur.swift` (dans `CasprCore`) | Ce qui peut échouer, et comment la barre et le menu le disent. |
-| `RelaisScripts.swift` (dans `CasprCore`) | Le JavaScript injecté — le pont (cliquer, lire, vider, calibrer) et l'écho —, en chaînes Swift pour que les tests l'atteignent : une faute de syntaxe casse `swift test` au lieu de laisser la page sans pont. |
-| `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `Relais` qui enregistre. |
+| `RelaisScripts.swift` (dans `CasprCore`) | Le JavaScript injecté — le pont (cliquer, lire, vider, et un seul guetteur de clic pour calibrer, `guetter`) et l'écho —, en chaînes Swift pour que les tests l'atteignent : une faute de syntaxe casse `swift test` au lieu de laisser la page sans pont. |
+| `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `RelaisCalibration` qui enregistre. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
 | `RelaisCycle.swift` (dans `CasprCore`) | La machine d'une dictée, en table : ses phases (`RelaisPhase`), leur libellé et la sortie que la barre dit avec le chrono, et ce que valent la touche de dictée et la croix à chacune (`RelaisCycle.decider`), et quel échec de la page mène au repli (`RelaisCycle.replie`). Aucune ligne ne vient de l'horloge. |
 | `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. La carte de session (`RelaisSession`) est aussi celle de l'accueil, et c'est elle qui dit ce que la voie exige pour dicter. |
@@ -151,6 +153,15 @@ une copie non vide, étrangère au message envoyé, qui s'insérait à la place
 de la réponse. La lecture de la réponse suit la même règle : le filet ne sert
 qu'à qui n'a pas de repère.
 
+La main suit la même règle. Un « copier » désigné n'est retenu que s'il est
+celui du tour de la dernière réponse, et par un repère que la dictée ramènera
+à ce seul bouton — la paire, ou `copierAutour`. La page en pose un sous
+chaque message, celui de l'utilisateur compris : appris là, il copiait la
+demande à chaque dictée. Et le clic doit avoir **copié** : le presse-papiers
+a changé dans les trois secondes. Le genre ne suffit pas — le pouce, sous la
+même réponse, est un bouton aussi. Sinon Caspr refuse ce clic, dit pourquoi,
+et redemande.
+
 Ce que l'automate s'interdit, et pourquoi :
 
 - **Se connecter.** C'est le compte de l'utilisateur : sans session, la
@@ -161,7 +172,8 @@ Ce que l'automate s'interdit, et pourquoi :
   page l'a **dit** (un bouton de connexion, une page d'authentification), vu
   par le filet et non par le calibrage peut-être faux, après l'avoir laissée
   se charger. Une page qui ne dit rien en trente secondes « ne répond pas » :
-  elle est rechargée, et personne n'est envoyé chercher un mot de passe.
+  elle est rechargée, laissée sous les yeux — l'alerte y renvoie —, et
+  personne n'est envoyé chercher un mot de passe.
 - **Écrire avant la fin.** Le parcours manuel enregistre repère par repère,
   sous une main qui voit ce qu'elle clique. Un automate qui ferait de même et
   échouerait à mi-chemin remplacerait en silence la moitié d'un calibrage qui

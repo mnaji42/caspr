@@ -226,7 +226,7 @@ struct RelaisScriptsTests {
     @Test("La calibration ne retient qu'un clic de la main, et renonce sur demande")
     func calibrationGuette() {
         let ctx = Self.pontSurFauxDocument()
-        ctx.evaluateScript("window.__relais.calibrer('bouton').then((r) => { resultat = r; });")
+        ctx.evaluateScript("window.__relais.guetter('envoi', '').then((r) => { resultat = r; });")
         ctx.evaluateScript("ecouteur({ isTrusted: false, target: bouton });")
         #expect(ctx.evaluateScript("resultat === null")!.toBool())
         ctx.evaluateScript("ecouteur({ isTrusted: true, target: bouton });")
@@ -234,9 +234,21 @@ struct RelaisScriptsTests {
                 == #"[data-testid="send-button"]"#)
         #expect(ctx.evaluateScript("ecouteur === null")!.toBool())
 
-        ctx.evaluateScript("resultat = null; window.__relais.calibrerAvecMenu().then((r) => { resultat = r; });")
+        ctx.evaluateScript("resultat = null; window.__relais.guetter('lecture', '').then((r) => { resultat = r; });")
         #expect(ctx.evaluateScript("window.__relais.abandonnerCalibration().ok")!.toBool())
         #expect(ctx.evaluateScript("resultat.ok === false && ecouteur === null")!.toBool())
+        #expect(ctx.exception == nil)
+    }
+
+    /// La page pose un « copier » sous chaque message, celui de
+    /// l'utilisateur compris : appris ailleurs que sous la dernière réponse,
+    /// il copiait la demande à chaque dictée.
+    @Test("« Copier » désigné hors de la dernière réponse est refusé, pas appris")
+    func copierHorsDeLaReponse() {
+        let ctx = Self.pontSurFauxDocument()
+        ctx.evaluateScript("window.__relais.guetter('copier', '').then((r) => { resultat = r; });")
+        ctx.evaluateScript("ecouteur({ isTrusted: true, target: bouton });")
+        #expect(ctx.evaluateScript("resultat.ok && resultat.selecteur === '' && ecouteur === null")!.toBool())
         #expect(ctx.exception == nil)
     }
 

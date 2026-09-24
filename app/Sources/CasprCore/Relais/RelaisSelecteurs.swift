@@ -1,33 +1,18 @@
 import Foundation
 
 /// Les trois éléments de la page ChatGPT dont le relais a besoin.
-public enum RelaisCible: String, CaseIterable, Codable {
+public enum RelaisCible: String, CaseIterable, Codable, Sendable {
     case micro, stop, composeur, envoi, reponse, copier, lecture
-
-    /// Ce que le repère doit être pour vouloir dire quelque chose.
-    ///
-    /// Le pont s'en sert trois fois — pour retrouver l'élément, pour juger un
-    /// repère au moment où on l'apprend, et pour écarter les clics hors sujet
-    /// pendant la calibration. Un bouton d'envoi qui désignerait la zone de
-    /// texte n'est pas un repère imparfait : c'est un repère faux, et il vaut
-    /// mieux ne rien apprendre que d'apprendre cela.
-    public var genre: String {
-        switch self {
-        case .composeur: "saisie"
-        case .reponse:   "texte"
-        default:         "bouton"
-        }
-    }
 
     public var libelle: String {
         switch self {
         case .micro:     "le bouton micro"
-        case .stop:      "le bouton d'arrêt (le carré, pas la flèche bleue)"
+        case .stop:      "le bouton d'arrêt"
         case .composeur: "la zone de texte"
-        case .envoi:     "le bouton d'envoi (la flèche bleue)"
+        case .envoi:     "le bouton d'envoi"
         case .reponse:   "la réponse de ChatGPT"
-        case .copier:    "le bouton copier sous la réponse"
-        case .lecture:   "le bouton « Lire à haute voix » sous la réponse"
+        case .copier:    "« copier » sous la réponse"
+        case .lecture:   "« Lire à haute voix »"
         }
     }
 }

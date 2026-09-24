@@ -114,7 +114,7 @@ struct RelaisSession: View, ValidatingComponent {
                         Relais.partage.calibrerAutomatiquement(relire)
                     }
                     Button("Montrer à la main…") {
-                        Relais.partage.calibrerTout(relire)
+                        Relais.partage.calibrerALaMain(relire)
                     }
                 }
                 ButtonRow {

@@ -192,54 +192,9 @@ final class Relais: ObservableObject {
     /// par `VoieChatGPT.entrer`, et par lui seul.
     @Published var dicteeEnCours = false
 
-    /// Une calibration a la page — écrit par ses deux parcours et leur
-    /// abandon, ici seulement.
+    /// Une calibration a la page — écrit à son départ et à sa sortie, que
+    /// `RelaisCalibration` demande (cf. `prendrePourCalibrer`).
     @Published private(set) var calibrationEnCours = false
-
-    /// Le parcours de calibration en cours, retenu pour pouvoir y renoncer.
-    ///
-    /// Un drapeau ne suffisait pas : fermer la fenêtre en pleine calibration
-    /// laissait la tâche attendre un clic qui ne viendrait jamais, le drapeau
-    /// restait levé, et plus rien ne repartait jusqu'au redémarrage de
-    /// l'application. Une étape d'accueil doit toujours pouvoir être
-    /// abandonnée — c'est même là qu'on en a le plus besoin.
-    private var calibration: Task<Void, Never>?
-    /// La calibration en cours est-elle le parcours automatique ? Abandonné,
-    /// il laisse une page à remettre d'aplomb (cf. `abandonnerCalibration`).
-    private var calibrationAutomatique = false
-    /// Le numéro du parcours en cours, automatique ou manuel, changé aussi
-    /// par l'abandon : un parcours abandonné qui finit plus tard — une copie
-    /// attendue jusqu'à cinq secondes, un appel au pont en suspens — ne rend
-    /// pas la main à la place de celui qui a commencé depuis. L'occupation ne
-    /// suffisait pas à le dire : une calibration manuelle lancée entre-temps
-    /// la remet à `.calibration`, et l'ancienne tâche la lui retirait.
-    private var numeroCalibration = 0
-
-    /// Met fin à la calibration, d'où qu'on le demande.
-    func abandonnerCalibration() {
-        guard calibration != nil else { return }
-        numeroCalibration &+= 1
-        calibration?.cancel()
-        calibration = nil
-        calibrationEnCours = false
-        Task {
-            await page?.abandonnerCalibration()
-            page?.cacher()
-        }
-        // Le parcours automatique a pu laisser la page en écoute, ou le
-        // message d'essai à moitié écrit. Elle est rechargée par la
-        // préparation, et non à part : c'est elle que la dictée suivante
-        // attend avant de cliquer le micro.
-        if calibrationAutomatique {
-            calibrationAutomatique = false
-            lancerPreparation { page in
-                await page.rendreLeMicro()
-                page.charger()
-                _ = await page.attendreComposeurPret(secondes: 30)
-            }
-        }
-        Log.info("relais : calibration abandonnée")
-    }
 
     /// Construite à la première utilisation, jamais avant.
     private var page: RelaisPage?
@@ -284,7 +239,7 @@ final class Relais: ObservableObject {
     /// page : ce que la voie ChatGPT exige pour dicter.
     ///
     /// Calibré implique connecté une fois — la calibration ne commence pas
-    /// sans session (cf. `obtenirLaSession`). Reste la session perdue
+    /// sans session (cf. `RelaisCalibration.obtenirLaSession`). Reste la session perdue
     /// depuis : elle compte dès que la page l'a montrée.
     var saitDicter: Bool { estCalibre && sessionVue != .deconnecte }
 
@@ -839,14 +794,14 @@ final class Relais: ObservableObject {
     /// yeux de qui vient d'y naviguer.
     func adopterPageDeDepart() {
         guard let page, let url = page.adresseCourante, RelaisPage.estChatGPT(url) else {
-            Self.alerter("Point de départ",
+            RelaisDialogues.alerter("Point de départ",
                          "Ouvrez d'abord la fenêtre du relais et allez sur la page "
                          + "ChatGPT que vous voulez utiliser — un projet dédié, par "
                          + "exemple.")
             return
         }
         RelaisPage.depart = url
-        Self.alerter("Point de départ enregistré", """
+        RelaisDialogues.alerter("Point de départ enregistré", """
             Les conversations créées par Caspr partiront désormais de cette page :
 
             \(url.absoluteString)
@@ -859,7 +814,7 @@ final class Relais: ObservableObject {
 
     func oublierPageDeDepart() {
         RelaisPage.reinitialiserDepart()
-        Self.alerter("Point de départ",
+        RelaisDialogues.alerter("Point de départ",
                      "Retour à la page d'accueil de ChatGPT.")
     }
 
@@ -935,484 +890,76 @@ final class Relais: ObservableObject {
         }
     }
 
+    // MARK: - La calibration (cf. `RelaisCalibration`)
+
+    /// Le parcours ne touche au relais que par ces deux portes : ce que la
+    /// page doit au départ et à la sortie d'une calibration reste ici, à côté
+    /// de ce qu'il protège — l'occupation, la préparation, le premier plan.
+    private lazy var calibration = RelaisCalibration(
+        prendre: { [unowned self] in prendrePourCalibrer() },
+        rendre: { [unowned self] in rendreApresCalibration($0, rangee: $1) })
+
     /// Apprendre les boutons de la page sans les faire montrer : Caspr les
-    /// essaie lui-même, sous les yeux de l'utilisateur, et ne retient que
-    /// ceux dont il a vu l'effet (cf. `RelaisCalibrationAuto`).
+    /// essaie lui-même, et ne retient que ceux dont il a vu l'effet.
+    func calibrerAutomatiquement(_ termine: (() -> Void)? = nil) { calibration.lancer(.automatique, termine: termine) }
+
+    /// Les faire montrer, clic par clic : le repli d'une page que l'automate
+    /// ne sait pas lire.
+    func calibrerALaMain(_ termine: (() -> Void)? = nil) { calibration.lancer(.manuel, termine: termine) }
+
+    /// Met fin à la calibration, d'où qu'on le demande.
+    func abandonnerCalibration() { calibration.abandonner() }
+
+    /// La page, prise pour une calibration ; `nil` quand ce n'est pas le
+    /// moment, dit à l'utilisateur.
     ///
-    /// Trois limites, qui sont chacune une décision :
-    ///
-    /// - **La connexion n'est jamais automatisée.** C'est le compte de
-    ///   l'utilisateur. Sans session, la fenêtre s'ouvre pour qu'il se
-    ///   connecte, et le parcours l'attend — il reprend dès que la page
-    ///   montre une conversation.
-    /// - **Rien n'est enregistré tant que l'aller-retour entier n'est pas
-    ///   prouvé.** Le parcours manuel enregistre repère par repère ; un
-    ///   automate qui ferait de même et échouerait à mi-chemin détruirait en
-    ///   silence un calibrage qui marchait.
-    /// - **Un seul message d'essai, annoncé avant.** Il part réellement dans
-    ///   une conversation de l'utilisateur, et compte sur son quota.
-    ///
-    /// Le parcours manuel reste le repli, proposé dans le rapport quand un
-    /// repère manque, et toujours à un bouton dans les réglages.
-    func calibrerAutomatiquement(_ termine: (() -> Void)? = nil) {
-        guard !ecouteMacOS else {
-            Self.alerter("Pas maintenant",
-                         "Une dictée macOS est en cours. Terminez-la avant de calibrer.")
-            termine?()
-            return
+    /// Une dictée macOS n'occupe pas la page, elle interdit qu'elle naisse :
+    /// le magnétophone n'entendrait plus que du silence. Le parcours recharge
+    /// la page : un fil de discussion ou une préparation en vol n'y
+    /// survivraient pas, et la préparation pouvait même la recharger sous la
+    /// main qui désigne le micro.
+    private func prendrePourCalibrer() -> RelaisPage? {
+        if let refus = ecouteMacOS ? "Une dictée macOS est en cours." : occupation.raison {
+            RelaisDialogues.alerter("Pas maintenant", refus + " Terminez-la avant de calibrer.")
+            return nil
         }
-        guard occupation == .libre else {
-            Self.alerter("Pas maintenant",
-                         (occupation.raison ?? "") + " Terminez-la avant de calibrer.")
-            termine?()
-            return
-        }
-        guard let page = try? pageActive() else {
-            termine?()
-            return
-        }
-        // Le parcours recharge la page : un fil de discussion ou une
-        // préparation en cours n'y survivraient pas, et le croire encore
-        // ouvert ferait poursuivre une conversation disparue.
+        // Sur la voie macOS, sans rien dire : aucun bouton n'y mène — les
+        // réglages du relais n'existent que sous ChatGPT, et le choisir
+        // change la voie avant de calibrer.
+        guard let page = try? pageActive() else { return nil }
         oublierCeQuiVitSurLaPage()
         calibrationEnCours = true
-        calibrationAutomatique = true
-        numeroCalibration &+= 1
-        let numero = numeroCalibration
-        page.montrer()
-        calibration = Task {
-            let aLaMain = await menerLaCalibrationAutomatique(page)
-            // Abandonnée entre-temps : l'abandon a déjà rendu la main, et ce
-            // qui a commencé depuis n'est pas à nous.
-            guard numeroCalibration == numero else {
-                termine?()
-                return
-            }
-            calibration = nil
-            calibrationAutomatique = false
-            calibrationEnCours = false
-            guard !aLaMain else { calibrerTout(termine); return }
-            // La fin d'une calibration prépare la dictée suivante, comme celle
-            // d'une dictée : le parcours a oublié discussion et préparation
-            // dès son lancement, et plusieurs de ses sorties — l'annonce
-            // refusée, une page qui ne répond pas, une connexion jamais venue
-            // — ne rechargent pas la page. La dictée suivante partait alors
-            // dans l'ancien fil, qu'on ne croyait plus ouvert. Après un
-            // rechargement, la préparation se borne à l'attendre.
-            preparerLaProchaine()
-            termine?()
-        }
+        return page
     }
 
-    /// Le parcours automatique, de la connexion au rapport. Rend vrai quand
-    /// l'utilisateur choisit de finir à la main.
-    private func menerLaCalibrationAutomatique(_ page: RelaisPage) async -> Bool {
-        guard await obtenirLaSession(page, relance: "« Calibrer automatiquement »") else { return false }
-        guard !Task.isCancelled, Self.demander("Calibrer automatiquement", """
-            Caspr va apprendre seul les boutons de la page, en les essayant sous vos \
-            yeux, dans une conversation neuve :
-
-            • le micro de la page s'ouvre une seconde, puis s'arrête — ce qu'il \
-            entend est effacé ;
-            • un message d'essai part réellement, un seul : « \(RelaisPage.essai) » ;
-            • le bouton « copier » de la réponse est essayé, et votre presse-papiers \
-            vous est rendu tel quel.
-
-            Rien n'est enregistré tant que tout n'a pas marché : votre calibrage \
-            actuel ne peut pas être abîmé. Comptez une demi-minute ; fermer la \
-            fenêtre arrête tout.
-            """)
-        else {
-            page.cacher()
-            NSApp.hide(nil)
-            return false
-        }
-
-        let ancien = RelaisSelecteurs.charger()
-        let issue: RelaisCalibrationAuto.Issue
-        do {
-            issue = try await RelaisCalibrationAuto(page: page, ancien: ancien).mener()
-        } catch {
-            // Abandonné : l'abandon remet la page d'aplomb (cf.
-            // `abandonnerCalibration`).
-            return false
-        }
-        await page.rendreLeMicro()
-        // Fermer la fenêtre arrête tout, comme l'annonce l'a promis — y
-        // compris l'écriture d'un parcours qui venait d'aboutir.
-        guard !Task.isCancelled else { return false }
-
-        guard let nouveau = issue.preuves.calibrage(remplacant: ancien) else {
-            Log.error("relais : calibration automatique incomplète — manquent "
-                      + issue.preuves.manquants.map(\.rawValue).joined(separator: ", "))
-            page.charger()
-            let rapport = Self.rapport(issue, ancien: ancien, enregistre: false)
-            let aLaMain = Self.choisir("Calibration automatique inachevée", rapport,
-                                       ["Montrer les boutons à la main…", "Fermer"]) == 0
-            if !aLaMain {
-                page.cacher()
-                NSApp.hide(nil)
-            }
-            return aLaMain
-        }
-        // La seule écriture du parcours automatique, une fois l'aller-retour
-        // entier prouvé.
-        page.selecteurs = nouveau
-        nouveau.enregistrer()
-        Log.info("relais : calibration automatique enregistrée — "
-                 + RelaisPreuves.parcours.map { "\($0.rawValue) \(nouveau[$0])" }
-                    .joined(separator: ", "))
-
-        // La réponse au message d'essai est encore à l'écran : c'est le
-        // moment de montrer « Lire à haute voix », s'il sert. Deux clics au
-        // plus, et le seul que l'automate ne fera pas.
-        let rapport = Self.rapport(issue, ancien: ancien, enregistre: true)
-        if Self.choisir("C'est appris", rapport,
-                        ["Terminé", "Montrer « Lire à haute voix »…"]) == 1,
-           Self.demander("Lire à haute voix", """
-               Cliquez « Lire à haute voix » sous la réponse — le petit haut-parleur.
-
-               S'il n'apparaît pas directement, ouvrez d'abord le menu « … » : Caspr \
-               retient le chemin complet et le refera pour vous.
-               """) {
-            do { try await page.calibrerLecture() }
-            catch is CancellationError { return false }
-            catch { Self.alerter("Relais", error.localizedDescription) }
-        }
-        page.charger()
-        page.cacher()
-        NSApp.hide(nil)
-        return false
-    }
-
-    /// La session qu'exigent les deux calibrations, en l'expliquant si elle
-    /// manque ; vrai quand elle est ouverte. `relance` : le bouton qui la
-    /// relance, dit dans les alertes.
+    /// La sortie d'une calibration, quelle qu'en soit l'issue : l'occupation
+    /// rendue, la page rangée — sauf quand une alerte y renvoie (`rangee`
+    /// faux) —, puis la préparation d'une dictée, après avoir remis la page
+    /// d'aplomb.
     ///
-    /// Trente secondes : choisir ChatGPT vient souvent de construire la page,
-    /// qui se charge encore. Et selon le filet, pas selon le calibrage qu'on
-    /// vient peut-être remplacer parce qu'il est faux — il faisait passer une
-    /// session ouverte pour fermée, et la calibration refusait de réparer
-    /// justement ce qu'on lui demandait de réparer (cf. `RelaisPage.connexion`).
-    private func obtenirLaSession(_ page: RelaisPage, relance: String) async -> Bool {
-        switch await page.connexion(secondes: 30, reperes: RelaisSelecteurs()) {
-        case .connecte:
-            return true
-        case .inconnu:
-            guard !Task.isCancelled else { return false }
-            // Ni connectée ni déconnectée : demander un mot de passe ferait
-            // chercher au mauvais endroit.
-            page.charger()
-            Self.alerter("La page ChatGPT ne répond pas", """
-                Elle ne s'est pas chargée en trente secondes : Caspr ne peut pas savoir \
-                si vous êtes connecté. Elle vient d'être rechargée, dans la fenêtre \
-                ouverte derrière ce message.
-
-                Vérifiez votre connexion à Internet. Une fois la conversation affichée, \
-                relancez \(relance) \(Self.ouRelancer).
-                """)
-            return false
-        case .deconnecte:
-            guard !Task.isCancelled else { return false }
-        }
-        Self.alerter("D'abord, se connecter à ChatGPT", """
-            La fenêtre ChatGPT est ouverte derrière ce message. Créez un compte ou \
-            connectez-vous : c'est votre compte, et Caspr ne se connecte jamais à \
-            votre place.
-
-            À savoir : « Continuer avec Google » ne fonctionne pas ici. Google refuse \
-            volontairement ses connexions dans une fenêtre embarquée. Une adresse \
-            e-mail et un mot de passe fonctionnent.
-
-            La calibration reprendra d'elle-même si la conversation s'affiche \
-            dans les dix minutes. Fermer la fenêtre l'arrête.
-            """)
-        // Attendre la connexion plutôt que s'arrêter : c'est le parcours de
-        // qui choisit ChatGPT pour la première fois, à l'accueil comme dans
-        // les réglages, et le renvoyer chercher un bouton une fois connecté
-        // lui faisait croire le travail fini. Dix minutes : le temps de
-        // retrouver un mot de passe, ou de créer un compte. Fermer la fenêtre
-        // annule la calibration, et l'attente avec elle.
-        let limite = Date.now.addingTimeInterval(600)
-        while Date.now < limite {
-            try? await Task.sleep(for: .seconds(1))
-            guard voieChatGPT, !Task.isCancelled else { return false }
-            if await page.connexion(secondes: 2, reperes: RelaisSelecteurs()) == .connecte { return true }
-        }
-        // L'alerte a promis une reprise : s'arrêter sans le dire laissait
-        // attendre, connecté, une suite qui ne viendrait plus. La fenêtre part
-        // avec l'attente, comme aux autres sorties du parcours — sans quoi
-        // l'accueil, qui revient à la fin d'une calibration, la recouvrait.
-        Self.alerter("Toujours pas connecté", """
-            Caspr a attendu dix minutes sans voir de conversation ChatGPT, et a \
-            arrêté d'attendre. Une fois connecté, relancez \(relance) \(Self.ouRelancer).
-            """)
-        page.cacher()
-        return false
-    }
-
-    /// Où relancer une calibration. Pendant l'accueil, les Réglages ne
-    /// s'ouvrent pas — la garde ramène l'accueil à leur place (cf.
-    /// `SetupRecoveryGuard`) — : renvoyer vers eux envoyait chercher un bouton
-    /// derrière une porte fermée. La même carte les porte dans l'accueil.
-    private static var ouRelancer: String {
-        SetupRecoveryGuard.shouldIntercept
-            ? "à l'étape du premier essai de l'accueil, sous « Votre compte ChatGPT »"
-            : "dans Réglages › Voie"
-    }
-
-    /// Ce que le parcours a trouvé et ce qui lui manque, repère par repère.
-    private static func rapport(_ issue: RelaisCalibrationAuto.Issue,
-                                ancien: RelaisSelecteurs, enregistre: Bool) -> String {
-        func nom(_ cible: RelaisCible) -> String {
-            switch cible {
-            case .composeur: "la zone de texte"
-            case .micro: "le micro"
-            case .stop: "l'arrêt"
-            case .envoi: "l'envoi"
-            case .copier: "« copier » sous la réponse"
-            case .reponse: "la réponse"
-            case .lecture: "« Lire à haute voix »"
-            }
-        }
-        var lignes = RelaisPreuves.parcours.map { cible -> String in
-            if issue.preuves.selecteurs[cible] != nil { return "✓ \(nom(cible))" }
-            let raison = issue.preuves.raisons[cible]
-                ?? "pas essayé : une étape précédente a échoué"
-            return "✗ \(nom(cible)) — \(raison)"
-        }
-        lignes.append(ancien.saitLire && enregistre
-            ? "✓ « Lire à haute voix » — gardé tel que vous l'aviez montré"
-            : "– « Lire à haute voix » — facultatif, à montrer à la main")
-        lignes.append("")
-        lignes.append(issue.messageEnvoye
-            ? "Un message d'essai est parti dans une conversation neuve."
-            : "Aucun message n'a été envoyé.")
-        if !enregistre {
-            lignes.append(ancien.estCalibre
-                ? "Rien n'a été enregistré : votre calibrage précédent est intact."
-                : "Rien n'a été enregistré.")
-            lignes.append("")
-            lignes.append("Vous pouvez montrer les boutons à la main : c'est le même "
-                          + "apprentissage, clic par clic.")
-        }
-        return lignes.joined(separator: "\n")
-    }
-
-    /// Apprendre à Caspr tout ce que la page sait faire, d'un seul parcours.
-    ///
-    /// Une seule calibration, et non plus une par fonctionnalité. Les
-    /// découper en étapes numérotées suggérait un escalier, alors que ce sont
-    /// des capacités indépendantes : « Discuter » exige d'envoyer sans jamais
-    /// récupérer, donc moins que « Réorganiser » qui venait pourtant avant lui.
-    /// Et pour l'utilisateur, apprendre six boutons d'affilée coûte une minute
-    /// une fois, là où revenir trois fois coûte la surprise à chaque fois.
-    ///
-    /// Les boutons n'existent pas tous au même moment : celui d'envoi réclame
-    /// un texte dans la zone, ceux de la barre d'actions réclament une réponse.
-    /// Le parcours les fait donc apparaître, en écrivant puis en envoyant un
-    /// message d'essai.
-    func calibrerTout(_ termine: (() -> Void)? = nil) {
-        guard !ecouteMacOS else {
-            Self.alerter("Pas maintenant",
-                         "Une dictée macOS est en cours. Terminez-la avant de calibrer.")
-            termine?()
-            return
-        }
-        guard occupation == .libre else {
-            Self.alerter("Pas maintenant",
-                         (occupation.raison ?? "") + " Terminez-la avant de calibrer.")
-            termine?()
-            return
-        }
-        guard let page = try? pageActive() else {
-            termine?()
-            return
-        }
-        calibrationEnCours = true
-        numeroCalibration &+= 1
-        let numero = numeroCalibration
-        page.montrer()
-        calibration = Task {
-            defer {
-                // Même règle que le parcours automatique (cf. `numeroCalibration`).
-                if numeroCalibration == numero { calibration = nil; calibrationEnCours = false }
-                termine?()
-            }
-
-            guard await obtenirLaSession(page, relance: "la calibration") else { return }
-
-            // Une conversation neuve pour calibrer.
-            //
-            // La page ouverte porte peut-être une discussion en cours, et son
-            // texte dans la zone de saisie : on désignerait alors des boutons
-            // dans un état qui n'est pas celui d'un départ, et le message
-            // d'essai s'ajouterait à ce qui traînait. Recharger coûte deux
-            // secondes et supprime toute la classe de surprises.
-            page.charger()
-            guard await page.attendreComposeurPret(secondes: 30) else {
-                Self.alerter("Relais", "La page ChatGPT n'a pas fini de se charger.")
-                return
-            }
-            // Vider la zone avant de commencer.
-            //
-            // ChatGPT conserve le brouillon non envoyé et le réinstalle au
-            // rechargement : on demandait donc de cliquer le micro devant un
-            // texte laissé là par une tentative précédente, que la dictée
-            // serait venue rallonger.
-            // Par les heuristiques, sans se fier au calibrage en place : il est
-            // peut-être absent, et s'il est là c'est peut-être lui qu'on
-            // remplace parce qu'il est faux.
-            await page.viderComposeur(selecteur: "")
-
-            // 1 — la dictée. Les trois repères du socle.
-            let socle: [(RelaisCible, String)] = [
-                (.micro, "Cliquez le bouton micro dans la page. L'enregistrement va "
-                       + "démarrer, c'est normal : il faut qu'il tourne pour que le "
-                       + "bouton d'arrêt existe."),
-                (.stop, "Cliquez maintenant le bouton d'arrêt — le carré, pas la flèche "
-                      + "bleue d'envoi."),
-                (.composeur, "Cliquez la zone de texte, celle où le texte transcrit vient "
-                           + "d'apparaître."),
-            ]
-            for (rang, (cible, consigne)) in socle.enumerated() {
-                guard Self.demander("Repère \(rang + 1) sur 6 — \(cible.libelle)", consigne)
-                else { abandonnerCalibration(); return }
-                guard await calibrerUn(page, cible) else { return }
-            }
-
-            // 2 — l'envoi. Le bouton n'existe qu'une fois la zone remplie.
-            let ecrit = await page.preparerCalibrationEnvoi()
-            let suite = Self.demander("Repère 4 sur 6 — le bouton d'envoi", ecrit ? """
-                Un message d'essai vient d'être écrit dans la page. Cliquez le bouton \
-                d'envoi — la flèche bleue, à droite de la zone de texte.
-
-                Il partira réellement dans votre conversation : c'est nécessaire pour \
-                qu'une réponse existe et qu'on puisse désigner ses boutons ensuite.
-                """ : """
-                Le message d'essai n'a pas pu être écrit tout seul.
-
-                Tapez n'importe quoi dans la zone de texte — un « bonjour » suffit — puis \
-                cliquez le bouton d'envoi, la flèche bleue à droite. Il n'apparaît qu'une \
-                fois la zone remplie, et le message doit partir pour qu'une réponse \
-                existe.
-                """)
-            guard suite else { abandonnerCalibration(); return }
-            guard await calibrerUn(page, .envoi) else { return }
-
-            // 3 — la barre d'actions de la réponse.
-            guard Self.demander("Repère 5 sur 6 — copier la réponse", """
-                Attendez que ChatGPT ait fini de répondre, puis cliquez l'icône \
-                « copier » sous **sa** réponse — deux carrés superposés.
-
-                Sous la réponse, pas sous votre propre message : la page en porte une par \
-                message, et Caspr retient au passage le bloc qui l'entoure pour ne jamais \
-                confondre les deux.
-                """) else { abandonnerCalibration(); return }
-            guard await calibrerUn(page, .copier) else { return }
-
-            guard Self.demander("Repère 6 sur 6 — lire à haute voix", """
-                Cliquez « Lire à haute voix » sous la même réponse — le petit \
-                haut-parleur.
-
-                S'il n'apparaît pas directement, ouvrez d'abord le menu « … » : Caspr \
-                retient le chemin complet et le refera pour vous. Deux clics, donc, si \
-                votre interface les demande.
-
-                Cette capacité sert aux modules qui doivent parler — une traduction \
-                qu'on fait entendre à quelqu'un, par exemple. Elle est facultative : \
-                abandonnez maintenant si elle ne vous sert pas, le reste est déjà appris.
-                """) else { abandonnerCalibration(); return }
-            // Facultative, la lecture ne défait pas les cinq repères appris
-            // avant elle : son échec se dit dans le message de fin, selon ce
-            // que la page sait faire — il annonçait sinon « lire à haute
-            // voix » juste après l'alerte disant qu'aucun clic ne l'avait
-            // désignée.
-            do { try await page.calibrerLecture() }
-            catch is CancellationError { return }
-            catch { Log.error("relais : « Lire à haute voix » non appris — \(error.localizedDescription)") }
-
-            page.charger()
-            page.cacher()
-            NSApp.hide(nil)
-            Self.alerter("C'est appris", page.selecteurs.saitLire
-                ? "Caspr sait dicter, envoyer, récupérer une réponse et la faire "
-                  + "lire à haute voix. Les modules qui en ont besoin sont "
-                  + "désormais utilisables."
-                : "Caspr sait dicter, envoyer et récupérer une réponse. « Lire à "
-                  + "haute voix » n'a pas été appris : il est facultatif, et se "
-                  + "montre en relançant la calibration.")
+    /// Le guetteur de clic est retiré d'abord : resté sur la page, il
+    /// retiendrait le prochain clic de l'utilisateur, n'importe où dans
+    /// ChatGPT. Puis le micro est rendu, et une page laissée à l'écoute — le
+    /// micro montré à la main, puis l'abandon ; l'automate interrompu entre
+    /// son micro et son arrêt — est rechargée : vider sa zone n'arrêterait
+    /// rien. Dans la préparation et non à part : c'est elle que l'appui
+    /// suivant attend avant de cliquer le micro.
+    private func rendreApresCalibration(_ page: RelaisPage, rangee: Bool) {
+        calibrationEnCours = false
+        if rangee { ranger(page) }
+        lancerPreparation { [weak self] page in
+            await page.abandonnerCalibration()
+            let ecoute = page.microOuvert
+            await page.rendreLeMicro()
+            guard !Task.isCancelled else { return }
+            if ecoute { page.charger() }
+            await self?.preparer(page)
         }
     }
 
-    private func calibrerUn(_ page: RelaisPage, _ cible: RelaisCible) async -> Bool {
-        do { _ = try await page.calibrer(cible); return true }
-        catch is CancellationError { return false }
-        catch { Self.alerter("Relais", error.localizedDescription); return false }
-    }
-
-    /// Une consigne, avec une porte de sortie.
-    ///
-    /// Un dialogue à un seul bouton force à aller au bout de ce qu'on a
-    /// commencé. Pour un parcours de six étapes qui pilote une page web, c'est
-    /// la garantie qu'un imprévu — une page qui ne réagit pas, un bouton
-    /// introuvable — laisse quelqu'un coincé.
-    @discardableResult
-    private static func demander(_ titre: String, _ texte: String) -> Bool {
-        NSApp.activate(ignoringOtherApps: true)
-        let a = NSAlert()
-        a.messageText = titre
-        a.informativeText = texte
-        a.addButton(withTitle: "Continuer")
-        a.addButton(withTitle: "Abandonner")
-        return a.runModal() == .alertFirstButtonReturn
-    }
-
-    /// Une question à plusieurs issues ; rend le rang du bouton choisi.
-    private static func choisir(_ titre: String, _ texte: String,
-                                _ boutons: [String]) -> Int {
-        NSApp.activate(ignoringOtherApps: true)
-        let a = NSAlert()
-        a.messageText = titre
-        a.informativeText = texte
-        for bouton in boutons { a.addButton(withTitle: bouton) }
-        return a.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
-    }
-
-    /// Ce que le relais voit de la page, en clair.
-    ///
-    /// Quand un clic ne prend pas, la seule question utile est « sur quoi
-    /// as-tu cliqué ? ». Sans cet écran, il n'y a aucun moyen de distinguer un
-    /// sélecteur devenu caduc d'un bouton qui refuse de répondre, et le seul
-    /// recours est de tout recalibrer en espérant.
+    /// Ce que le relais voit de la page, en clair (cf. `RelaisDialogues`).
     func diagnostic() {
         guard let page = try? pageActive() else { return }
-        let sel = RelaisSelecteurs.charger()
-        Task {
-            let connexion = await page.connexion(secondes: 1)
-            let ecoute = await page.auRepos()?.enregistrement == true
-            let micro = page.microOuvert
-            func ligne(_ nom: String, _ valeur: String) -> String {
-                valeur.isEmpty ? "\(nom) : (non calibré — heuristique)" : "\(nom) : \(valeur)"
-            }
-            Self.alerter("Diagnostic du relais", """
-                Session : \(connexion == .connecte ? "connectée"
-                            : connexion == .inconnu ? "la page ne le dit pas" : "pas connectée")
-                Page : \(ecoute ? "en train d'écouter" : "au repos")
-                Micro tenu par la page : \(micro ? "oui" : "non")
-
-                \(ligne("Micro", sel.micro))
-                \(ligne("Arrêt", sel.stop))
-                \(ligne("Zone de texte", sel.composeur))
-                """)
-        }
-    }
-
-    private static func alerter(_ titre: String, _ texte: String) {
-        NSApp.activate(ignoringOtherApps: true)
-        let a = NSAlert()
-        a.messageText = titre
-        a.informativeText = texte
-        a.runModal()
+        Task { await RelaisDialogues.diagnostic(page) }
     }
 }

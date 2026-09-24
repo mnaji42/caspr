@@ -25,7 +25,7 @@ import CasprCore
 /// ## Ce que l'automate s'interdit
 ///
 /// - **Écrire le calibrage.** Le parcours ne rend que des preuves ; c'est
-///   `Relais` qui enregistre, et seulement l'aller-retour entier (cf.
+///   `RelaisCalibration` qui enregistre, et seulement l'aller-retour entier (cf.
 ///   `RelaisPreuves`). Un parcours qui échoue à mi-chemin laisse le calibrage
 ///   d'avant intact.
 /// - **Envoyer plus d'un message.** Avant chaque essai d'un bouton d'envoi, le
@@ -59,11 +59,6 @@ struct RelaisCalibrationAuto {
         var messageEnvoye = false
     }
 
-    /// Un fragment du message d'essai, pour le reconnaître là où la page l'a
-    /// réécrit : ni apostrophe ni guillemet, que l'éditeur pourrait rendre
-    /// autrement.
-    private static let empreinte = "Caspr pour repérer les boutons"
-
     /// La raison d'un repère essayé dont le clic n'a rien trouvé. Sans elle,
     /// le rapport le disait « pas essayé : une étape précédente a échoué »,
     /// et envoyait chercher la panne une étape trop tôt.
@@ -72,7 +67,8 @@ struct RelaisCalibrationAuto {
     /// Mène le parcours jusqu'au premier repère qui ne se prouve pas.
     ///
     /// Lève `CancellationError` quand on l'abandonne : il n'y a alors rien à
-    /// rapporter, et c'est l'abandon qui remet la page d'aplomb.
+    /// rapporter, et c'est la sortie de la calibration qui remet la page
+    /// d'aplomb (cf. `RelaisCalibration.sortir`).
     func mener() async throws -> Issue {
         var issue = Issue()
         // Une conversation neuve, sans le brouillon que ChatGPT réinstalle.
@@ -97,16 +93,14 @@ struct RelaisCalibrationAuto {
 
     /// La zone de texte : on y écrit, on relit, on vide, on relit.
     private func prouverComposeur(_ issue: inout Issue) async throws -> String? {
-        let liste = await candidats(.composeur)
+        let liste = await page.sonder { try await page.candidats(.composeur) } ?? []
         guard !liste.isEmpty else {
             issue.preuves.manque(.composeur, "aucune zone de texte n'y est seule à son repère")
             return nil
         }
         for sel in liste {
-            try await ecrireLEssai(dans: sel)
-            let ecrit = try await observer(pendant: 3) {
-                await lire(sel)?.contains(Self.empreinte) == true
-            }
+            let ecrit = await RelaisCalibration.ecrireLEssai(page, dans: sel, pendant: 3)
+            try Task.checkCancellation()
             guard ecrit else {
                 issue.preuves.manque(.composeur, "ce qu'on y écrit ne s'y relit pas")
                 continue
@@ -127,20 +121,20 @@ struct RelaisCalibrationAuto {
     /// la page, et un bouton d'arrêt l'a remplacée. L'arrêt n'est pas encore
     /// appris : le filet le cherche.
     private func prouverMicro(_ composeur: String, _ issue: inout Issue) async throws -> String? {
-        let liste = await candidats(.micro)
+        let liste = await page.sonder { try await page.candidats(.micro) } ?? []
         guard !liste.isEmpty else {
             issue.preuves.manque(.micro, "aucun bouton micro n'y est seul à son repère")
             return nil
         }
         for sel in liste {
-            guard await cliquer(.micro, sel) else {
+            guard await page.sonder({ try await page.cliquer(.micro, sel: sel) }) == true else {
                 issue.preuves.manque(.micro, Self.clicPerdu)
                 continue
             }
             // Quinze secondes : la première fois, macOS demande l'accès au
             // micro, et il faut le temps de lire la question.
             let ecoute = try await observer(pendant: 15) {
-                await vu(sel, "", composeur)?.enregistrement == true
+                await vu(micro: sel, composeur: composeur)?.enregistrement == true
             }
             if ecoute {
                 issue.preuves.prouve(.micro, sel)
@@ -165,19 +159,19 @@ struct RelaisCalibrationAuto {
     /// l'écoute, et le micro est rendu.
     private func prouverStop(_ micro: String, _ composeur: String,
                              _ issue: inout Issue) async throws -> String? {
-        let liste = await candidats(.stop)
+        let liste = await page.sonder { try await page.candidats(.stop) } ?? []
         if liste.isEmpty {
             issue.preuves.manque(.stop, "aucun bouton d'arrêt n'y est seul à son repère")
         }
         for sel in liste {
-            guard await cliquer(.stop, sel) else {
+            guard await page.sonder({ try await page.cliquer(.stop, sel: sel) }) == true else {
                 issue.preuves.manque(.stop, Self.clicPerdu)
                 continue
             }
             // Trente secondes : la zone revient après la transcription, qui
             // suit la durée parlée — ici, une seconde ou deux.
             let revenue = try await observer(pendant: 30) {
-                await vu(micro, sel, composeur)?.composeur == true
+                await vu(micro: micro, stop: sel, composeur: composeur)?.composeur == true
             }
             if revenue {
                 issue.preuves.prouve(.stop, sel)
@@ -192,7 +186,7 @@ struct RelaisCalibrationAuto {
             // Ce clic n'a pas arrêté l'écoute : un autre candidat le peut
             // encore. Plus d'écoute, en revanche, et il n'y a plus rien à
             // arrêter.
-            guard await vu(micro, "", composeur)?.enregistrement == true else { break }
+            guard await vu(micro: micro, composeur: composeur)?.enregistrement == true else { break }
         }
         try await remettreLaPage()
         return nil
@@ -203,21 +197,20 @@ struct RelaisCalibrationAuto {
     private func prouverEnvoi(_ micro: String, _ stop: String, _ composeur: String,
                               _ issue: inout Issue) async throws -> Bool {
         await page.viderComposeur(selecteur: composeur)
-        try await ecrireLEssai(dans: composeur)
-        guard try await observer(pendant: 3, {
-            await lire(composeur)?.contains(Self.empreinte) == true
-        }) else {
+        let ecrit = await RelaisCalibration.ecrireLEssai(page, dans: composeur, pendant: 3)
+        try Task.checkCancellation()
+        guard ecrit else {
             issue.preuves.manque(.envoi, "le message d'essai n'a pas pu être écrit")
             return false
         }
         // La preuve est l'apparition d'une conversation : elle ne prouve rien
         // sur une page qui en porte déjà une.
-        guard await vu(micro, stop, composeur)?.conversation == false else {
+        guard await vu(micro: micro, stop: stop, composeur: composeur)?.conversation == false else {
             issue.preuves.manque(.envoi, "la page de départ est déjà une conversation — "
                                  + "revenez à l'accueil de ChatGPT dans les réglages")
             return false
         }
-        let liste = await candidats(.envoi)
+        let liste = await page.sonder { try await page.candidats(.envoi) } ?? []
         guard !liste.isEmpty else {
             issue.preuves.manque(.envoi, "aucun bouton d'envoi n'y est seul à son repère")
             return false
@@ -226,26 +219,26 @@ struct RelaisCalibrationAuto {
         // montrerait déjà.
         _ = await page.sonder { try await self.page.marquer() }
         for sel in liste {
-            guard await lire(composeur)?.contains(Self.empreinte) == true else {
+            guard await vu(.texte, composeur: composeur)?.texte?.contains(RelaisCalibration.empreinte) == true else {
                 // Parti entre deux candidats : peut-être envoyé, et en tout cas
                 // pas deux fois.
                 issue.messageEnvoye = true
                 issue.preuves.manque(.envoi, "le message d'essai a quitté la zone avant le clic")
                 break
             }
-            guard await cliquer(.envoi, sel) else {
+            guard await page.sonder({ try await page.cliquer(.envoi, sel: sel) }) == true else {
                 issue.preuves.manque(.envoi, Self.clicPerdu)
                 continue
             }
             let parti = try await observer(pendant: 15) {
-                await vu(micro, stop, composeur)?.conversation == true
+                await vu(micro: micro, stop: stop, composeur: composeur)?.conversation == true
             }
             if parti {
                 issue.messageEnvoye = true
                 issue.preuves.prouve(.envoi, sel)
                 return true
             }
-            if await lire(composeur)?.contains(Self.empreinte) != true {
+            if await vu(.texte, composeur: composeur)?.texte?.contains(RelaisCalibration.empreinte) != true {
                 // Le message a quitté la zone sans qu'une conversation ne se
                 // montre : on ne sait pas où il est allé, et l'on n'en
                 // enverra pas un second pour le savoir.
@@ -289,7 +282,7 @@ struct RelaisCalibrationAuto {
                                      + "plus un bouton seul")
                 continue
             }
-            if !copie.isEmpty, !copie.contains(Self.empreinte) {
+            if !copie.isEmpty, !copie.contains(RelaisCalibration.empreinte) {
                 issue.preuves.prouve(.copier, sel, parent: parent)
                 return
             }
@@ -319,7 +312,7 @@ struct RelaisCalibrationAuto {
         var precedent: String?
         var stable = 0
         _ = try await observer(pendant: 5) {
-            let texte = await lire(composeur)
+            let texte = await vu(.texte, composeur: composeur)?.texte
             stable = texte == precedent ? stable + 1 : 0
             precedent = texte
             return stable >= 4
@@ -381,32 +374,15 @@ struct RelaisCalibrationAuto {
         return presse.string(forType: .string) ?? ""
     }
 
-    // MARK: - Appels au pont, avec les repères qu'on éprouve
-
-    private func candidats(_ cible: RelaisCible) async -> [String] {
-        await page.sonder { try await self.page.candidats(cible) } ?? []
-    }
-
-    /// Le texte de la zone, ou `nil` quand elle est introuvable.
-    private func lire(_ composeur: String) async -> String? {
-        await page.sonder { try await self.page.lire(sel: composeur) }
-    }
-
-    private func ecrireLEssai(dans composeur: String) async throws {
-        try Task.checkCancellation()
-        _ = await page.sonder { try await self.page.ecrire(RelaisPage.essai, sel: composeur) }
-    }
-
-    private func cliquer(_ cible: RelaisCible, _ selecteur: String) async -> Bool {
-        await page.sonder { try await self.page.cliquer(cible, sel: selecteur) } == true
-    }
+    // MARK: - La page, lue avec les repères qu'on éprouve
 
     /// L'état de la page lu avec les repères en cours d'épreuve, et non avec
     /// le calibrage en place — qu'on est peut-être en train de remplacer
     /// parce qu'il est faux.
-    private func vu(_ micro: String, _ stop: String, _ composeur: String) async -> RelaisInstantane? {
+    private func vu(_ demande: RelaisDemande = [], micro: String = "", stop: String = "",
+                    composeur: String) async -> RelaisInstantane? {
         var reperes = RelaisSelecteurs()
         (reperes.micro, reperes.stop, reperes.composeur) = (micro, stop, composeur)
-        return await page.sonder { try await self.page.instantane(reperes: reperes) }
+        return await page.sonder { try await page.instantane(demande, reperes: reperes) }
     }
 }

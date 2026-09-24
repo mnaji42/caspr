@@ -17,7 +17,7 @@ public enum RelaisScripts {
     public enum Fonction: String, CaseIterable, Sendable {
         case cliquer, lire, ecrire, encadrer, copierLaReponse, cliquerBouton
         case lireReponse, compacter, oublierBrouillon, candidats, candidatsCopier
-        case calibrer, calibrerAvecMenu, abandonnerCalibration
+        case guetter, abandonnerCalibration
         case marquer, instantane
     }
 
@@ -273,7 +273,7 @@ public enum RelaisScripts {
       };
 
       // Un bouton qui ouvre un menu, la page le déclare (cf.
-      // `calibrerAvecMenu`). L'automate ne le clique jamais : le menu « … »
+      // `guetter`). L'automate ne le clique jamais : le menu « … »
       // de la réponse porte « Régénérer » et « Supprimer ».
       const ouvreUnMenu = (el) => !!el.getAttribute('aria-haspopup')
         || el.getAttribute('aria-expanded') !== null;
@@ -348,6 +348,30 @@ public enum RelaisScripts {
         if (!derniere) return { raison: 'pas de réponse' };
         const bouton = copierAutour(derniere, selCopier);
         return bouton ? { bouton, voie: 'repere' } : { raison: 'repère absent ou ambigu' };
+      }
+
+      // Le « copier » que l'utilisateur a désigné, appris seulement s'il est
+      // celui de la dernière réponse (cf. `guetter`) : dans le plus petit
+      // bloc qui les porte tous deux, aucun autre message. Sinon un repère
+      // vide — un refus, que Swift explique.
+      function copierDesigne(el, derniere) {
+        const refus = { ok: true, selecteur: '', parent: '' };
+        if (!derniere) return refus;
+        let tour = el;
+        while (tour && !tour.contains(derniere)) tour = tour.parentElement;
+        const autres = tour && tous('[data-message-author-role], article', tour)
+          .filter((m) => !m.contains(derniere) && !derniere.contains(m));
+        if (!autres || autres.length) return refus;
+        const repere = repereCopier(el, derniere);
+        return repere ? { ok: true, ...repere } : refus;
+      }
+
+      // Le repère d'un « copier » tel que la dictée le retrouvera, pour les
+      // deux parcours : la paire (cf. `paireCopier`), sinon un repère — parmi
+      // les siens et `autres` — que `copierAutour` ramène à ce seul bouton.
+      function repereCopier(el, derniere, autres = []) {
+        const seul = [...reperesPossibles(el), ...autres].find((c) => copierAutour(derniere, c) === el);
+        return paireCopier(el) || (seul ? { selecteur: seul, parent: '' } : null);
       }
 
       // Un sélecteur qui a une chance de survivre au prochain déploiement.
@@ -618,7 +642,7 @@ public enum RelaisScripts {
       // Le clic n'est pas intercepté : il atteint la page. Sans quoi
       // désigner le bouton d'arrêt serait impossible, puisqu'il n'existe
       // qu'une fois l'enregistrement démarré.
-      const guetter = (retenir) => new Promise((resolve) => {
+      const ecouterLesClics = (retenir) => new Promise((resolve) => {
         const surClic = (ev) => {
           // Seuls les clics de la main comptent.
           //
@@ -884,22 +908,40 @@ public enum RelaisScripts {
           return { ok: true };
         },
 
-        calibrer(genre) {
-          return guetter((ev) => {
-            // Un clic hors sujet ne compte pas — on continue d'écouter.
-            //
-            // À l'étape du bouton d'envoi, on demande d'abord d'écrire
-            // quelque chose : le premier clic de l'utilisateur tombe donc
-            // dans la zone de texte, et il était retenu comme s'il désignait
-            // le bouton. La calibration passait à l'étape suivante en ayant
-            // appris la zone de saisie à la place de la flèche bleue.
-            //
-            // Ignorer plutôt que refuser : on ne peut pas prévenir de ce
-            // qu'on n'a pas demandé, et l'utilisateur cliquera le bon
-            // élément juste après, ce qui est exactement ce qu'on attend.
+        // Le repère de `cible` que l'utilisateur désigne d'un clic — un
+        // seul guetteur pour les deux parcours et pour tous les repères.
+        //
+        // Un clic hors sujet ne compte pas, et l'on continue d'écouter. À
+        // l'étape du bouton d'envoi, on demande d'abord d'écrire quelque
+        // chose : le premier clic tombe donc dans la zone de texte, et il
+        // était retenu comme s'il désignait le bouton — la calibration
+        // apprenait la zone de saisie à la place de la flèche bleue. Ignorer
+        // plutôt que refuser : l'utilisateur cliquera le bon élément juste
+        // après, ce qui est exactement ce qu'on attend.
+        //
+        // « Lire à haute voix » est parfois sous la réponse, parfois derrière
+        // les trois points : le clic sur un ouvre-menu — la page le déclare,
+        // `aria-haspopup` n'est pas deviné par nous — est retenu à part, et le
+        // suivant est le bouton. Sans menu, le premier clic est le bon.
+        //
+        // « Copier » n'est retenu que s'il désigne ce que la dictée cliquera :
+        // la paire du dernier bloc (cf. `paireCopier`), ou un repère que
+        // `copierAutour` ramène à ce seul bouton, et toujours dans le tour de
+        // la dernière réponse. La page en pose un sous chaque message, celui
+        // de l'utilisateur compris : appris là, il copiait la demande. Un
+        // repère vide dit ce refus à Swift, qui redemande. `selReponse` : le
+        // repère de la réponse que la dictée consultera.
+        guetter(cible, selReponse) {
+          const genre = GENRE[cible];
+          let menu = null;
+          return ecouterLesClics((ev) => {
             const el = ev.target.closest(CLIQUABLE[genre] || '*');
             if (!convient(genre, el)) return null;
-            return { ok: true, selecteur: selecteurStable(el, genre), parent: selecteurAncetre(el) };
+            if (cible === 'copier') return copierDesigne(el, derniereReponse(selReponse));
+            const repere = { ok: true, selecteur: selecteurStable(el, genre), parent: selecteurAncetre(el) };
+            if (cible !== 'lecture') return repere;
+            if (ouvreUnMenu(el) && !menu) { menu = repere; return null; } // on attend le vrai bouton
+            return { ...repere, menu: menu ? menu.selecteur : '', menuParent: menu ? menu.parent : '' };
           });
         },
 
@@ -956,26 +998,12 @@ public enum RelaisScripts {
           if (!derniere) return { ok: false, raison: 'pas de réponse' };
           const liste = [];
           for (const s of HEURISTIQUES.copier) {
-            let noeud = derniere;
-            for (let niveau = 0; niveau < 6 && noeud; niveau++) {
-              const boutons = tous(s, noeud).filter((b) => visible(b) && convient('bouton', b)
-                                                        && !ouvreUnMenu(b));
-              if (boutons.length) {
-                if (boutons.length === 1) {
-                  const el = boutons[0];
-                  const seul = [...reperesPossibles(el), s]
-                    .find((c) => copierAutour(derniere, c) === el);
-                  const paire = paireCopier(el)
-                    || (seul ? { selecteur: seul, parent: '' } : null);
-                  if (paire && !liste.some((c) => c.selecteur === paire.selecteur
-                                                  && c.parent === paire.parent)) liste.push(paire);
-                }
-                // Le premier niveau qui en contient décide : plus haut, on
-                // entrerait dans les messages voisins.
-                break;
-              }
-              noeud = noeud.parentElement;
-            }
+            // Au premier niveau qui en contient, et seul à ce niveau (cf.
+            // `copierAutour`) : plus haut, on entrerait dans les messages
+            // voisins.
+            const el = copierAutour(derniere, s);
+            const c = el && !ouvreUnMenu(el) && repereCopier(el, derniere, [s]);
+            if (c && !liste.some((x) => x.selecteur === c.selecteur && x.parent === c.parent)) liste.push(c);
           }
           return { ok: true, candidats: liste };
         },
@@ -995,29 +1023,6 @@ public enum RelaisScripts {
             }
           } catch (e) { /* stockage inaccessible : on s'en passe */ }
           return { ok: true, retirees };
-        },
-
-        // Calibrer un bouton qui se cache peut-être dans un menu.
-        //
-        // « Lire à haute voix » est parfois directement sous la réponse, et
-        // parfois derrière les trois points. On ne demande donc pas à
-        // l'utilisateur de savoir lequel des deux cas est le sien : on écoute
-        // ses clics, et l'on reconnaît celui qui ouvre un menu à ce qu'il le
-        // déclare — `aria-haspopup` est posé par la page, pas deviné par nous.
-        //
-        // Le premier clic sur un ouvre-menu est retenu à part, et l'on continue
-        // d'écouter ; le suivant est le bouton cherché. S'il n'y a pas de menu,
-        // le premier clic est déjà le bon et l'on s'arrête là.
-        calibrerAvecMenu() {
-          let menu = null;
-          return guetter((ev) => {
-            const el = ev.target.closest(CLIQUABLE.bouton);
-            if (!convient('bouton', el)) return null;
-            const repere = { selecteur: selecteurStable(el, 'bouton'), parent: selecteurAncetre(el) };
-            if (ouvreUnMenu(el) && !menu) { menu = repere; return null; } // on attend le vrai bouton
-            return { ok: true, ...repere,
-                     menu: menu ? menu.selecteur : '', menuParent: menu ? menu.parent : '' };
-          });
         },
 
         // Fait renoncer une calibration en cours, s'il y en a une.

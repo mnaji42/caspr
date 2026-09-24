@@ -38,7 +38,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisScripts.swift` (dans `CasprCore`) | Le JavaScript injecté — le pont (cliquer, lire, vider, calibrer) et l'écho —, en chaînes Swift pour que les tests l'atteignent : une faute de syntaxe casse `swift test` au lieu de laisser la page sans pont. |
 | `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `Relais` qui enregistre. |
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
-| `RelaisCycle.swift` (dans `CasprCore`) | La machine d'une dictée, en table : ses phases (`RelaisPhase`), leur libellé et la sortie que la barre dit avec le chrono, et ce que valent la touche de dictée et la croix à chacune (`RelaisCycle.decider`). Aucune ligne ne vient de l'horloge. |
+| `RelaisCycle.swift` (dans `CasprCore`) | La machine d'une dictée, en table : ses phases (`RelaisPhase`), leur libellé et la sortie que la barre dit avec le chrono, et ce que valent la touche de dictée et la croix à chacune (`RelaisCycle.decider`), et quel échec de la page mène au repli (`RelaisCycle.replie`). Aucune ligne ne vient de l'horloge. |
 | `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. La carte de session (`RelaisSession`) est aussi celle de l'accueil, et c'est elle qui dit ce que la voie exige pour dicter. |
 | `RelaisModuleCard.swift` | Le réglage d'un module : ses actions, sa sortie, son affichage. |
 | `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
@@ -107,8 +107,15 @@ Et ce brut est gardé **dès qu'il est lu**, avant la seconde passe
 (`Livraison.garderLeBrut`). Si la suite échoue — l'insertion refusée, une
 réponse qu'on renonce à attendre —, « Insérer la transcription brute de
 ChatGPT », dans le menu de Caspr, le rend : c'est l'entrée qui sert à l'aperçu
-de macOS, puisque la voie ChatGPT n'a pas d'audio à rejouer. Une livraison
-réussie l'oublie. Quand un module a remanié le texte, l'historique garde le
+de macOS. Une livraison réussie l'oublie.
+
+Avant qu'il soit lu, c'est le **son de la page** qui répond de la dictée : la
+copie en mémoire vive du flux que ChatGPT capte (`RelaisEcho`). La touche de
+dictée pendant l'attente renonce à ChatGPT sans rien perdre : le brut s'il est
+lu, sinon ce son transcrit par macOS, s'insère là où l'on parlait
+(`RelaisRepli`) ; un refus, une session fermée ou une page morte y mènent
+aussi. La croix n'insère rien, et laisse le son au menu : « Réessayer » le
+transcrit par macOS. Quand un module a remanié le texte, l'historique garde le
 brut à côté (sous ⌥ dans le menu, « Brut » dans les réglages) : une seconde
 passe qui aboutit peut quand même avoir perdu ce qu'on avait dit.
 
@@ -211,9 +218,10 @@ distingue de la voie macOS, et pourquoi.
   ouvrir le micro de Caspr, arrêter et lire, transformer, ouvrir la
   discussion ou livrer — ; un numéro, `generation`, vérifié après chaque
   attente, pour qu'un cycle abandonné ne touche plus rien ; et `geste`, qui
-  décide sur-le-champ par la table de `RelaisCycle`. Aucun audio à conserver,
-  donc pas de « Réessayer » : le recours est la transcription brute, gardée
-  dès qu'elle est lue. Le pendant de `VoieApple.swift`, qui ne partage avec
+  décide sur-le-champ par la table de `RelaisCycle`. Le recours est la
+  transcription brute, gardée dès qu'elle est lue, et avant elle le son de la
+  page : `replier` finit le cycle, page arrêtée, et le confie à la voie macOS,
+  comme un « Réessayer ». Le pendant de `VoieApple.swift`, qui ne partage avec
   elle que la livraison.
 - **`DicteeEnCours.swift`** — le module et la destination, figés à l'arrêt de
   l'écoute et portés jusqu'à la livraison : `RelaisCatalogue.courant` relit
@@ -348,9 +356,9 @@ rejoignent dans `Livraison` : rendre le clavier, insérer au curseur ou en
 note, archiver, garder de quoi reprendre un échec. Elle ne distingue les voies
 qu'une fois, pour rendre le clavier, que seule une dictée ChatGPT a pu donner
 à la fenêtre du relais. Les autres différences sont écrites là où elles se
-produisent, et ce sont des différences réelles : aucun audio de notre côté,
-donc pas de « Réessayer » ; une page à rendre et à préparer à la fin de
-chaque dictée.
+produisent, et ce sont des différences réelles : un son qui n'est pas le
+nôtre, mais la copie de celui de la page ; une page à rendre et à préparer à
+la fin de chaque dictée.
 
 ## Pourquoi une exclusion, et pas un moteur de plus
 

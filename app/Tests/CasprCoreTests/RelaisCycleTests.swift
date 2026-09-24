@@ -27,13 +27,24 @@ struct RelaisCycleTests {
         }
     }
 
-    @Test("Après un échec prouvé : échouer au démarrage, replier ensuite, continuer en lecture")
+    @Test("Un échec prouvé replie de l'écoute à la réponse, et seulement un échec prouvé")
     func echec() {
-        #expect(RelaisCycle.apresEchec(en: .demarrage) == .echouer)
-        for phase in [RelaisPhase.ecoute, .transcription, .envoi, .reponse] {
-            #expect(RelaisCycle.apresEchec(en: phase) == .replier)
+        let prouves: [RelaisErreur] = [.refusParChatGPT("Limite atteinte"), .pasConnecte,
+                                       .pageInterrompue, .pontAbsent]
+        // La page a peut-être encore le texte : elle s'ouvre pour qu'on l'y
+        // prenne.
+        let autres: [RelaisErreur] = [.introuvable(.stop), .ecouteNonOuverte, .pasDeReponse,
+                                      .envoiSansEffet]
+        let repliees: Set<RelaisPhase> = [.ecoute, .transcription, .envoi, .reponse]
+        for phase in RelaisPhase.allCases {
+            for erreur in prouves {
+                #expect(RelaisCycle.replie(apres: erreur, en: phase) == repliees.contains(phase),
+                        "\(erreur) en \(phase)")
+            }
+            for erreur in autres {
+                #expect(!RelaisCycle.replie(apres: erreur, en: phase), "\(erreur) en \(phase)")
+            }
         }
-        #expect(RelaisCycle.apresEchec(en: .lecture) == .continuer)
     }
 
     @Test("Chaque attente dit ce qu'on attend, et comment en sortir")

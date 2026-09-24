@@ -92,26 +92,30 @@ public enum RelaisCycle {
         }
     }
 
-    public enum ApresEchec: String, Sendable {
-        /// La dictée n'a pas commencé : elle échoue, et le dit.
-        case echouer
-        /// Ce qui a été dit n'est pas perdu : on livre ce qu'on a.
-        case replier
-        /// La réponse est en main, seule la voix manque : on continue, avec
-        /// un avertissement.
-        case continuer
-    }
-
-    /// Ce que devient la dictée quand la page prouve un échec — alerte de
-    /// refus, processus mort, session fermée.
-    public static func apresEchec(en phase: RelaisPhase) -> ApresEchec {
+    /// Ce que devient la dictée quand la page prouve un échec : vrai quand
+    /// ChatGPT ne rendra plus rien de ce qui a été dit, et qu'on livre à sa
+    /// place ce qu'on a (cf. `RelaisRepli`).
+    ///
+    /// Un refus, une session fermée, une page morte, ou sans pont — chargée
+    /// sans le script de Caspr, que rien n'y installera : elle ne rendra pas
+    /// davantage le texte qu'une page morte. Pas les autres erreurs : un arrêt
+    /// introuvable laisse une page qui a peut-être encore le texte — elle
+    /// s'ouvre pour qu'on l'y prenne, et le son reste au menu.
+    ///
+    /// Au démarrage, rien n'a encore été dit : la dictée échoue. Pendant
+    /// l'envoi ou la réponse, le brut est lu, et c'est lui qui s'insère —
+    /// par la seconde passe, qui le rend quand elle échoue. En lecture, la
+    /// réponse est en main, seule la voix manque : la dictée continue, avec
+    /// un avertissement. En livraison, la page n'y est plus pour rien : un
+    /// échec d'insertion a son propre chemin (cf. `Livraison.EchecDInsertion`).
+    public static func replie(apres erreur: RelaisErreur, en phase: RelaisPhase) -> Bool {
         switch phase {
-        case .demarrage: .echouer
-        case .ecoute, .transcription, .envoi, .reponse: .replier
-        case .lecture: .continuer
-        // La page n'y est plus pour rien : un échec d'insertion a son propre
-        // chemin (cf. `Livraison.EchecDInsertion`).
-        case .livraison: .echouer
+        case .ecoute, .transcription, .envoi, .reponse:
+            switch erreur {
+            case .refusParChatGPT, .pasConnecte, .pageInterrompue, .pontAbsent: true
+            default: false
+            }
+        case .demarrage, .lecture, .livraison: false
         }
     }
 }

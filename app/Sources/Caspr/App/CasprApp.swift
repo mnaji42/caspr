@@ -494,10 +494,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Une dictée ratée après plusieurs minutes de parole doit pouvoir être
-        // relancée sans tout redire : l'audio est encore là. Sur la voie
-        // ChatGPT, il n'y a pas d'audio, mais la transcription brute, gardée
-        // dès qu'elle est lue (cf. `Livraison.garderLeBrut`) : elle passe par
-        // la même entrée que l'aperçu de macOS.
+        // relancée sans tout redire : l'audio est encore là — sur la voie
+        // ChatGPT, le son de la page, tant que sa transcription brute n'est
+        // pas lue. Lue, c'est elle (cf. `Livraison.garderLeBrut`) : elle passe
+        // par la même entrée que l'aperçu de macOS.
         //
         // Au repos seulement : pendant une dictée, ces entrées agissaient
         // sur le recours de la précédente et remettaient l'état au repos

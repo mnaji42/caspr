@@ -550,6 +550,11 @@ final class Relais: ObservableObject {
     /// Appelé quand la page meurt pendant que la dictée écoute.
     var surPageInterrompue: (() -> Void)?
 
+    /// La durée du son que la page a capté pour la dictée en cours (cf.
+    /// `RelaisEcho`) — il survit à sa mort —, et ce son, pris pour le repli.
+    var secondesEntendues: Double { page?.echo.secondes ?? 0 }
+    func prendreLeSon() -> [Float] { page?.echo.prendre() ?? [] }
+
     /// La page d'une dictée qui commence, et le scénario qui la pilotera.
     ///
     /// La page a été préparée quand la dictée précédente s'est achevée : il
@@ -765,6 +770,10 @@ final class Relais: ObservableObject {
     /// manqué —, et chacun devait penser à tout : un oubli condamnait la page
     /// jusqu'au redémarrage.
     func finirLeCycle(_ fin: Fin) {
+        // Le son de la page n'a plus d'usage : le repli l'a pris, ou la dictée
+        // s'est passée de lui. Des minutes de parole en mémoire vive ne
+        // doivent pas attendre la dictée suivante pour partir.
+        page?.echo.liberer()
         // Le report d'abord : c'est lui qui dit de garder la page quand on a
         // choisi macOS pendant la dictée, et à la sortie de la discussion de
         // laisser la fenêtre ouverte sur le texte.

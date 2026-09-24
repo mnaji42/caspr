@@ -285,30 +285,39 @@ final class Livraison {
     /// Le recours de ChatGPT est sa réponse, et non sa transcription : le
     /// menu doit nommer ce qu'il insérera (cf. `garderLaReponse`).
     private(set) var recoursEstLaReponse = false
+    /// Le recours vient d'une dictée ChatGPT, même quand c'est le son de sa
+    /// page que macOS transcrira (cf. `VoieChatGPT.replier`) : la fenêtre du
+    /// relais a pu prendre le clavier, et l'insérer doit d'abord le rendre.
+    private(set) var recoursApresLeRelais = false
 
     /// Garde de quoi reprendre une dictée ratée, et le dit dans la barre.
     ///
     /// Les deux vont ensemble : la barre promet « Réessayer », et c'est cet
-    /// audio qui tient la promesse. Promettre sans garder, c'est ce que faisait
-    /// la voie ChatGPT, qui n'a pas d'audio de ce côté-ci.
+    /// audio qui tient la promesse.
     ///
     /// Dit là où l'utilisateur regarde. La barre des menus reçoit le détail,
     /// mais on ne consulte pas un menu qu'on n'a pas de raison d'ouvrir : sans
     /// ça, un échec se lit comme « je m'y suis mal pris ». `echec` tient en
-    /// une ligne, parce que la barre ne reste que cinq secondes.
-    func conserver(audio: [Float], apercu: String,
-                   echec: String = "Transcription impossible — « Réessayer » dans le menu") {
+    /// une ligne, parce que la barre ne reste que cinq secondes ; `nil` ne dit
+    /// rien — une dictée ChatGPT annulée n'a pas échoué, elle garde seulement
+    /// le son de sa page (49, 95).
+    ///
+    /// `apresLeRelais` : cf. `recoursApresLeRelais`.
+    func conserver(audio: [Float], apercu: String, apresLeRelais: Bool = false,
+                   echec: String? = "Transcription impossible — « Réessayer » dans le menu") {
         pendingAudio = audio
         pendingPreview = apercu
         voieDuRecours = .apple
         recoursEstLaReponse = false
+        recoursApresLeRelais = apresLeRelais
+        guard let echec else { return }
         overlay.showFailure(echec, hint: Self.rescueHint(preview: apercu))
     }
 
     /// Garde la transcription de ChatGPT dès qu'elle est lue, **avant** que
     /// le module ne la reprenne.
     ///
-    /// C'est le filet de la voie ChatGPT, qui n'a pas d'audio à rejouer. La
+    /// C'est le filet de la voie ChatGPT une fois le son de la page oublié. La
     /// transcription existait et mourait dans une variable : quand la suite
     /// échouait — l'insertion refusée, l'attente d'une réponse abandonnée à
     /// la touche —, il ne restait qu'à aller la chercher dans la page, si
@@ -324,6 +333,7 @@ final class Livraison {
         pendingPreview = brut
         voieDuRecours = .chatgpt
         recoursEstLaReponse = false
+        recoursApresLeRelais = true
     }
 
     /// Garde la réponse de ChatGPT à la place du brut, quand la dictée est
@@ -356,10 +366,7 @@ final class Livraison {
         // Un échec de la voie ChatGPT ouvre la fenêtre du relais pour qu'on y
         // récupère le texte, et Caspr passe devant : le brut s'écrirait dans
         // la page. Même geste qu'à la livraison (cf. `livrer`).
-        switch voieDuRecours {
-        case .chatgpt: await Relais.partage.rendreLeClavier()
-        case .apple: break
-        }
+        if recoursApresLeRelais { await Relais.partage.rendreLeClavier() }
         try await ecrire(text, vers: Preferences.shared.effectiveTarget,
                          depuis: Self.applicationDevant())
     }
@@ -371,6 +378,7 @@ final class Livraison {
         pendingPreview = nil
         voieDuRecours = .apple
         recoursEstLaReponse = false
+        recoursApresLeRelais = false
     }
 
     var hasPendingAudio: Bool { pendingAudio != nil }

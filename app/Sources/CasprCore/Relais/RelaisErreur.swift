@@ -29,10 +29,10 @@ public enum RelaisErreur: LocalizedError, Equatable {
 
     /// Ce que la barre affiche, quand la raison générique mentirait.
     ///
-    /// « Réessayer dans le menu » ne veut rien dire pour le relais, qui ne
-    /// garde pas d'audio. Pour ces cas-là, la raison elle-même est ce
-    /// qu'on a besoin de lire — surtout le texte d'un refus, qui dit
-    /// d'emblée si c'est un quota et non une panne.
+    /// « Réessayer dans le menu » ne dit rien de la page ni de ChatGPT.
+    /// Pour ces cas-là, la raison elle-même est ce qu'on a besoin de lire —
+    /// surtout le texte d'un refus, qui dit d'emblée si c'est un quota et non
+    /// une panne.
     public var raisonCourte: String? {
         switch self {
         case .refusParChatGPT(let message):

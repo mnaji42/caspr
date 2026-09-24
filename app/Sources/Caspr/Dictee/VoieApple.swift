@@ -152,6 +152,8 @@ final class VoieApple {
     ///
     /// Rien ne peut interrompre une transcription macOS — elle dure une
     /// seconde : ce chemin n'a pas à vérifier que le cycle est encore le sien.
+    /// Pas même celle du son d'une page ChatGPT (cf. `VoieChatGPT.replier`) :
+    /// son cycle est déjà fini.
     ///
     /// `apercuConserve` : ce que l'aperçu en direct avait écrit du même audio,
     /// gardé avec lui comme second recours — celui d'un « Réessayer ». `nil`
@@ -179,6 +181,7 @@ final class VoieApple {
                 // la dictée oblige à tout redire.
                 livraison.conserver(audio: samples,
                                     apercu: apercuConserve ?? previewText,
+                                    apresLeRelais: dictee.voie == .chatgpt,
                                     echec: "Rien n'a été entendu")
                 // Un échec et non un retour au repos : la barre renvoie au
                 // menu, et le menu affichait « Prêt ». Envoyer quelqu'un
@@ -207,7 +210,8 @@ final class VoieApple {
             Log.error("échec de transcription : \(error.localizedDescription) — "
                       + "\(String(format: "%.1f", minutes)) min conservées")
             livraison.conserver(audio: samples,
-                                apercu: apercuConserve ?? previewText)
+                                apercu: apercuConserve ?? previewText,
+                                apresLeRelais: dictee.voie == .chatgpt)
             return "\(error.localizedDescription) — audio conservé, "
                 + "« Réessayer » dans le menu."
         }

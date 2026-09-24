@@ -6,11 +6,15 @@ import CasprCore
 ///
 /// La page tient le micro pendant qu'elle écoute, et celui que Caspr ouvrirait
 /// ne recevrait que du silence : on reçoit donc la copie de son propre flux
-/// (cf. `RelaisScripts.echo`). Pour l'instant, on ne fait que mesurer ce qui
-/// arrive — une ligne de journal par dictée —, pour savoir si un repli par la
-/// voie macOS, et un aperçu en direct, peuvent s'y adosser.
+/// (cf. `RelaisScripts.echo`). Une ligne de journal par dictée dit ce qui est
+/// arrivé ; le son sert au repli par la voie macOS, quand on renonce à
+/// ChatGPT ou qu'il échoue (cf. `RelaisRepli`).
 ///
-/// Rien sur disque : un tableau en mémoire, libéré au désarmement.
+/// Rien sur disque : un tableau en mémoire, gardé après le désarmement — la
+/// transcription de ChatGPT vient après l'arrêt, et c'est pendant qu'on
+/// l'attend qu'on peut y renoncer —, puis pris par le repli ou libéré à la
+/// fin de la dictée (cf. `Relais.finirLeCycle`). Il survit à la mort du
+/// processus de la page : c'est le même objet, et la même page rechargée.
 @MainActor
 final class RelaisEcho {
 
@@ -28,6 +32,10 @@ final class RelaisEcho {
     /// pas commencé.
     private var ecouteDepuis: ContinuousClock.Instant?
     private var echantillons: [Float] = []
+    /// Tout ce qui est arrivé depuis l'armement, pour la ligne du journal : le
+    /// son a pu être pris avant le désarmement — une annulation pendant
+    /// l'écoute —, et la ligne dirait « rien reçu ».
+    private var recus = 0
     private var crete: Float = 0
     private var statut: [String: Any] = [:]
 
@@ -53,9 +61,14 @@ final class RelaisEcho {
 
     func relier(_ vue: WKWebView) { webView = vue }
 
-    /// Arme l'écho, juste avant le clic du micro.
+    /// Arme l'écho, juste avant le clic du micro — sur un son vide : celui
+    /// d'une dictée précédente ne doit jamais passer pour celui-ci.
     func armer() {
         desarmer()
+        liberer()
+        recus = 0
+        crete = 0
+        statut = [:]
         arme = true
         signaler(signalArmer)
     }
@@ -65,7 +78,8 @@ final class RelaisEcho {
         if arme { ecouteDepuis = .now }
     }
 
-    /// Désarme, écrit la ligne de la dictée et libère le son — sur-le-champ.
+    /// Désarme et écrit la ligne de la dictée — sur-le-champ. Le son reçu
+    /// reste, pour le repli.
     ///
     /// Sans attendre la page : une page figée ne rendrait jamais la main, et la
     /// ligne resterait en suspens. On y perd au plus le dernier morceau encore
@@ -76,22 +90,45 @@ final class RelaisEcho {
         guard arme else { return }
         arme = false
         signaler(signalDesarmer)
-        defer { echantillons = []; crete = 0; statut = [:]; ecouteDepuis = nil }
+        defer { ecouteDepuis = nil }
         guard let debut = ecouteDepuis else { return }
         let appels = (statut["appels"] as? Int).map { "\($0) appel\($0 > 1 ? "s" : "") à getUserMedia" }
             ?? "aucun statut de la page"
         let niveau = "crête " + Self.decimal(Double(crete), 3)
         let etat = statut["etat"] as? String ?? "?"
-        guard !echantillons.isEmpty else {
+        guard recus > 0 else {
             return Log.notice("relais : écho — rien reçu (\(niveau), \(appels), contexte \(etat))")
         }
         let duree = Double((.now - debut) / .milliseconds(1)) / 1000
-        let taux = statut["taux"] as? Double ?? 16000
         let piste = (statut["piste"] as? Int).map { "\($0) Hz" } ?? "? Hz"
-        Log.notice("relais : écho — \(Self.decimal(Double(echantillons.count) / taux, 1)) s reçues "
+        Log.notice("relais : écho — \(Self.decimal(Double(recus) / taux, 1)) s reçues "
                  + "pour \(Self.decimal(duree, 1)) s d'écoute, piste \(piste), contexte "
                  + "\(etat) à \(Int(taux)) Hz, \(niveau), \(appels)")
     }
+
+    /// La fréquence du contexte de la page : 16 kHz demandés, ceux de la
+    /// voie macOS.
+    private var taux: Double { statut["taux"] as? Double ?? 16000 }
+
+    /// La durée du son reçu, en secondes ; zéro s'il est inutilisable (cf.
+    /// `prendre`).
+    var secondes: Double { taux == 16000 ? Double(echantillons.count) / taux : 0 }
+
+    /// Le son reçu depuis l'armement, pour la voie macOS ; il quitte l'écho.
+    ///
+    /// Vide si le contexte n'a pas tourné à 16 kHz : transcrit comme tel, un
+    /// autre débit rendrait un texte faux, sans que rien ne le dise.
+    func prendre() -> [Float] {
+        defer { liberer() }
+        guard taux == 16000 else {
+            Log.error("relais : écho à \(Int(taux)) Hz, inutilisable par macOS")
+            return []
+        }
+        return echantillons
+    }
+
+    /// Oublie le son reçu : la dictée est livrée, ou le repli l'a pris.
+    func liberer() { echantillons = [] }
 
     /// Tiré sans attendre : rien ne s'attend, sur le chemin d'une dictée,
     /// qu'une page pourrait retenir.
@@ -116,6 +153,7 @@ final class RelaisEcho {
                 statut[cle] = valeur
             }
         } else if let octets = Data(base64Encoded: corps) {
+            recus += octets.count / 2
             octets.withUnsafeBytes { brut in
                 for i in stride(from: 0, to: brut.count - 1, by: 2) {
                     let n = Int16(littleEndian: brut.loadUnaligned(fromByteOffset: i, as: Int16.self))

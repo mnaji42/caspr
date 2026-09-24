@@ -24,6 +24,10 @@ final class VoieChatGPT {
 
     /// L'état commun, projeté par chaque phase (cf. `entrer`).
     var surEtat: (DictationController.State) -> Void = { _ in }
+    /// Le repli par macOS, une fois la dictée ChatGPT finie : le son de la
+    /// page, la dictée figée, et ce que la barre dira s'il aboutit (cf.
+    /// `replier`).
+    var surRepliParMacOS: (_ son: [Float], _ dictee: DicteeEnCours, _ annonce: String?) -> Void = { _, _, _ in }
 
     /// La phase de la dictée en cours ; `nil` hors d'une dictée ChatGPT.
     private(set) var phase: RelaisPhase?
@@ -188,48 +192,96 @@ final class VoieChatGPT {
         return decision
     }
 
-    /// La touche pendant que ChatGPT travaille : renoncer à lui, sans perdre
-    /// ce qui a été dit (48, 94).
+    /// La touche pendant que ChatGPT travaille, ou un échec que la page
+    /// prouve : renoncer à lui sans perdre ce qui a été dit (48, 93–98).
     ///
-    /// La transcription déjà lue s'insère là où l'on parlait, à la
-    /// destination figée à l'arrêt : on renonce à la réponse, pas à la
-    /// dictée. Abandonner la jetait au menu, et il fallait aller l'y
-    /// chercher — alors que c'est exactement ce que la touche voulait dire.
-    /// La page est arrêtée puis préparée une fois le texte écrit, comme
-    /// après un abandon.
+    /// Le meilleur texte en main s'écrit là où l'on parlait, à la destination
+    /// figée à l'arrêt : la transcription de ChatGPT si elle est déjà lue,
+    /// sinon celle de macOS, sur le son que la page captait (cf.
+    /// `RelaisRepli`). Abandonner la jetait au menu, ou la perdait tout à fait
+    /// tant que ChatGPT transcrivait — alors que c'est exactement ce que la
+    /// touche voulait dire. La grande fenêtre ne s'ouvre pas : on n'arrache
+    /// pas le premier plan à l'application où l'on vient d'écrire.
     ///
-    /// Sans transcription lue — ChatGPT transcrit encore —, ou pour un module
-    /// qui n'écrit nulle part, c'est l'abandon : le brut éventuel reste au
-    /// menu.
-    private func replier() {
-        guard let brut, let dictee, !dictee.nEcritNullePart else {
+    /// La dictée figée garde la voie ChatGPT, pour que la livraison rende le
+    /// clavier que la fenêtre du relais a pu prendre. Morte pendant l'écoute,
+    /// la page n'a rien figé : la dictée se fige à cet instant.
+    ///
+    /// Rend faux quand un échec ne laisse rien à livrer : l'appelant suit
+    /// alors le chemin d'échec d'avant le repli (20, 100).
+    @discardableResult
+    private func replier(apres cause: RelaisErreur? = nil) -> Bool {
+        let dictee = self.dictee ?? figer()
+        let ecrit = !dictee.nEcritNullePart
+        let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: relais.secondesEntendues, ecrit: ecrit)
+        let annonce = RelaisRepli.annonce(repli, apres: cause)
+        Log.info("relais : repli après \(cause?.localizedDescription ?? "la touche") — "
+                 + "\(annonce ?? "rien à livrer"), "
+                 + "\(String(format: "%.1f", relais.secondesEntendues)) s de son")
+        // Une page morte porte une conversation vierge : une discussion
+        // restée ouverte y enverrait la suite sans son contexte.
+        let pageMorte = cause == .pageInterrompue
+        let fin = Relais.Fin.abandonnee(quitterLaDiscussion: ecrit || pageMorte, ecouteQuiDemarre: false)
+        // Morte, elle n'écoute plus rien : sa barre ne doit pas flotter sur le
+        // repli le temps d'un relevé.
+        if pageMorte, repli != .rien { relais.masquerBarre() }
+        switch repli {
+        case .rien:
+            guard cause == nil else { return false }
             abandonner(ecouteQuiDemarre: false)
-            return
-        }
-        couper()
-        let g = generation
-        // Rangée avant d'écrire, comme au chemin ordinaire : la barre du
-        // relais restait sinon au-dessus de l'application où l'on insère,
-        // jusqu'à la fin de l'arrêt. Il n'y a plus d'écoute qu'un rangement
-        // empêcherait d'arrêter : le brut est lu, le micro de la page coupé.
-        relais.masquerBarre()
-        overlay.hide()
-        // La touche et la croix y annulent encore : rien n'est activé ni
-        // écrit (63).
-        entrer(.livraison)
-        Log.info("relais : ChatGPT abandonné — transcription brute insérée")
-        moteur = Task {
-            var echec: String?
-            do {
-                try await livraison.livrer(brut, dictee)
+        case .garder:
+            // Rien ne s'écrit : le brut est au menu depuis sa lecture, et
+            // l'abandon y met le son (48, 54). Un échec prouvé reste un
+            // échec — le menu le dit, sans le son d'une annulation.
+            abandonner(ecouteQuiDemarre: false, pageMorte: pageMorte, echec: cause == nil ? nil : annonce)
+            overlay.showFailure(annonce ?? "")
+        case .transcrireParMacOS:
+            // La page est arrêtée puis préparée d'abord, comme après un
+            // abandon (93) : ChatGPT cesse d'écouter à l'instant où l'on y
+            // renonce, et non une fois macOS fini. C'est l'arrêt qui range sa
+            // barre : rangée avant, la page serait suspendue, et l'arrêt
+            // n'aboutirait pas. Puis la voie macOS prend la suite, comme un
+            // « Réessayer » — sa transcription dure quelques secondes, et ne
+            // s'interrompt pas plus que celle d'une dictée macOS.
+            let son = relais.prendreLeSon()
+            couper()
+            terminer(fin)
+            overlay.showProcessing("Transcription par macOS…")
+            surRepliParMacOS(son, dictee, annonce)
+        case .inserer(let brut):
+            couper()
+            let g = generation
+            // Rangée avant d'écrire, comme au chemin ordinaire : la barre du
+            // relais restait sinon au-dessus de l'application où l'on insère.
+            // Le brut lu, la page n'écoute plus.
+            relais.masquerBarre()
+            overlay.hide()
+            // La touche et la croix y annulent encore : rien n'est activé ni
+            // écrit (63).
+            entrer(.livraison)
+            moteur = Task {
+                var echec: String?
+                do {
+                    try await livraison.livrer(brut, dictee)
+                } catch {
+                    guard g == generation else { return }
+                    echec = insertionImpossible(error)
+                }
                 guard g == generation else { return }
-                overlay.showFailure("Transcription brute insérée — ChatGPT abandonné")
-            } catch {
-                guard g == generation else { return }
-                echec = insertionImpossible(error)
+                if echec == nil, let annonce { overlay.showFailure(annonce) }
+                terminer(fin, echec: echec)
             }
-            terminer(.abandonnee(quitterLaDiscussion: true, ecouteQuiDemarre: false), echec: echec)
         }
+        return true
+    }
+
+    /// Ce qui est dit maintenant : le module et la destination du moment. La
+    /// voie et l'application visée restent celles de l'appui (29).
+    private func figer() -> DicteeEnCours {
+        DicteeEnCours(voie: .chatgpt, module: RelaisCatalogue.courant,
+                      destination: Preferences.shared.effectiveTarget,
+                      applicationVisee: applicationVisee,
+                      duree: phase == .ecoute ? Date.now.timeIntervalSince(depuis) : 0)
     }
 
     /// Abandonne la dictée, et fait à sa place ce qu'elle ne fera plus.
@@ -240,19 +292,35 @@ final class VoieChatGPT {
     /// ailleurs, comme sa fin l'aurait fait (cf. `Relais.finirLeCycle`).
     ///
     /// Rien n'est inséré, mais rien de ce qui est en main ne se perd : la
-    /// réponse va au menu, sinon le brut, qui y est depuis sa lecture. La
+    /// réponse va au menu, sinon le brut, qui y est depuis sa lecture, sinon
+    /// le son de la page — « Réessayer » le transcrira par macOS (49, 95). La
     /// page préparée ensuite n'a plus la réponse — seul l'historique de
     /// ChatGPT l'aurait gardée.
-    private func abandonner(ecouteQuiDemarre: Bool) {
-        if let reponse { livraison.garderLaReponse(reponse) }
+    ///
+    /// `pageMorte` : la page rechargée porte une conversation vierge, et la
+    /// discussion se ferme (cf. `replier`). `echec` : le message du menu,
+    /// quand c'est la page et non l'utilisateur qui a mis fin à la dictée.
+    private func abandonner(ecouteQuiDemarre: Bool, pageMorte: Bool = false, echec: String? = nil) {
+        if let reponse {
+            livraison.garderLaReponse(reponse)
+        } else if brut == nil {
+            garderLeSon()
+        }
         // Pendant l'écoute, rien n'est encore figé : c'est le module du
         // moment qui dit où la dictée devait aller.
         let ecrit = !(dictee?.nEcritNullePart ?? (RelaisCatalogue.courant.sortieParDefaut == .aucune))
         couper()
         overlay.hide()
-        Feedback.cancelled()
-        terminer(.abandonnee(quitterLaDiscussion: !ecouteQuiDemarre && ecrit,
-                             ecouteQuiDemarre: ecouteQuiDemarre))
+        if echec == nil { Feedback.cancelled() }
+        terminer(.abandonnee(quitterLaDiscussion: pageMorte || (!ecouteQuiDemarre && ecrit),
+                             ecouteQuiDemarre: ecouteQuiDemarre), echec: echec)
+    }
+
+    /// Le son de la page au menu, sans message, s'il vaut une dictée :
+    /// « Réessayer » le transcrira par macOS.
+    private func garderLeSon() {
+        guard relais.secondesEntendues >= RelaisRepli.secondesMinimales else { return }
+        livraison.conserver(audio: relais.prendreLeSon(), apercu: "", apresLeRelais: true, echec: nil)
     }
 
     /// Le cycle en cours cesse de l'être.
@@ -277,11 +345,11 @@ final class VoieChatGPT {
 
     /// WebKit a tué la page pendant qu'on parlait.
     ///
-    /// Le son qu'elle captait est perdu avec elle. Continuer d'afficher
-    /// l'écoute, c'était laisser parler dans le vide jusqu'à l'appui d'arrêt ;
-    /// on échoue donc tout de suite, en le disant. Les autres phases le
-    /// découvrent seules, au relevé suivant de leur attente (cf.
-    /// `RelaisDictee.observer`).
+    /// Continuer d'afficher l'écoute, c'était laisser parler dans le vide
+    /// jusqu'à l'appui d'arrêt : on s'arrête tout de suite. Ce qu'elle a capté
+    /// jusque-là, l'écho l'a gardé, et macOS le transcrit (27, 97) ; sans lui,
+    /// on échoue, en le disant. Les autres phases le découvrent seules, au
+    /// relevé suivant de leur attente (cf. `RelaisDictee.observer`).
     ///
     /// La page rechargée porte une conversation vierge : une discussion
     /// restée ouverte y enverrait la suite sans son contexte. Elle se ferme,
@@ -290,6 +358,7 @@ final class VoieChatGPT {
         guard phase == .ecoute else { return }
         let erreur = RelaisErreur.pageInterrompue
         Log.error("relais : la page est morte pendant l'écoute")
+        if replier(apres: erreur) { return }
         couper()
         // Rangée sur-le-champ, et non après l'arrêt de l'abandon : une page
         // morte n'écoute plus rien, et sa barre ne doit pas flotter sur
@@ -384,11 +453,8 @@ final class VoieChatGPT {
         Feedback.recordingStopped()
         // Ce qui est dit à l'arrêt : le module et la destination du moment.
         // La voie et l'application visée restent celles de l'appui (29).
-        let module = RelaisCatalogue.courant
-        let dictee = DicteeEnCours(voie: .chatgpt, module: module,
-                                   destination: Preferences.shared.effectiveTarget,
-                                   applicationVisee: applicationVisee,
-                                   duree: Date.now.timeIntervalSince(depuis))
+        let dictee = figer()
+        let module = dictee.module ?? RelaisCatalogue.courant
         self.dictee = dictee
         entrer(.transcription)
         guard let issue = await transcrire(dictee, module, scenario, g), g == generation else { return }
@@ -432,8 +498,7 @@ final class VoieChatGPT {
     /// Arrête la page, lit la transcription, la transforme, puis ouvre la
     /// discussion ou livre ; `nil` quand le cycle n'est plus le sien.
     ///
-    /// Rien n'a été enregistré de notre côté : ni durée minimale à vérifier,
-    /// ni audio à conserver pour un « Réessayer » qui n'aurait rien à rejouer.
+    /// Ni durée minimale à vérifier : c'est ChatGPT qui dit si l'on a parlé.
     private func transcrire(_ dictee: DicteeEnCours, _ module: RelaisModule,
                             _ scenario: RelaisDictee, _ g: Int) async -> Issue? {
         Log.info("fin de dictée relais : \(String(format: "%.1f", dictee.duree)) s")
@@ -505,6 +570,12 @@ final class VoieChatGPT {
         } catch {
             // L'abandon a tout défait (cf. `abandonner`).
             guard g == generation, !(error is CancellationError) else { return nil }
+            // ChatGPT ne rendra rien : le son de la page, transcrit par macOS,
+            // prend sa place (96–98).
+            if let erreur = error as? RelaisErreur, let phase, RelaisCycle.replie(apres: erreur, en: phase),
+               replier(apres: erreur) {
+                return nil
+            }
             return echecDeLaPage(error)
         }
     }
@@ -526,10 +597,11 @@ final class VoieChatGPT {
     /// texte resté dans la fenêtre du relais, sauf quand la page est morte :
     /// celle qu'on ouvrirait est neuve, et le texte a disparu avec l'ancienne.
     ///
-    /// Pas de « Réessayer » : il n'y a pas d'audio de ce côté-ci, et proposer
-    /// un recours qui ne peut pas marcher est pire que de n'en proposer aucun.
+    /// Le son de la page, s'il y en a, va au menu en prime : « Réessayer » le
+    /// transcrit par macOS, quand la fenêtre n'a plus rien à rendre.
     private func echecDeLaPage(_ error: Error) -> Issue {
         Log.error("échec de transcription : \(error.localizedDescription)")
+        garderLeSon()
         let recuperable = (error as? RelaisErreur)?.laissePeutEtreLeTexte ?? true
         // Un refus de ChatGPT porte sa raison, un quota par exemple : la
         // barre la montre telle quelle.

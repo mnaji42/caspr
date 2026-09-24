@@ -94,6 +94,18 @@ final class DictationController {
             }
             state = etat
         }
+        // Le repli d'une dictée ChatGPT à laquelle on renonce : son cycle est
+        // fini, la page arrêtée ; la voie macOS transcrit le son de la page,
+        // comme un « Réessayer ». Dans le même tour que le repos que la fin
+        // du cycle vient de poser : un appui entre les deux ouvrirait une
+        // dictée par-dessus. Pas d'aperçu : la page avait le micro, macOS n'a
+        // rien écrit pendant qu'on parlait.
+        chatgpt.surRepliParMacOS = { [weak self] son, dictee, annonce in
+            guard let self else { return }
+            voieDuCycle = .apple
+            state = .processing
+            Task { await self.transcrireParMacOS(son, dictee, apercuConserve: "", annonce: annonce) }
+        }
         // Échap suit ce que le relais montre (cf. `ajusterEchap`).
         Relais.partage.surAffichageChange = { [weak self] in self?.ajusterEchap() }
         // Le module du relais se choisit sur la barre, au moment de parler.
@@ -318,8 +330,11 @@ final class DictationController {
     }
 
     /// Ce qui est dit à l'arrêt : la destination du moment.
-    private func figer(duree: TimeInterval) -> DicteeEnCours {
-        DicteeEnCours(voie: .apple, module: nil, destination: target,
+    ///
+    /// `voie` : `.chatgpt` pour rejouer le son d'une page ChatGPT, dont la
+    /// fenêtre a pu prendre le clavier (cf. `Livraison.livrer`).
+    private func figer(duree: TimeInterval, voie: VoieDeDictee = .apple) -> DicteeEnCours {
+        DicteeEnCours(voie: voie, module: nil, destination: target,
                       applicationVisee: applicationVisee, duree: duree)
     }
 
@@ -345,13 +360,16 @@ final class DictationController {
         await transcrireParMacOS(samples, figer(duree: seconds))
     }
 
-    /// `apercuConserve` : cf. `VoieApple.transcrireEtLivrer`.
+    /// `apercuConserve` : cf. `VoieApple.transcrireEtLivrer`. `annonce` : ce
+    /// que la barre dit d'un texte inséré — d'où il vient, quand ce n'est pas
+    /// de là où l'on croit (cf. `RelaisRepli.annonce`).
     private func transcrireParMacOS(_ samples: [Float], _ dictee: DicteeEnCours,
-                                    apercuConserve: String? = nil) async {
+                                    apercuConserve: String? = nil, annonce: String? = nil) async {
         state = .processing
         // Le micro est déjà rendu, à l'arrêt du magnétophone.
         let echec = await macOS.transcrireEtLivrer(samples, dictee, langue: language,
                                                    apercuConserve: apercuConserve)
+        if echec == nil, let annonce { overlay.showFailure(annonce) }
         state = echec.map { .failed($0) } ?? .idle
         voieDuCycle = nil
     }
@@ -395,14 +413,15 @@ final class DictationController {
         // Posé tout de suite, et non par la tâche : entre les deux, un appui
         // aurait trouvé l'état au repos et ouvert un cycle par-dessus.
         state = .processing
-        // Seule la voie macOS garde de l'audio : c'est elle qui le rejoue,
-        // quelle que soit la voie retenue depuis.
+        // C'est la voie macOS qui le rejoue, quelle que soit la voie retenue
+        // depuis — et même quand c'est le son d'une page ChatGPT.
         voieDuCycle = .apple
         // Le menu de Caspr ne prend pas le premier plan : l'application devant
         // est celle où l'on veut le texte, comme à l'appui. Et la destination
         // du moment : réessayer est une nouvelle livraison.
         applicationVisee = Livraison.applicationDevant()
-        let figee = figer(duree: livraison.pendingDuration)
+        let figee = figer(duree: livraison.pendingDuration,
+                          voie: livraison.recoursApresLeRelais ? .chatgpt : .apple)
         // L'aperçu gardé avec cet audio, et non celui d'une dictée faite
         // depuis.
         let apercu = livraison.pendingPreviewText ?? ""

@@ -121,7 +121,7 @@ final class VoieChatGPT {
         // L'attente se montre dès l'arrêt : sa phase, puis le chrono et la
         // sortie dès dix secondes — elle peut durer des minutes, et la touche
         // de dictée en est la sortie, encore faut-il le dire. Les phases
-        // suivantes se lisent sur la même barre (cf. `avancement`).
+        // suivantes se lisent sur la même barre (cf. `montrerLAttente`).
         if nouvelle == .transcription, avant == .ecoute {
             chrono = .now
             montrerLAttente()
@@ -146,16 +146,13 @@ final class VoieChatGPT {
         return true
     }
 
+    /// L'attente, sur la barre : la phase, le chrono et la sortie, relus deux
+    /// fois par seconde — rien quand la phase n'en montre pas.
     private func montrerLAttente() {
-        overlay.showProcessing(phase?.libelle ?? "", progress: { [weak self] in self?.avancement })
-    }
-
-    /// Ce que la barre affiche pendant une attente, relu deux fois par
-    /// seconde ; `nil` quand la phase n'en montre pas.
-    private var avancement: RecordingOverlay.ProcessingProgress? {
-        guard let libelle = phase?.libelle else { return nil }
-        return .init(label: libelle, elapsed: Date.now.timeIntervalSince(chrono),
-                     exitHint: phase?.sortie)
+        overlay.showProcessing(phase?.libelle ?? "") { [weak self] in
+            guard let self, let libelle = phase?.libelle else { return nil }
+            return .init(label: libelle, elapsed: Date.now.timeIntervalSince(chrono), exitHint: phase?.sortie)
+        }
     }
 
     // MARK: - Les gestes
@@ -163,8 +160,12 @@ final class VoieChatGPT {
     /// La touche de dictée, ou la croix — et Échap pendant l'écoute —,
     /// pendant une dictée ChatGPT. Décidé sur-le-champ : aucune de ces
     /// sorties n'attend qu'un appel à la page rende la main.
-    func geste(_ geste: RelaisCycle.Geste) {
-        guard let phase else { return }
+    ///
+    /// Rend la décision prise, `nil` hors d'une dictée ChatGPT : le geste
+    /// n'est alors pas le sien, et l'appelant en fait ce qu'il ferait au
+    /// repos plutôt que de l'avaler (cf. `DictationController.toggle`).
+    func geste(_ geste: RelaisCycle.Geste) -> RelaisCycle.Decision? {
+        guard let phase else { return nil }
         let decision = RelaisCycle.decider(geste, en: phase)
         Log.info("relais : \(geste.rawValue) en \(phase.rawValue) — \(decision.rawValue)")
         switch decision {
@@ -184,6 +185,7 @@ final class VoieChatGPT {
         case .annuler:
             abandonner(ecouteQuiDemarre: false)
         }
+        return decision
     }
 
     /// La touche pendant que ChatGPT travaille : renoncer à lui, sans perdre
@@ -206,6 +208,11 @@ final class VoieChatGPT {
         }
         couper()
         let g = generation
+        // Rangée avant d'écrire, comme au chemin ordinaire : la barre du
+        // relais restait sinon au-dessus de l'application où l'on insère,
+        // jusqu'à la fin de l'arrêt. Il n'y a plus d'écoute qu'un rangement
+        // empêcherait d'arrêter : le brut est lu, le micro de la page coupé.
+        relais.masquerBarre()
         overlay.hide()
         // La touche et la croix y annulent encore : rien n'est activé ni
         // écrit (63).
@@ -219,13 +226,7 @@ final class VoieChatGPT {
                 overlay.showFailure("Transcription brute insérée — ChatGPT abandonné")
             } catch {
                 guard g == generation else { return }
-                // Le brut reste au menu : rien n'a été écrit.
-                Log.error("échec d'insertion : \(error.localizedDescription)")
-                let enHistorique = (error as? Livraison.EchecDInsertion)?.enHistorique == true
-                overlay.showFailure("Insertion impossible", hint: enHistorique
-                    ? "Le texte est dans l'historique, menu de Caspr."
-                    : "La transcription brute est dans le menu de Caspr.")
-                echec = error.localizedDescription
+                echec = insertionImpossible(error)
             }
             terminer(.abandonnee(quitterLaDiscussion: true, ecouteQuiDemarre: false), echec: echec)
         }
@@ -255,6 +256,12 @@ final class VoieChatGPT {
     }
 
     /// Le cycle en cours cesse de l'être.
+    ///
+    /// L'écoute est reprise ici, dans le même tour que l'annulation, et non
+    /// par un `withTaskCancellationHandler` : son rappel n'est pas isolé, il
+    /// lui faudrait un saut vers l'acteur principal, et ce saut, arrivé après
+    /// coup, pourrait reprendre l'écoute du cycle suivant. `couper` est le
+    /// seul à annuler le moteur.
     private func couper() {
         generation &+= 1
         moteur?.cancel()
@@ -284,6 +291,10 @@ final class VoieChatGPT {
         let erreur = RelaisErreur.pageInterrompue
         Log.error("relais : la page est morte pendant l'écoute")
         couper()
+        // Rangée sur-le-champ, et non après l'arrêt de l'abandon : une page
+        // morte n'écoute plus rien, et sa barre ne doit pas flotter sur
+        // l'échec le temps d'un relevé.
+        relais.masquerBarre()
         overlay.showFailure(erreur.raisonCourte ?? "La page ChatGPT s'est fermée")
         terminer(.abandonnee(quitterLaDiscussion: true, ecouteQuiDemarre: false),
                  echec: erreur.localizedDescription)
@@ -474,16 +485,13 @@ final class VoieChatGPT {
             // Seule l'écriture a échoué : la page n'y est pour rien. Le brut
             // reste au menu : rien n'a été écrit.
             guard g == generation else { return nil }
-            Log.error("échec d'insertion : \(echec.localizedDescription)")
             // L'historique a gardé le texte, ou il n'y avait que le brut, que
             // le menu garde : pas de fenêtre à ouvrir, la page est préparée
             // pour la suivante comme après une réussite.
             guard !echec.enHistorique, let reponse, reponse != brut else {
-                overlay.showFailure("Insertion impossible", hint: echec.enHistorique
-                    ? "Le texte est dans l'historique, menu de Caspr."
-                    : "La transcription brute est dans le menu de Caspr.")
-                return (echec.localizedDescription, false)
+                return (insertionImpossible(echec), false)
             }
+            Log.error("échec d'insertion : \(echec.localizedDescription)")
             // Historique désactivé, texte remanié : la réponse de ChatGPT
             // n'est plus que dans la page. La préparer pour la suivante l'y
             // détruisait — ni l'historique ni le menu ne l'avaient. La fenêtre
@@ -499,6 +507,17 @@ final class VoieChatGPT {
             guard g == generation, !(error is CancellationError) else { return nil }
             return echecDeLaPage(error)
         }
+    }
+
+    /// Seule l'écriture a échoué : le texte est dans l'historique, ou le brut
+    /// au menu, et la barre dit lequel ; rend le message du menu.
+    private func insertionImpossible(_ error: Error) -> String {
+        Log.error("échec d'insertion : \(error.localizedDescription)")
+        let enHistorique = (error as? Livraison.EchecDInsertion)?.enHistorique == true
+        overlay.showFailure("Insertion impossible", hint: enHistorique
+            ? "Le texte est dans l'historique, menu de Caspr."
+            : "La transcription brute est dans le menu de Caspr.")
+        return error.localizedDescription
     }
 
     /// La page a prouvé un échec avant que le brut soit lu — seule la

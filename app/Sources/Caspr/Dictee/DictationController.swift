@@ -181,10 +181,10 @@ final class DictationController {
         }
         dernierAppui = maintenant
         // Sous ChatGPT, c'est la phase qui décide (cf. `RelaisCycle.decider`).
-        if voieDuCycle == .chatgpt {
-            chatgpt.geste(.touche)
-            return
-        }
+        // Sans phase, le cycle est fini : l'appui suit le chemin du repos au
+        // lieu de disparaître dans une voie restée notée — une touche qui ne
+        // fait plus rien, c'est une dictée bloquée jusqu'au redémarrage.
+        if voieDuCycle == .chatgpt, chatgpt.geste(.touche) != nil { return }
         switch state {
         case .idle, .failed:
             commencer()
@@ -227,10 +227,7 @@ final class DictationController {
     /// vaut la croix à toute phase : rien n'est inséré, et ce qui est déjà en
     /// main va au menu (cf. `VoieChatGPT.abandonner`).
     func cancel() {
-        if voieDuCycle == .chatgpt {
-            chatgpt.geste(.croix)
-            return
-        }
+        if voieDuCycle == .chatgpt, chatgpt.geste(.croix) != nil { return }
         switch state {
         case .idle, .failed:
             // Hors dictée, Échap met fin à la discussion ouverte.

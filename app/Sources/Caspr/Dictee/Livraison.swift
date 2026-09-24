@@ -316,6 +316,14 @@ final class Livraison {
         overlay.showFailure(echec, hint: Self.rescueHint(preview: apercu))
     }
 
+    /// L'aperçu gardé au menu, allongé de ce que son analyseur écrit encore
+    /// après l'arrêt — la fin de la dictée —, tant qu'il est le recours en
+    /// place : figé à la croix, il la perdait (cf. `ApercuEnDirect.surTexteTardif`).
+    func prolongerLApercu(de ancien: String, en nouveau: String) {
+        guard voieDuRecours == .apple, recoursApresLeRelais, pendingPreview == ancien else { return }
+        pendingPreview = nouveau
+    }
+
     /// Garde la transcription de ChatGPT dès qu'elle est lue, **avant** que
     /// le module ne la reprenne.
     ///

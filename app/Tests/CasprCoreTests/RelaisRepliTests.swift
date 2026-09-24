@@ -45,6 +45,29 @@ struct RelaisRepliTests {
         #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 0.3, ecrit: false) == .garder)
     }
 
+    @Test("Sans brut ni son utilisable, l'aperçu de macOS est le texte qui reste")
+    func apercu() {
+        // Un contexte de la page hors 16 kHz : l'écho ne compte aucune
+        // seconde, l'aperçu, qui convertit, a écrit (93, 97).
+        #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 0, ecrit: true, apercu: " bonjour ")
+                == .insererLApercu("bonjour"))
+        // Le son entier passe avant : macOS relit toute la phrase.
+        #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 60, ecrit: true, apercu: "bonjour")
+                == .transcrireParMacOS)
+        // Le brut de ChatGPT passe avant tout (94).
+        #expect(RelaisRepli.choisir(brutLu: "brut", secondesAudio: 0, ecrit: true, apercu: "bonjour")
+                == .inserer("brut"))
+        // Un module qui n'écrit nulle part le garde au menu ; un aperçu blanc
+        // n'est pas un texte.
+        #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 0, ecrit: false, apercu: "bonjour") == .garder)
+        #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 0, ecrit: true, apercu: " \n") == .rien)
+        // Une page morte ne dit plus « dictée perdue » quand l'aperçu reste.
+        #expect(RelaisRepli.annonce(.insererLApercu("x"), apres: .pageInterrompue)
+                == "La page ChatGPT s'est fermée — aperçu de macOS inséré")
+        #expect(RelaisRepli.annonce(.insererLApercu("x"), apres: nil, son: 0, parle: 60)
+                == "Aperçu de macOS inséré — ChatGPT abandonné")
+    }
+
     @Test("La barre dit d'où vient le texte, et pourquoi ce n'est pas de ChatGPT")
     func annonces() {
         #expect(RelaisRepli.annonce(.inserer("x"), apres: nil)

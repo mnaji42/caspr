@@ -112,8 +112,8 @@ de macOS. Une livraison réussie l'oublie.
 Avant qu'il soit lu, c'est le **son de la page** qui répond de la dictée : la
 copie en mémoire vive du flux que ChatGPT capte (`RelaisEcho`). La touche de
 dictée pendant l'attente renonce à ChatGPT sans rien perdre : le brut s'il est
-lu, sinon ce son transcrit par macOS, s'insère là où l'on parlait
-(`RelaisRepli`) ; un refus, une session fermée ou une page morte y mènent
+lu, sinon ce son transcrit par macOS, sinon l'aperçu de macOS, s'insère là
+où l'on parlait (`RelaisRepli`) ; un refus, une session fermée ou une page morte y mènent
 aussi. La croix n'insère rien, et laisse le son au menu : « Réessayer » le
 transcrit par macOS, « Insérer l'aperçu » rend ce que l'aperçu en avait écrit. Quand un module a remanié le texte, l'historique garde le
 brut à côté (sous ⌥ dans le menu, « Brut » dans les réglages) : une seconde
@@ -382,8 +382,11 @@ et le raccourci reste instantané.
 direct de la voie ChatGPT lit donc la copie du flux de la page, celle que
 garde l'écho (`RelaisEcho.surMorceau`, `ApercuEnDirect`) : macOS écrit ce qu'il
 entend pendant que ChatGPT écoute, et ce texte reste au menu (« Insérer
-l'aperçu ») quand un repli par macOS échoue — seul au menu quand le son est
-inutilisable, un contexte qui n'a pas tourné à 16 kHz. Sa langue se choisit
+l'aperçu ») quand un repli par macOS échoue. Quand le son est inutilisable —
+un contexte qui n'a pas tourné à 16 kHz —, c'est lui que le repli insère
+(`RelaisRepli.insererLApercu`), à la touche comme sur une page morte, et lui
+seul que la croix garde au menu, allongé de ce que l'analyseur écrit encore
+après l'arrêt (`Livraison.prolongerLApercu`). Sa langue se choisit
 dans le menu que la barre montre à côté du badge « ChatGPT », qui, lui, détecte
 la sienne. Si la page n'envoie rien, la barre le dit au bout de deux secondes,
 et la dictée n'en dépend pas.

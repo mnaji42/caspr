@@ -147,9 +147,11 @@ final class VoieApple {
     /// gardé avec lui comme second recours — celui d'un « Réessayer ». `nil`
     /// pour une dictée qui vient de finir : l'aperçu est alors lu au moment de
     /// l'échec, et non à l'arrêt, parce qu'il finit son analyse après l'arrêt
-    /// et peut encore s'allonger pendant la transcription.
+    /// et peut encore s'allonger pendant la transcription. Lu à l'échec aussi
+    /// quand il est donné : celui d'une page ChatGPT à laquelle on vient de
+    /// renoncer s'allonge de même.
     func transcrireEtLivrer(_ samples: [Float], _ dictee: DicteeEnCours,
-                            langue: String, apercuConserve: String?) async -> String? {
+                            langue: String, apercuConserve: @autoclosure () -> String?) async -> String? {
         let debut = ContinuousClock.now
         do {
             let text = try await transcrire(samples, langue: langue)
@@ -168,7 +170,7 @@ final class VoieApple {
                 // vide aussi sûrement qu'un micro coupé, et dans ce cas jeter
                 // la dictée oblige à tout redire.
                 livraison.conserver(audio: samples,
-                                    apercu: apercuConserve ?? apercu.texte,
+                                    apercu: apercuConserve() ?? apercu.texte,
                                     apresLeRelais: dictee.voie == .chatgpt,
                                     echec: "Rien n'a été entendu")
                 // Un échec et non un retour au repos : la barre renvoie au
@@ -198,7 +200,7 @@ final class VoieApple {
             Log.error("échec de transcription : \(error.localizedDescription) — "
                       + "\(String(format: "%.1f", minutes)) min conservées")
             livraison.conserver(audio: samples,
-                                apercu: apercuConserve ?? apercu.texte,
+                                apercu: apercuConserve() ?? apercu.texte,
                                 apresLeRelais: dictee.voie == .chatgpt)
             return "\(error.localizedDescription) — audio conservé, "
                 + "« Réessayer » dans le menu."

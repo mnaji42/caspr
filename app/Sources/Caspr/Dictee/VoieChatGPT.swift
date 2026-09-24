@@ -71,6 +71,11 @@ final class VoieChatGPT {
         self.overlay = overlay
         self.livraison = livraison
         apercu = ApercuEnDirect(overlay: overlay)
+        // La croix garde l'aperçu au menu avant qu'il ait fini d'analyser la
+        // fin de la dictée : ce qu'il en écrit encore doit y entrer.
+        apercu.surTexteTardif = { [weak livraison] ancien, nouveau in
+            livraison?.prolongerLApercu(de: ancien, en: nouveau)
+        }
         // La page peut mourir pendant qu'on parle.
         relais.surPageInterrompue = { [weak self] in self?.pageInterrompue() }
     }
@@ -232,7 +237,7 @@ final class VoieChatGPT {
         let dictee = self.dictee ?? figer()
         let ecrit = !dictee.nEcritNullePart
         let son = relais.secondesEntendues
-        let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: son, ecrit: ecrit)
+        let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: son, ecrit: ecrit, apercu: apercu.texte)
         let annonce = RelaisRepli.annonce(repli, apres: cause, son: son, parle: dictee.duree)
         Log.info("relais : repli après \(cause?.localizedDescription ?? "la touche") — "
                  + "\(annonce ?? "rien à livrer"), \(String(format: "%.1f", son)) s de son "
@@ -271,12 +276,15 @@ final class VoieChatGPT {
             terminer(fin)
             overlay.showProcessing("\(motif) — transcription par macOS…")
             surRepliParMacOS(echantillons, dictee, annonce, motif)
-        case .inserer(let brut):
+        case .inserer(let texte), .insererLApercu(let texte):
+            // L'aperçu, lui, n'est au menu que si on l'y met : une insertion
+            // refusée l'y retrouve, comme le brut, qui y est depuis sa lecture.
+            if case .insererLApercu = repli { garderLeSon() }
             couper()
             let g = generation
             // Rangée avant d'écrire, comme au chemin ordinaire : la barre du
             // relais restait sinon au-dessus de l'application où l'on insère.
-            // Le brut lu, la page n'écoute plus.
+            // Le brut lu, ou la page morte, elle n'écoute plus.
             relais.masquerBarre()
             overlay.hide()
             // La touche et la croix y annulent encore : rien n'est activé ni
@@ -285,7 +293,7 @@ final class VoieChatGPT {
             moteur = Task {
                 var echec: String?
                 do {
-                    try await livraison.livrer(brut, dictee)
+                    try await livraison.livrer(texte, dictee)
                 } catch {
                     guard g == generation else { return }
                     echec = insertionImpossible(error)
@@ -378,8 +386,10 @@ final class VoieChatGPT {
     /// Continuer d'afficher l'écoute, c'était laisser parler dans le vide
     /// jusqu'à l'appui d'arrêt : on s'arrête tout de suite. Ce qu'elle a capté
     /// jusque-là, l'écho l'a gardé, et macOS le transcrit (27, 97) ; sans lui,
-    /// on échoue, en le disant. Les autres phases le découvrent seules, au
-    /// relevé suivant de leur attente (cf. `RelaisDictee.observer`).
+    /// l'aperçu en a peut-être écrit (cf. `RelaisRepli.insererLApercu`) ; sans
+    /// rien de tout cela, on échoue, en le disant. Les autres phases le
+    /// découvrent seules, au relevé suivant de leur attente (cf.
+    /// `RelaisDictee.observer`).
     ///
     /// La page rechargée porte une conversation vierge : une discussion
     /// restée ouverte y enverrait la suite sans son contexte. Elle se ferme,
@@ -389,8 +399,6 @@ final class VoieChatGPT {
         let erreur = RelaisErreur.pageInterrompue
         Log.error("relais : la page est morte pendant l'écoute")
         if RelaisCycle.replie(apres: erreur, en: .ecoute), replier(apres: erreur) { return }
-        // Sans son à transcrire, l'aperçu a pu écrire : il va au menu.
-        garderLeSon()
         couper()
         // Rangée sur-le-champ, et non après l'arrêt de l'abandon : une page
         // morte n'écoute plus rien, et sa barre ne doit pas flotter sur
@@ -637,12 +645,14 @@ final class VoieChatGPT {
     }
 
     /// Seule l'écriture a échoué : le texte est dans l'historique, ou le brut
-    /// au menu, et la barre dit lequel ; rend le message du menu.
+    /// — l'aperçu d'un repli — au menu, et la barre dit lequel ; rend le
+    /// message du menu.
     private func insertionImpossible(_ error: Error) -> String {
         Log.error("échec d'insertion : \(error.localizedDescription)")
         let enHistorique = (error as? Livraison.EchecDInsertion)?.enHistorique == true
         overlay.showFailure("Insertion impossible", hint: enHistorique
             ? "Le texte est dans l'historique, menu de Caspr."
+            : livraison.voieDuRecours == .apple ? "L'aperçu de macOS est dans le menu de Caspr."
             : "La transcription brute est dans le menu de Caspr.")
         return error.localizedDescription
     }

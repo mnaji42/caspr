@@ -99,14 +99,15 @@ final class DictationController {
         // comme un « Réessayer ». Dans le même tour que le repos que la fin
         // du cycle vient de poser : un appui entre les deux ouvrirait une
         // dictée par-dessus. L'aperçu qu'on en a lu pendant l'écoute, s'il y
-        // en a eu un, reste le recours si macOS échoue.
+        // en a eu un, reste le recours si macOS échoue — lu à l'échec, et non
+        // ici : arrêté à l'instant, il finit encore d'écrire la fin.
         chatgpt.surRepliParMacOS = { [weak self] son, dictee, annonce, motif in
             guard let self else { return }
             voieDuCycle = .apple
             state = .processing
-            let apercu = chatgpt.apercu.texte
             Task {
-                await self.transcrireParMacOS(son, dictee, apercuConserve: apercu, annonce: annonce, motif: motif)
+                await self.transcrireParMacOS(son, dictee, apercuConserve: self.chatgpt.apercu.texte,
+                                              annonce: annonce, motif: motif)
             }
         }
         // Échap suit ce que le relais montre (cf. `ajusterEchap`).
@@ -369,12 +370,12 @@ final class DictationController {
     /// ChatGPT n'a pas rendu ce texte, que le menu garde avant l'échec de
     /// macOS — la barre, elle, dit ce qui reste à faire (cf. `Livraison.conserver`).
     private func transcrireParMacOS(_ samples: [Float], _ dictee: DicteeEnCours,
-                                    apercuConserve: String? = nil, annonce: String? = nil,
+                                    apercuConserve: @autoclosure () -> String? = nil, annonce: String? = nil,
                                     motif: String? = nil) async {
         state = .processing
         // Le micro est déjà rendu, à l'arrêt du magnétophone.
         let echec = await macOS.transcrireEtLivrer(samples, dictee, langue: language,
-                                                   apercuConserve: apercuConserve)
+                                                   apercuConserve: apercuConserve())
         if echec == nil, let annonce { overlay.showFailure(annonce) }
         state = echec.map { echec in
             .failed(motif.map { "\($0). Repli par macOS : \(echec)" } ?? echec)

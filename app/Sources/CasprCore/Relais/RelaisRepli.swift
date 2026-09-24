@@ -17,6 +17,10 @@ public enum RelaisRepli: Equatable, Sendable {
     case inserer(String)
     /// Rien de ChatGPT, mais le son de la page : macOS le transcrit.
     case transcrireParMacOS
+    /// Ni brut ni son utilisable — un contexte de la page qui n'a pas tourné
+    /// à 16 kHz —, mais l'aperçu de macOS en a écrit, depuis ce même son :
+    /// c'est lui qui s'insère, le seul texte de la dictée qui reste.
+    case insererLApercu(String)
     /// Le module n'écrit nulle part : rien ne s'insère, et ce qu'on a va au
     /// menu de Caspr.
     case garder
@@ -27,14 +31,19 @@ public enum RelaisRepli: Equatable, Sendable {
     /// d'exploitable — et le moteur réveillé pour rien.
     public static let secondesMinimales = 0.3
 
-    public static func choisir(brutLu brut: String?, secondesAudio: Double, ecrit: Bool) -> RelaisRepli {
+    /// Le brut d'abord, puis le son entier, puis l'aperçu : la transcription
+    /// de macOS relit toute la phrase, l'aperçu l'a écrite en l'entendant.
+    public static func choisir(brutLu brut: String?, secondesAudio: Double, ecrit: Bool,
+                               apercu: String = "") -> RelaisRepli {
         // Un brut vide a déjà fini la dictée sur « Rien n'a été entendu » :
         // ce n'est pas un texte à livrer.
         let brut = brut.flatMap { $0.isEmpty ? nil : $0 }
         let son = secondesAudio >= secondesMinimales
-        guard ecrit else { return brut != nil || son ? .garder : .rien }
+        let apercu = apercu.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard ecrit else { return brut != nil || son || !apercu.isEmpty ? .garder : .rien }
         if let brut { return .inserer(brut) }
-        return son ? .transcrireParMacOS : .rien
+        if son { return .transcrireParMacOS }
+        return apercu.isEmpty ? .rien : .insererLApercu(apercu)
     }
 
     /// Ce que dit la barre une fois le repli fait : d'où vient le texte, et
@@ -53,6 +62,7 @@ public enum RelaisRepli: Equatable, Sendable {
         switch repli {
         case .inserer: issue = "transcription brute insérée"
         case .transcrireParMacOS: issue = "transcrit par macOS"
+        case .insererLApercu: issue = "aperçu de macOS inséré"
         case .garder: issue = "gardé dans le menu de Caspr"
         case .rien: return nil
         }

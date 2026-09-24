@@ -35,6 +35,11 @@ final class ApercuEnDirect {
     /// le numéro change.
     private var retenu = 0
 
+    /// Le texte qu'un aperçu arrêté rend encore, en finissant son analyse :
+    /// l'ancien et le nouveau. Un recours déjà figé avec l'ancien s'allonge
+    /// ainsi de la fin de la dictée (cf. `Livraison.prolongerLApercu`).
+    var surTexteTardif: (_ ancien: String, _ nouveau: String) -> Void = { _, _ in }
+
     init(overlay: RecordingOverlay) {
         self.overlay = overlay
     }
@@ -62,10 +67,11 @@ final class ApercuEnDirect {
                 }
                 // Retenu pour le recours : si la passe finale échoue, c'est
                 // un texte de macOS sur exactement le même audio.
+                let ancien = texte
                 texte = text
                 // Arrêté, l'aperçu n'a plus de barre où s'afficher : elle est
                 // passée au traitement.
-                if ecoute { overlay.setPreviewText(text) }
+                if ecoute { overlay.setPreviewText(text) } else { surTexteTardif(ancien, text) }
             },
             onFailure: { [weak self] reason in
                 Log.error("aperçu indisponible : \(reason)")

@@ -382,8 +382,16 @@ et le raccourci reste instantané.
 direct de la voie ChatGPT lit donc la copie du flux de la page, celle que
 garde l'écho (`RelaisEcho.surMorceau`, `ApercuEnDirect`) : macOS écrit ce qu'il
 entend pendant que ChatGPT écoute, et ce texte reste au menu (« Insérer
-l'aperçu ») quand un repli par macOS échoue. Si la page n'envoie rien, la
-barre le dit au bout de deux secondes, et la dictée n'en dépend pas.
+l'aperçu ») quand un repli par macOS échoue — seul au menu quand le son est
+inutilisable, un contexte qui n'a pas tourné à 16 kHz. Sa langue se choisit
+dans le menu que la barre montre à côté du badge « ChatGPT », qui, lui, détecte
+la sienne. Si la page n'envoie rien, la barre le dit au bout de deux secondes,
+et la dictée n'en dépend pas.
+
+Pas encore éprouvé dans l'app installée : aucune ligne « relais : écho — N s
+reçues » n'est venue du journal. Tant qu'elle manque, la carte de la voie, le
+README et le site continuent de dire que la voie ChatGPT n'a pas d'aperçu ; la
+première dictée qui la montre les rend fausses.
 
 **Aucun banc d'essai.** Le relais n'accepte pas d'audio enregistré : la page
 veut un micro en direct. Rejouer des dictées enregistrées contre ChatGPT

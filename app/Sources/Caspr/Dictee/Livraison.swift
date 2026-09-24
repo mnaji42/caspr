@@ -302,8 +302,10 @@ final class Livraison {
     /// rien — une dictée ChatGPT annulée n'a pas échoué, elle garde seulement
     /// le son de sa page (49, 95).
     ///
-    /// `apresLeRelais` : cf. `recoursApresLeRelais`.
-    func conserver(audio: [Float], apercu: String, apresLeRelais: Bool = false,
+    /// `apresLeRelais` : cf. `recoursApresLeRelais`. `audio` `nil` : l'aperçu
+    /// seul, quand le son de la page est inutilisable (cf.
+    /// `VoieChatGPT.garderLeSon`) — le menu ne promet alors pas « Réessayer ».
+    func conserver(audio: [Float]?, apercu: String, apresLeRelais: Bool = false,
                    echec: String? = "Transcription impossible — « Réessayer » dans le menu") {
         pendingAudio = audio
         pendingPreview = apercu

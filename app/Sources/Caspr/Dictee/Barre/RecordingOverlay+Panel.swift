@@ -172,6 +172,9 @@ extension RecordingOverlay {
     ///   élargir la barre.
     /// - **Une seule** : un simple indicateur, qui dit dans quelle langue on
     ///   parle.
+    /// - **Sous ChatGPT, aperçu en direct activé** : le badge de la voie, et
+    ///   le menu des langues de l'aperçu à côté (cf.
+    ///   `Status.badgeAvecLesLangues`).
     ///
     /// Les modules ne sont pas ici : ils sont passés **au-dessus de la carte, à
     /// droite** (cf. `makePanel`). Ils n'apparaissent que sous le relais, et
@@ -182,8 +185,8 @@ extension RecordingOverlay {
     /// Appelée à chaque mise à jour, mais ne fait rien tant que la composition
     /// ne change pas : reconstruire des contraintes vingt fois par seconde
     /// pendant une dictée serait absurde.
-    func layoutTabs(switchable: Bool, usesMenu: Bool) {
-        let wanted = Layout(switchable: switchable, usesMenu: usesMenu)
+    func layoutTabs(switchable: Bool, usesMenu: Bool, badge: Bool) {
+        let wanted = Layout(switchable: switchable, usesMenu: usesMenu, badge: badge)
         guard wanted != tabsLayout || textRow == nil else { return }
         tabsLayout = wanted
         guard let row = textRow else { return }
@@ -192,10 +195,13 @@ extension RecordingOverlay {
             view.removeFromSuperview()
         }
         // Les langues à gauche, la destination à droite.
+        // Le badge part d'abord de la composition précédente : un groupe
+        // détaché le retiendrait encore.
+        languageBadge.removeFromSuperview()
+        let langues: NSView = usesMenu ? languageMenu : languageControl
         let left: NSView = !switchable ? languageBadge
-            : (usesMenu ? languageMenu : languageControl)
+            : (badge ? makeRow([languageBadge, langues]) : langues)
         fill(row, with: [left, targetControl])
-
     }
 
     /// La rangée des modules, montrée ou cachée à **chaque** mise à jour.
@@ -215,6 +221,7 @@ extension RecordingOverlay {
     struct Layout: Equatable {
         var switchable: Bool
         var usesMenu: Bool
+        var badge: Bool
     }
 
     /// Rangée `space-between` : les groupes sont plaqués aux bords.

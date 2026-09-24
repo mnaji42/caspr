@@ -77,10 +77,11 @@ final class VoieChatGPT {
 
     /// Ce que la barre montre sous cette voie.
     ///
-    /// La langue n'a aucun sens quand ChatGPT la détecte lui-même, et
-    /// l'afficher quand même laisserait croire qu'elle agit. Le badge nomme
-    /// alors la voie à l'œuvre — sans quoi la barre est indiscernable d'une
-    /// dictée macOS.
+    /// ChatGPT détecte la langue lui-même : le badge nomme la voie à l'œuvre —
+    /// sans quoi la barre est indiscernable d'une dictée macOS. Les langues ne
+    /// s'y ajoutent qu'avec l'aperçu en direct, dont elles règlent la
+    /// reconnaissance (cf. `DictationController.onSelectLanguage`) ; sans
+    /// lui, elles laisseraient croire qu'elles règlent ChatGPT.
     ///
     /// La pastille porte les modules dès que l'aller-retour est calibré. Sans
     /// lui, un seul module est possible, et la barre n'en montre pas : proposer
@@ -98,8 +99,10 @@ final class VoieChatGPT {
             destinationImposee: courant.sorties == [.aucune]
                 ? "Réponse à l'écran" : nil,
             languageBadge: "ChatGPT",
-            switchableLanguages: [],
-            languageCode: Preferences.shared.primaryLanguage)
+            switchableLanguages: Preferences.shared.livePreviewEnabled
+                ? Preferences.shared.activeLanguages.map { ($0.code, $0.shortBadge) } : [],
+            languageCode: Preferences.shared.primaryLanguage,
+            badgeAvecLesLangues: true)
     }
 
     /// Le module choisi sur la barre, au moment de parler.
@@ -339,9 +342,15 @@ final class VoieChatGPT {
     /// Le son de la page au menu, sans message, s'il vaut une dictée :
     /// « Réessayer » le transcrira par macOS, et « Insérer l'aperçu » rendra
     /// ce que l'aperçu en avait écrit.
+    ///
+    /// L'aperçu seul quand le son ne sert pas — un contexte de la page qui
+    /// n'a pas tourné à 16 kHz (cf. `RelaisEcho.secondes`) : l'aperçu, lui,
+    /// convertit depuis n'importe quelle fréquence, et son texte est alors
+    /// tout ce qui reste de la dictée (95).
     private func garderLeSon() {
-        guard relais.secondesEntendues >= RelaisRepli.secondesMinimales else { return }
-        livraison.conserver(audio: relais.prendreLeSon(), apercu: apercu.texte, apresLeRelais: true, echec: nil)
+        let son = relais.secondesEntendues >= RelaisRepli.secondesMinimales ? relais.prendreLeSon() : nil
+        guard son != nil || !apercu.texte.allSatisfy(\.isWhitespace) else { return }
+        livraison.conserver(audio: son, apercu: apercu.texte, apresLeRelais: true, echec: nil)
     }
 
     /// Le cycle en cours cesse de l'être.
@@ -380,6 +389,8 @@ final class VoieChatGPT {
         let erreur = RelaisErreur.pageInterrompue
         Log.error("relais : la page est morte pendant l'écoute")
         if RelaisCycle.replie(apres: erreur, en: .ecoute), replier(apres: erreur) { return }
+        // Sans son à transcrire, l'aperçu a pu écrire : il va au menu.
+        garderLeSon()
         couper()
         // Rangée sur-le-champ, et non après l'arrêt de l'abandon : une page
         // morte n'écoute plus rien, et sa barre ne doit pas flotter sur

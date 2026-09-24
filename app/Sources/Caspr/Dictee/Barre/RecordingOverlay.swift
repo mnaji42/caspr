@@ -77,6 +77,15 @@ final class RecordingOverlay {
 
         /// Le code de la langue en cours, pour savoir quelle pastille éclairer.
         var languageCode: String = ""
+
+        /// Le badge reste à côté des langues, qui passent alors en menu.
+        ///
+        /// Sous ChatGPT, le badge nomme la voie — sans lui, la barre ne se
+        /// distingue pas d'une dictée macOS —, et les langues ne règlent que
+        /// l'aperçu en direct : ChatGPT détecte la sienne. Un menu, et non des
+        /// pastilles : le badge en prend la place, et ce réglage-là est
+        /// secondaire.
+        var badgeAvecLesLangues = false
     }
 
     /// Une attente qui se raconte : ce qu'on attend, depuis quand, et
@@ -534,8 +543,10 @@ final class RecordingOverlay {
             switchable = [current] + switchable.dropLast()
         }
         let all = status.switchableLanguages
-        let usesMenu = all.count > 3
+        let usesMenu = all.count > 3 || (status.badgeAvecLesLangues && all.count > 1)
         let canSwitch = usesMenu || switchable.count > 1
+        languageMenu.toolTip = status.badgeAvecLesLangues
+            ? "Langue de l'aperçu de macOS\nChatGPT détecte la sienne" : nil
 
         if usesMenu, all.map(\.code) != menuCodes {
             menuCodes = all.map(\.code)
@@ -557,7 +568,8 @@ final class RecordingOverlay {
         // Masquer ne suffit pas à recentrer : les entretoises restent en
         // place et le contrôle survivant se retrouve décalé d'une demi-
         // entretoise. On refait la rangée avec les seuls contrôles visibles.
-        layoutTabs(switchable: canSwitch, usesMenu: usesMenu)
+        layoutTabs(switchable: canSwitch, usesMenu: usesMenu,
+                   badge: canSwitch && status.badgeAvecLesLangues)
         layoutModules(show: showsModules)
 
         if let imposee = status.destinationImposee {

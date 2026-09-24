@@ -271,9 +271,11 @@ public final class RelaisDictee {
         guard page.selecteurs.saitCopier else {
             // Deux secondes et demie sans changement, et non une : ChatGPT
             // écrit par flux, et rien ne signale un texte coupé. Le calme se
-            // juge sur la longueur, et la réponse n'est lue qu'une fois, finie
+            // juge sur la longueur, et la réponse n'est lue qu'une fois finie
             // : relire tout son texte quatre fois par seconde forçait la page
-            // à se redisposer pendant qu'elle l'écrivait.
+            // à se redisposer pendant qu'elle l'écrivait. Une lecture qui
+            // échoue ou rend vide se refait au relevé suivant : un appel raté
+            // ne vaut pas une réponse vide, qui rendrait le brut.
             var finie = RelaisVeille.ReponseFinie(seuil: 10)
             return try await observer(.reponse) { vu -> String? in
                 guard finie.juger(vu.reponse) else { return nil }
@@ -397,26 +399,26 @@ public final class RelaisDictee {
         // cours d'écriture, immobile depuis deux secondes. Le bloc du bouton
         // « copier », facultatif de bout en bout, faisait attendre trois
         // minutes pour rien quand il était vide.
+        //
+        // Sans délai, même pour une réponse qu'on vient de copier et que le
+        // texte attend pour s'insérer : elle a été vue à l'instant, et une
+        // page qui ne la montrerait plus se quitte par la touche de dictée,
+        // que la barre indique (cf. `Relais.reponseObtenue`).
         var finie = RelaisVeille.ReponseFinie(seuil: dejaFinie ? 0 : 8)
         do {
-            // Délai de geste, pour une réponse qu'on vient de copier
-            // seulement : il ne reste qu'à la voir dans la page.
-            try await observer(.reponse, delai: dejaFinie ? .reponseCopiee : nil) {
-                finie.juger($0.reponse) ? () : nil
-            }
-        } catch let erreur as RelaisErreur where erreur != RelaisDelai.reponseCopiee.erreur {
+            try await observer(.reponse) { finie.juger($0.reponse) ? () : nil }
+        } catch let erreur as RelaisErreur {
             journal("relais : \(erreur.raisonCourte ?? "\(erreur)"), lecture à haute voix abandonnée", true)
             return erreur
-        } catch {
-            return nil
-        }
+        } catch { return nil }
         quandFinie()
         if !page.selecteurs.lectureMenu.isEmpty {
             guard await cliquerLecture(menu: true) else {
                 journal("relais : menu de la lecture à haute voix introuvable", true)
                 return nil
             }
-            // Le menu s'ouvre : une pause, et non une attente de ChatGPT.
+            // Le menu s'ouvre : une pause, et non une attente de ChatGPT (cf.
+            // `RelaisDelai`, les durées hors de la liste).
             guard (try? await horloge.dormir(.milliseconds(600))) != nil else { return nil }
         }
         let lancee = await cliquerLecture(menu: false)
@@ -579,32 +581,42 @@ public final class RelaisDictee {
 /// rien à décider à l'appui — la page est prête, quel que soit le module qu'on
 /// choisira en parlant.
 public enum RelaisPreparation {
+    /// La page, au repos : elle a répondu — porte-t-elle une conversation ? —,
+    /// elle s'est tue — un fil JavaScript bloqué, un pont absent —, son
+    /// processus est mort et le rechargement a été retenu (cf. la récidive
+    /// dans `RelaisPage`), ou elle se charge.
+    public enum Page: Equatable { case repond(conversation: Bool), muette, morte, enChargement }
+
     public enum Decision: Equatable {
-        case garderLeFil, conversationNeuve, vider, reconstruire
+        case garderLeFil, conversationNeuve, vider, reconstruire, recharger, attendreLeChargement
     }
 
-    /// `conversation` : ce que la page a répondu au repos — si elle porte une
-    /// conversation —, `nil` quand elle s'est tue : un fil JavaScript bloqué,
-    /// un pont absent. La page morte, et celle qui se charge, ne se demandent
-    /// pas : l'appelant recharge l'une et attend l'autre avant la question.
-    public static func decision(enDiscussion: Bool, conversation: Bool?) -> Decision {
-        switch conversation {
+    public static func decision(enDiscussion: Bool, page: Page) -> Decision {
+        switch page {
+        // Morte et laissée morte, elle se recharge ici plutôt que dans la
+        // question, qui la verrait muette et la reconstruirait.
+        case .morte: .recharger
+        // Une page qui se charge est déjà la page de départ neuve —
+        // `charger()` ne mène que là : il n'y a qu'à l'attendre. L'interroger
+        // tombait sur un pont pas encore injecté, pris pour une page figée, et
+        // la rechargeait par-dessus — après la mort du processus, typiquement.
+        case .enChargement: .attendreLeChargement
         // Recharger ne répare pas un fil JavaScript bloqué (mesuré) : on la
         // reconstruit, discussion comprise. Une page muette ne doit pas
         // devenir la panne de la dictée suivante. En discussion aussi : figée,
         // le fil est perdu de toute façon, et la garder sous prétexte d'une
         // discussion condamnait chaque appui au même échec, sous un message
         // qui promettait un rechargement jamais fait.
-        case nil: .reconstruire
+        case .muette: .reconstruire
         // En discussion, le fil ouvert *est* la page prête — tant qu'elle
         // répond.
-        case _ where enDiscussion: .garderLeFil
+        case .repond where enDiscussion: .garderLeFil
         // Un message est parti, que la suite ait abouti ou non.
-        case true?: .conversationNeuve
+        case .repond(conversation: true): .conversationNeuve
         // Le cas de « Brut », qui n'envoie rien : vider la zone suffit. Une
         // zone qui refuse de se vider sur une page qui répond n'est pas une
         // page à jeter — c'est souvent une transcription encore en cours.
-        case false?: .vider
+        case .repond(conversation: false): .vider
         }
     }
 }

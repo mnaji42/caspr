@@ -413,6 +413,27 @@ struct RelaisDicteeTests {
         #expect(finie && page.lectures == 1)
     }
 
+    @Test("Une réponse copiée que la page ne montre pas s'attend sans échéance, jusqu'à la touche")
+    func reponseCopieeSansEcheance() async throws {
+        let page = PageFactice()
+        page.generation = .seconds(100_000)
+        let dictee = Self.dictee(page)
+        try await dictee.ouvrirLEcoute()
+        let brut = try await dictee.arreterEtLire()
+        try await dictee.envoyer(avant: "", apres: "", brut: brut)
+        var rendue = false
+        let tache = Task { () -> RelaisErreur? in
+            defer { rendue = true }
+            return await dictee.faireLire(dejaFinie: true)
+        }
+        // Bien au-delà des dix secondes que ce relevé a portées.
+        while page.t < .seconds(60), !rendue { await Task.yield() }
+        #expect(!rendue)
+        dictee.cesserDAttendreLaLecture()
+        #expect(await tache.value == nil)
+        #expect(dictee.lectureInterrompue && page.lectures == 0)
+    }
+
     @Test("La touche cesse d'attendre la lecture, sur-le-champ, sans rien lever")
     func cesserDAttendreLaLecture() async throws {
         let page = PageFactice()
@@ -483,11 +504,16 @@ struct RelaisDicteeTests {
     @Test("La préparation de la dictée suivante, cas par cas")
     func preparation() {
         typealias P = RelaisPreparation
-        #expect(P.decision(enDiscussion: true, conversation: nil) == .reconstruire)
-        #expect(P.decision(enDiscussion: false, conversation: nil) == .reconstruire)
-        #expect(P.decision(enDiscussion: true, conversation: true) == .garderLeFil)
-        #expect(P.decision(enDiscussion: true, conversation: false) == .garderLeFil)
-        #expect(P.decision(enDiscussion: false, conversation: true) == .conversationNeuve)
-        #expect(P.decision(enDiscussion: false, conversation: false) == .vider)
+        for discussion in [true, false] {
+            // Morte, elle se recharge ; en chargement, elle s'attend — sans
+            // qu'on l'interroge, discussion ou non (73, 74).
+            #expect(P.decision(enDiscussion: discussion, page: .morte) == .recharger)
+            #expect(P.decision(enDiscussion: discussion, page: .enChargement) == .attendreLeChargement)
+            #expect(P.decision(enDiscussion: discussion, page: .muette) == .reconstruire)
+        }
+        #expect(P.decision(enDiscussion: true, page: .repond(conversation: true)) == .garderLeFil)
+        #expect(P.decision(enDiscussion: true, page: .repond(conversation: false)) == .garderLeFil)
+        #expect(P.decision(enDiscussion: false, page: .repond(conversation: true)) == .conversationNeuve)
+        #expect(P.decision(enDiscussion: false, page: .repond(conversation: false)) == .vider)
     }
 }

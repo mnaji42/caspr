@@ -30,7 +30,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisPage.swift` | La `WKWebView`, la session, le micro. Au premier montage de chaque lancement, elle vide le cache disque de WebKit — jamais les cookies ni le stockage de la page, qui portent la session. |
 | `RelaisPage+Pont.swift` | La façade du pont : un seul point d'appel, `pont(fonction, args…)`, qui décode le JSON que rend la page, et une méthode typée par fonction (`cliquer`, `lire`, `encadrer`, `copierLaReponse`…). Sans délai, et l'annulation le tranche sur-le-champ même quand la page ne répond jamais (`AppelAnnulable`, dans `CasprCore`) — le chemin d'une dictée. `sonder` l'enveloppe d'une borne, **au repos seulement** : son silence fait reconstruire la page, jamais échouer une dictée. Les noms des fonctions sont un type (`RelaisScripts.Fonction`), et un test vérifie que le pont les expose toutes, et elles seules. Un pont absent d'une page chargée — ni `charger()` en cours, ni `isLoading` de WebKit, qui couvre « Recharger » et les redirections de la page — est un échec prouvé (`pontAbsent`), pas une attente. Le pont vit dans un monde à lui (`RelaisPage.monde`, « caspr ») : il agit sur le DOM de chatgpt.com, mais la page ne le voit pas et ne peut pas l'écraser (éprouvé fonction par fonction contre le monde de la page : mêmes résultats) ; revenir au monde de la page tient en une ligne. |
 | `RelaisFenetres.swift` | Les **deux** fenêtres, et la vue web qui passe de l'une à l'autre (cf. « Les deux fenêtres » plus bas). |
-| `RelaisDictee.swift` (dans `CasprCore`) | Le scénario d'une dictée : écouter, rendre la transcription, envoyer, récupérer la réponse, la faire lire, arrêter la page après un abandon. Écrit sur ce qu'il demande à la page (`RelaisPageDictee`, dont `RelaisPage` est la vraie) et au presse-papiers, il se rejoue en test contre une page factice et une horloge qu'on avance à la main. Toutes ses attentes passent par une seule primitive, `observer` : un relevé par quart de seconde, **aucune échéance**, les échecs que la page prouve jugés avant tout. `RelaisPreparation` y décide ce que la fin d'une dictée fait de la page. |
+| `RelaisDictee.swift` (dans `CasprCore`) | Le scénario d'une dictée : écouter, rendre la transcription, envoyer, récupérer la réponse, la faire lire, arrêter la page après un abandon. Écrit sur ce qu'il demande à la page (`RelaisPageDictee`, dont `RelaisPage` est la vraie) et au presse-papiers, il se rejoue en test contre une page factice et une horloge qu'on avance à la main. Toutes ses attentes passent par une seule primitive, `observer` : un relevé par quart de seconde, **aucune échéance**, les échecs que la page prouve jugés avant tout. `RelaisPreparation` y décide ce que la fin d'une dictée fait de la page, selon ce qu'elle est au repos — morte, en chargement, muette, ou qui répond. |
 | `RelaisObservation.swift` (dans `CasprCore`) | Le temps du scénario : l'horloge, `RelaisDelai` — la liste, et la seule, des délais de geste qui restent sur le chemin d'une dictée, chacun avec ce qu'il prouve —, et `AppelAnnulable`. |
 | `RelaisPage+Calibration.swift` | Le message d'essai et les guetteurs de clic, pour les deux calibrations. |
 | `RelaisPage+Navigation.swift` | Les délégués WebKit : l'autorisation du micro, les popups de connexion, les navigations échouées, le processus tué. |
@@ -290,12 +290,12 @@ clic — un micro que WebKit tenait déjà avant ce clic ne le prouve pas, seul
 l'enregistrement le fait alors —, l'arrêt pendant l'écoute, la consigne qui se relit dans la zone, le
 bouton d'envoi, le message qui quitte la zone après son clic — un clic sans
 effet est un échec dit, pas une attente sans fin —, la copie qui atterrit
-après le clic, la réponse qu'on vient de copier qui se montre dans la page
-— le texte attend ce relevé pour s'insérer, et dépassé il s'insère sans la
-voix —, « Lire à haute voix » sous une réponse finie. Ils sont tous
+après le clic, « Lire à haute voix » sous une réponse finie. Ils sont tous
 dans `RelaisDelai`, et il n'en existe aucun autre ; chaque appel qui en
 passe un le dit dans un commentaire « délai de geste : … ». Dans le doute,
-pas de délai. Au repos, en revanche, un silence se constate
+pas de délai : la réponse qu'on vient de copier, et que le texte attend pour
+s'insérer après le clic de lecture, n'en a plus — la touche de dictée en
+sort, et la barre le dit. Au repos, en revanche, un silence se constate
 (`sonder`) : une page muette y est reconstruite — une vue neuve, la session
 intacte —, parce qu'un rechargement ne débloque pas un fil JavaScript figé.
 

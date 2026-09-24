@@ -462,23 +462,24 @@ final class Relais: ObservableObject {
     }
 
     /// Le travail de `preparerLaProchaine`, à part pour que l'arrêt d'une
-    /// dictée abandonnée le fasse aussi (cf. `interrompre`) : une question
-    /// posée à la page, et ce qu'en décide `RelaisPreparation`.
-    private func preparer(_ page: RelaisPage) async {
-        // Morte et laissée morte (cf. la récidive dans `RelaisPage`), elle se
-        // recharge ici plutôt que dans la question, qui la verrait muette.
-        if page.rechargementRetenu { page.charger() }
-        // Une page qui se charge est déjà la page de départ neuve —
-        // `charger()` ne mène que là : il n'y a qu'à l'attendre. L'interroger
-        // tombait sur un pont pas encore injecté, pris pour une page figée, et
-        // la rechargeait par-dessus — après la mort du processus, typiquement.
-        // Un chargement resté en route au-delà de l'attente passe par la
-        // question ordinaire.
-        if page.chargementEnCours, await page.attendreComposeurPret(secondes: 30) { return }
+    /// dictée abandonnée le fasse aussi (cf. `interrompre`) : l'état de la
+    /// page, et ce qu'en décide `RelaisPreparation`.
+    ///
+    /// `attendu` : un chargement a déjà été attendu, en vain. On ne le
+    /// recharge ni ne l'attend plus : la page passe par la question
+    /// ordinaire, et muette, elle est reconstruite.
+    private func preparer(_ page: RelaisPage, attendu: Bool = false) async {
         guard !Task.isCancelled else { return }
-        let conversation = await page.auRepos()?.conversation
+        let etat: RelaisPreparation.Page = !attendu && page.rechargementRetenu ? .morte
+            : !attendu && page.chargementEnCours ? .enChargement
+            : await page.auRepos().map { .repond(conversation: $0.conversation) } ?? .muette
         guard !Task.isCancelled else { return }
-        switch RelaisPreparation.decision(enDiscussion: enDiscussion, conversation: conversation) {
+        switch RelaisPreparation.decision(enDiscussion: enDiscussion, page: etat) {
+        case .recharger:
+            page.charger()
+            fallthrough
+        case .attendreLeChargement:
+            if await !page.attendreComposeurPret(secondes: 30) { await preparer(page, attendu: true) }
         case .garderLeFil:
             return
         case .conversationNeuve:
@@ -1065,9 +1066,15 @@ final class Relais: ObservableObject {
     /// fenêtre a été ouverte par l'appui lui-même (cf. `afficherBarre`) :
     /// épargnée parce que visible, elle restait devant avec le clavier, et les
     /// frappes suivantes partaient dans ChatGPT au lieu de l'éditeur.
+    ///
+    /// Rien à ranger non plus quand ChatGPT n'a pas ouvert son micro :
+    /// `interrompre` s'en charge, **après** l'arrêt. Rangée ici, avant que la
+    /// tâche de l'arrêt n'ait commencé, la page était suspendue hors champ, et
+    /// ChatGPT, qui peut justement se mettre à écouter en retard, restait en
+    /// enregistrement : l'appui suivant échouait sur un micro introuvable.
     func rangerApresUnDemarrageManque(_ erreur: Error) {
         guard let page else { return }
-        if case .pasConnecte? = erreur as? RelaisErreur { return }
+        if let e = erreur as? RelaisErreur, [.pasConnecte, .ecouteNonOuverte].contains(e) { return }
         if enDiscussion, page.estVisible { return }
         ranger(page)
     }

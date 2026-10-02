@@ -350,12 +350,14 @@ public final class RelaisDictee {
         restaurer()
         try Task.checkCancellation()
         guard !texte.isEmpty else { throw RelaisErreur.pasDeReponse }
-        // Garde-fou : la dernière ligne d'un bout de consigne ne figure
-        // jamais dans une réponse, et sa présence signe un bouton « copier »
-        // pris sous le mauvais message — c'est le prompt lui-même qui
-        // s'écrivait dans l'éditeur, sans que rien ne trahisse la méprise.
-        // Les deux bouts : un module qui n'a que « Après » n'en a pas d'autre.
-        if empreintes.contains(where: texte.contains) {
+        // Garde-fou : un bouton « copier » pris sous le mauvais message
+        // copie la demande — c'est le prompt lui-même qui s'écrivait dans
+        // l'éditeur, sans que rien ne trahisse la méprise. La demande porte
+        // **toutes** les empreintes, et c'est ce qui la signe : une réponse
+        // qui reprend un délimiteur — « === FIN DE LA TRANSCRIPTION === »
+        // recopié par ChatGPT — reste une réponse, et la rejeter livrait le
+        // brut à sa place. Un module qui n'a que « Après » n'en a qu'une.
+        if !empreintes.isEmpty, empreintes.allSatisfy(texte.contains) {
             journal("relais : copie de la demande au lieu de la réponse", true)
             throw RelaisErreur.pasDeReponse
         }

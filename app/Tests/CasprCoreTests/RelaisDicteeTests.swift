@@ -425,6 +425,28 @@ struct RelaisDicteeTests {
         await #expect(throws: RelaisErreur.pasDeReponse) { try await dictee.recuperer() }
     }
 
+    /// La demande porte les deux délimiteurs de « Réorganiser » ; une
+    /// réponse qui en recopie un seul reste une réponse, et la rejeter
+    /// livrait le brut à sa place.
+    @Test("Une réponse qui recopie un seul délimiteur est gardée ; la demande, qui porte les deux, est rejetée")
+    func delimiteurRecopie() async throws {
+        let module = RelaisCatalogue.reorganiser
+        for (reponse, gardee) in [("Bonjour.\n=== FIN DE LA TRANSCRIPTION ===", true),
+                                  (module.avant + "bonjour" + module.apres, false)] {
+            let page = PageFactice()
+            page.reponse = reponse
+            let dictee = Self.dictee(page)
+            try await dictee.ouvrirLEcoute()
+            let brut = try await dictee.arreterEtLire()
+            try await dictee.envoyer(avant: module.avant, apres: module.apres, brut: brut)
+            if gardee {
+                #expect(try await dictee.recuperer() == reponse)
+            } else {
+                await #expect(throws: RelaisErreur.pasDeReponse) { try await dictee.recuperer() }
+            }
+        }
+    }
+
     @Test("Abandonnée pendant la copie, la dictée rend le presse-papiers et n'insère rien")
     func abandonPendantLaCopie() async throws {
         let page = PageFactice()

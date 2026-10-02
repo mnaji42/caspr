@@ -459,9 +459,11 @@ chaque lecture.
 La réponse se récupère par le bouton « copier » de son tour — la paire bloc et
 bouton, ou le repère seul autour de la dernière réponse —, jamais par un
 libellé, et seulement pour une réponse **nouvelle**, postérieure à l'envoi, et
-finie. Une copie qui contient l'empreinte de la consigne — la dernière
-ligne de l'un ou l'autre de ses bouts, « Avant » et « Après » — est rejetée :
-c'est la demande. Ces empreintes sont aussi ce qui se relit dans la zone avant
+finie. Une copie qui contient les empreintes de la consigne — la dernière
+ligne de chacun de ses bouts non vides, « Avant » et « Après » — est rejetée :
+c'est la demande, qui les porte toutes. Une réponse qui n'en reprend qu'une
+— « === FIN DE LA TRANSCRIPTION === » recopié par ChatGPT — reste une
+réponse : la rejeter livrait le brut à sa place. Ces empreintes sont aussi ce qui se relit dans la zone avant
 le clic d'envoi : un module qui n'a que « Après » en a une, comme les autres. Le presse-papiers est sauvegardé tout entier juste avant le clic
 et rendu tel quel, abandon compris : une copie faite par l'utilisateur pendant
 l'attente n'est ni insérée ni écrasée.

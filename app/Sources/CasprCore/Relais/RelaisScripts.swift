@@ -49,7 +49,6 @@ public enum RelaisScripts {
         micro: [
           '[data-testid="composer-speech-button"]',
           'button[aria-label*="dict" i]',
-          'button[aria-label*="dicté" i]',
           'button[aria-label*="micro" i]',
         ],
         stop: [

@@ -24,12 +24,7 @@ final class Relais: ObservableObject {
     ///
     /// Relue à chaque fois, jamais recopiée : la voie a un seul endroit où
     /// vivre, et une copie ici serait une seconde décision à tenir d'accord.
-    private var voieChatGPT: Bool {
-        switch Preferences.shared.voie {
-        case .chatgpt: true
-        case .apple: false
-        }
-    }
+    private var voieChatGPT: Bool { Preferences.shared.voie == .chatgpt }
 
     /// Fait exister la page, ou la détruit, selon la voie qu'on vient de
     /// choisir.
@@ -64,12 +59,7 @@ final class Relais: ObservableObject {
     /// qu'on en change, qui garde le micro jusqu'au bout. Sur la voie macOS,
     /// seulement pour la dictée ChatGPT commencée avant qu'on en change : elle
     /// va au bout sur la page qu'elle a prise.
-    private var pageVoulue: Bool {
-        switch Preferences.shared.voie {
-        case .chatgpt: !ecouteMacOS
-        case .apple: occupation == .dictee
-        }
-    }
+    private var pageVoulue: Bool { voieChatGPT ? !ecouteMacOS : occupation == .dictee }
 
     /// Le magnétophone de Caspr écoute : une dictée macOS est entre l'appui et
     /// l'arrêt.

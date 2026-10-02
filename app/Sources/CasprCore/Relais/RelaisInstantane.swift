@@ -41,18 +41,20 @@ public struct RelaisMarque: Codable, Equatable, Sendable {
 /// Chaque champ se décode s'il est présent, sinon prend sa valeur par
 /// défaut — la règle de `RelaisSelecteurs`, pour la même raison : un pont
 /// d'une autre version qui omet un champ ne doit pas rendre le relevé
-/// entier illisible, ce qui se lirait comme un silence de la page.
-public struct RelaisInstantane: Equatable, Sendable {
+/// entier illisible, ce qui se lirait comme un silence de la page. Tenue
+/// par le type (`ParDefaut`), et non par un décodeur écrit à la main pour
+/// chaque structure : un champ ajouté s'y déclare en une ligne.
+public struct RelaisInstantane: Equatable, Sendable, Decodable {
     /// L'adresse est celle d'une conversation (`/c/…`, `/g/<projet>/c/…`).
-    public var conversation = false
+    @ParDefaut public var conversation = false
     /// L'écran d'authentification, ou une invite de connexion.
-    public var authentification = false
+    @ParDefaut public var authentification = false
     /// La zone de saisie, visible.
-    public var composeur = false
-    public var micro = false
-    public var stop = false
+    @ParDefaut public var composeur = false
+    @ParDefaut public var micro = false
+    @ParDefaut public var stop = false
     /// La zone absente et l'arrêt présent : la page écoute.
-    public var enregistrement = false
+    @ParDefaut public var enregistrement = false
     /// Le texte de la zone ; `nil` quand elle est introuvable, ou pas demandé.
     public var texte: String?
     /// `nil` quand elle n'a pas été demandée, ou sans marque.
@@ -61,68 +63,48 @@ public struct RelaisInstantane: Equatable, Sendable {
     /// alertes n'ont pas été demandées, ou sans marque.
     public var echec: Echec?
 
-    public struct Reponse: Equatable, Sendable {
+    public struct Reponse: Equatable, Sendable, Decodable {
         /// Les réponses de ChatGPT apparues depuis la marque.
-        public var nouvelles = 0
+        @ParDefaut public var nouvelles = 0
         /// ChatGPT écrit encore — jamais l'arrêt de la dictée.
-        public var enCours = false
+        @ParDefaut public var enCours = false
         /// La longueur de la dernière réponse nouvelle.
-        public var longueur = 0
+        @ParDefaut public var longueur = 0
         /// Le bouton « copier » du tour suit la réponse nouvelle.
-        public var copierPret = false
+        @ParDefaut public var copierPret = false
     }
 
-    public struct Echec: Equatable, Sendable {
-        public var texte = ""
+    public struct Echec: Equatable, Sendable, Decodable {
+        @ParDefaut public var texte = ""
         /// Un motif d'échec connu, et non une alerte quelconque.
-        public var reconnue = false
+        @ParDefaut public var reconnue = false
     }
 }
 
-extension RelaisInstantane: Decodable {
-    private enum CodingKeys: String, CodingKey {
-        case conversation, authentification, composeur, micro, stop, enregistrement
-        case texte, reponse, echec
-    }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        conversation = try c.lire(.conversation, false)
-        authentification = try c.lire(.authentification, false)
-        composeur = try c.lire(.composeur, false)
-        micro = try c.lire(.micro, false)
-        stop = try c.lire(.stop, false)
-        enregistrement = try c.lire(.enregistrement, false)
-        texte = try c.decodeIfPresent(String.self, forKey: .texte)
-        reponse = try c.decodeIfPresent(Reponse.self, forKey: .reponse)
-        echec = try c.decodeIfPresent(Echec.self, forKey: .echec)
-    }
+/// Un champ qui, absent ou nul, se décode à sa valeur par défaut — `false`,
+/// `0`, `""` — au lieu de faire échouer toute la structure.
+///
+/// Le décodage synthétisé de Swift lève sur une clé absente : il ignore les
+/// valeurs par défaut des propriétés. Ce type le corrige pour la clé qui
+/// le porte, par `decodeIfPresent`, et laisse Swift écrire le reste.
+@propertyWrapper
+public struct ParDefaut<Valeur: Decodable & Equatable & Sendable & ValeurParDefaut>: Decodable, Equatable, Sendable {
+    public var wrappedValue: Valeur
+    public init(wrappedValue: Valeur) { self.wrappedValue = wrappedValue }
+    public init(from decoder: Decoder) throws { wrappedValue = try decoder.singleValueContainer().decode(Valeur.self) }
 }
 
-extension RelaisInstantane.Reponse: Decodable {
-    private enum CodingKeys: String, CodingKey { case nouvelles, enCours, longueur, copierPret }
+public protocol ValeurParDefaut { static var parDefaut: Self { get } }
+extension Bool: ValeurParDefaut { public static var parDefaut: Bool { false } }
+extension Int: ValeurParDefaut { public static var parDefaut: Int { 0 } }
+extension String: ValeurParDefaut { public static var parDefaut: String { "" } }
 
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        nouvelles = try c.lire(.nouvelles, 0)
-        enCours = try c.lire(.enCours, false)
-        longueur = try c.lire(.longueur, 0)
-        copierPret = try c.lire(.copierPret, false)
-    }
-}
-
-extension RelaisInstantane.Echec: Decodable {
-    private enum CodingKeys: String, CodingKey { case texte, reconnue }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        texte = try c.lire(.texte, "")
-        reconnue = try c.lire(.reconnue, false)
-    }
-}
-
-private extension KeyedDecodingContainer {
-    func lire<T: Decodable>(_ cle: Key, _ defaut: T) throws -> T {
-        try decodeIfPresent(T.self, forKey: cle) ?? defaut
+// Choisie par le décodage synthétisé, plus précise que `decode<T>` : c'est
+// elle qui rend un champ `ParDefaut` facultatif. Publique, pour qu'un type
+// de l'application qui en porte un ne retombe pas, sans rien dire, sur la
+// version qui lève.
+extension KeyedDecodingContainer {
+    public func decode<V>(_ type: ParDefaut<V>.Type, forKey cle: Key) throws -> ParDefaut<V> {
+        try decodeIfPresent(type, forKey: cle) ?? ParDefaut(wrappedValue: .parDefaut)
     }
 }

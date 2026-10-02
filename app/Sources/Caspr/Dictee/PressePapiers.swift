@@ -3,10 +3,11 @@ import CasprCore
 
 /// Le presse-papiers entier, pour le rendre tel quel.
 ///
-/// Il appartient à l'utilisateur, et Caspr s'en sert pour récupérer une
-/// réponse de ChatGPT — son bouton « copier » ne sait écrire que là : pendant
-/// une dictée (`RelaisDictee.recuperer`) comme pendant la calibration
-/// automatique, qui l'essaie.
+/// Il appartient à l'utilisateur, et Caspr s'en sert pour coller une dictée
+/// là où l'accessibilité ne peut pas écrire (`TextInjector`), et pour
+/// récupérer une réponse de ChatGPT — son bouton « copier » ne sait écrire
+/// que là : pendant une dictée (`RelaisDictee.recuperer`) comme pendant la
+/// calibration automatique, qui l'essaie.
 ///
 /// Tous les éléments et tous leurs types, et non la seule chaîne : une image,
 /// un fichier ou un texte mis en forme qu'on y gardait ne doit pas revenir en

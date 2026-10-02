@@ -74,7 +74,7 @@ final class TextInjector {
 
     private func injectViaPasteboard(_ text: String) async throws {
         let pasteboard = NSPasteboard.general
-        let saved = Self.snapshot(pasteboard)
+        let saved = PressePapiers(pasteboard)
 
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
@@ -88,7 +88,7 @@ final class TextInjector {
         // document. On dort donc dans une tâche que l'annulation n'atteint pas.
         let delai = pasteSettleDelay
         await Task { try? await Task.sleep(for: delai) }.value
-        Self.restore(saved, to: pasteboard)
+        saved.rendre(pasteboard)
     }
 
     private func postCommandV() throws {
@@ -109,28 +109,5 @@ final class TextInjector {
         up.flags = .maskCommand
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
-    }
-
-    /// Copie le contenu du presse-papiers, tous types confondus.
-    private static func snapshot(_ pasteboard: NSPasteboard) -> [[NSPasteboard.PasteboardType: Data]] {
-        (pasteboard.pasteboardItems ?? []).map { item in
-            var stored: [NSPasteboard.PasteboardType: Data] = [:]
-            for type in item.types {
-                if let data = item.data(forType: type) { stored[type] = data }
-            }
-            return stored
-        }
-    }
-
-    private static func restore(_ snapshot: [[NSPasteboard.PasteboardType: Data]],
-                                to pasteboard: NSPasteboard) {
-        pasteboard.clearContents()
-        guard !snapshot.isEmpty else { return }
-        let items = snapshot.map { stored -> NSPasteboardItem in
-            let item = NSPasteboardItem()
-            for (type, data) in stored { item.setData(data, forType: type) }
-            return item
-        }
-        pasteboard.writeObjects(items)
     }
 }

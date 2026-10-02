@@ -82,7 +82,7 @@ final class RecordingOverlay {
         ///
         /// Sous ChatGPT, le badge nomme la voie — sans lui, la barre ne se
         /// distingue pas d'une dictée macOS —, et les langues ne règlent que
-        /// l'aperçu en direct : ChatGPT détecte la sienne. Un menu, et non des
+        /// macOS — l'aperçu en direct et le repli : ChatGPT détecte la sienne. Un menu, et non des
         /// pastilles : le badge en prend la place, et ce réglage-là est
         /// secondaire.
         var badgeAvecLesLangues = false
@@ -566,7 +566,7 @@ final class RecordingOverlay {
         let usesMenu = all.count > 3 || (status.badgeAvecLesLangues && all.count > 1)
         let canSwitch = usesMenu || switchable.count > 1
         languageMenu.toolTip = status.badgeAvecLesLangues
-            ? "Langue de l'aperçu de macOS\nChatGPT détecte la sienne" : nil
+            ? "Langue de macOS — aperçu et repli\nChatGPT détecte la sienne" : nil
 
         if usesMenu, all.map(\.code) != menuCodes {
             menuCodes = all.map(\.code)

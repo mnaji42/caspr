@@ -33,8 +33,14 @@ public enum RelaisRepli: Equatable, Sendable {
 
     /// Le brut d'abord, puis le son entier, puis l'aperçu : la transcription
     /// de macOS relit toute la phrase, l'aperçu l'a écrite en l'entendant.
+    ///
+    /// `macOSPret` : macOS sait écrire la langue sans rien télécharger ni
+    /// rien demander. Sinon, le son n'est pas transcrit — un modèle à
+    /// télécharger tenait « Transcription… » des minutes, et un droit jamais
+    /// demandé ouvrait son dialogue au milieu d'une dictée : il reste au
+    /// menu, où « Réessayer » le transcrira quand on l'aura choisi.
     public static func choisir(brutLu brut: String?, secondesAudio: Double, ecrit: Bool,
-                               apercu: String = "") -> RelaisRepli {
+                               apercu: String = "", macOSPret: Bool = true) -> RelaisRepli {
         // Un brut vide a déjà fini la dictée sur « Rien n'a été entendu » :
         // ce n'est pas un texte à livrer.
         let brut = brut.flatMap { $0.isEmpty ? nil : $0 }
@@ -42,8 +48,9 @@ public enum RelaisRepli: Equatable, Sendable {
         let apercu = apercu.trimmingCharacters(in: .whitespacesAndNewlines)
         guard ecrit else { return brut != nil || son || !apercu.isEmpty ? .garder : .rien }
         if let brut { return .inserer(brut) }
-        if son { return .transcrireParMacOS }
-        return apercu.isEmpty ? .rien : .insererLApercu(apercu)
+        if son, macOSPret { return .transcrireParMacOS }
+        if !apercu.isEmpty { return .insererLApercu(apercu) }
+        return son ? .garder : .rien
     }
 
     /// Ce que dit la barre une fois le repli fait : d'où vient le texte, et

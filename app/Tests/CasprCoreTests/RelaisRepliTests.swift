@@ -61,6 +61,18 @@ struct RelaisRepliTests {
         // n'est pas un texte.
         #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 0, ecrit: false, apercu: "bonjour") == .garder)
         #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 0, ecrit: true, apercu: " \n") == .rien)
+    }
+
+    /// macOS sans son modèle ou sans son droit : rien ne se télécharge ni ne
+    /// se demande au milieu d'une dictée. L'aperçu s'insère s'il y en a un,
+    /// sinon le son reste au menu.
+    @Test func macOSPasPret() {
+        #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 60, ecrit: true, macOSPret: false) == .garder)
+        #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 60, ecrit: true, apercu: "bonjour", macOSPret: false)
+            == .insererLApercu("bonjour"))
+        #expect(RelaisRepli.choisir(brutLu: "brut", secondesAudio: 60, ecrit: true, macOSPret: false)
+            == .inserer("brut"))
+        #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 0.1, ecrit: true, macOSPret: false) == .rien)
         // Une page morte ne dit plus « dictée perdue » quand l'aperçu reste.
         #expect(RelaisRepli.annonce(.insererLApercu("x"), apres: .pageInterrompue)
                 == "La page ChatGPT s'est fermée — aperçu de macOS inséré")

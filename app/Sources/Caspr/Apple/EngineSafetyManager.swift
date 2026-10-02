@@ -39,6 +39,24 @@ enum EngineSafetyManager {
             appleNotRefused: EngineChoice.apple.isAvailable(for: language))
     }
 
+    /// Pourquoi macOS ne saurait pas écrire cette langue sans rien télécharger
+    /// ni rien demander ; `nil` quand il le sait.
+    ///
+    /// Le repli d'une dictée ChatGPT s'en garde (cf. `RelaisRepli.choisir`) :
+    /// c'est le seul chemin où macOS écrirait sans qu'on l'ait choisi.
+    static func manque(for language: String) -> String? {
+        let version = engine(for: language)
+        guard !isReady(version, for: language) else { return nil }
+        switch version {
+        case .apple:
+            return "modèle d'Apple Intelligence absent en \(language)"
+        case .appleLegacy:
+            if !LegacySpeechEngine.isAuthorised { return "droit de reconnaissance vocale non accordé" }
+            if SystemDictation.isDisabled { return "Dictée de macOS éteinte" }
+            return "Dictée de macOS indisponible en \(language)"
+        }
+    }
+
     /// Cette version est-elle prête à écrire, ici, maintenant et dans cette
     /// langue — sans rien télécharger ni rien demander ?
     ///

@@ -83,10 +83,12 @@ final class VoieChatGPT {
     /// Ce que la barre montre sous cette voie.
     ///
     /// ChatGPT détecte la langue lui-même : le badge nomme la voie à l'œuvre —
-    /// sans quoi la barre est indiscernable d'une dictée macOS. Les langues ne
-    /// s'y ajoutent qu'avec l'aperçu en direct, dont elles règlent la
-    /// reconnaissance (cf. `DictationController.onSelectLanguage`) ; sans
-    /// lui, elles laisseraient croire qu'elles règlent ChatGPT.
+    /// sans quoi la barre est indiscernable d'une dictée macOS. Les langues
+    /// s'y ajoutent en menu, avec une infobulle qui dit ce qu'elles règlent :
+    /// la langue de macOS, celle de l'aperçu en direct et du repli quand on
+    /// renonce à ChatGPT (cf. `DictationController.onSelectLanguage`). Elles
+    /// n'apparaissaient qu'avec l'aperçu, et le repli transcrivait alors dans
+    /// une langue que la barre ne montrait pas.
     ///
     /// La pastille porte les modules dès que l'aller-retour est calibré. Sans
     /// lui, un seul module est possible, et la barre n'en montre pas : proposer
@@ -103,8 +105,7 @@ final class VoieChatGPT {
             moduleIndex: modules.firstIndex(of: courant) ?? 0,
             destinationImposee: courant.ecrit ? nil : "Réponse à l'écran",
             languageBadge: "ChatGPT",
-            switchableLanguages: Preferences.shared.livePreviewEnabled
-                ? Preferences.shared.activeLanguages.map { ($0.code, $0.shortBadge) } : [],
+            switchableLanguages: Preferences.shared.activeLanguages.map { ($0.code, $0.shortBadge) },
             languageCode: Preferences.shared.primaryLanguage,
             badgeAvecLesLangues: true)
     }
@@ -236,7 +237,12 @@ final class VoieChatGPT {
         let dictee = self.dictee ?? figer()
         let ecrit = dictee.module?.ecrit != false
         let son = relais.secondesEntendues
-        let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: son, ecrit: ecrit, apercu: apercu.texte)
+        let manque = EngineSafetyManager.manque(for: Preferences.shared.primaryLanguage)
+        if let manque, brut == nil, son >= RelaisRepli.secondesMinimales {
+            Log.info("relais : repli par macOS impossible — \(manque) ; le son reste au menu")
+        }
+        let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: son, ecrit: ecrit, apercu: apercu.texte,
+                                        macOSPret: manque == nil)
         let annonce = RelaisRepli.annonce(repli, apres: cause, son: son, parle: dictee.duree)
         Log.info("relais : repli après \(cause?.localizedDescription ?? "la touche") — "
                  + "\(annonce ?? "rien à livrer"), \(String(format: "%.1f", son)) s de son "

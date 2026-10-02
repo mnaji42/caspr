@@ -41,7 +41,10 @@ final class PermissionsMonitor {
     /// Le droit de reconnaissance vocale est-il en jeu ici ?
     ///
     /// Seulement quand la Dictée écrit : l'aperçu en direct tourne sur la même
-    /// version, et la voie ChatGPT n'en fait tourner aucune.
+    /// version. La voie ChatGPT ne l'exige pas d'avance : son repli ne fait
+    /// tourner macOS que s'il est déjà prêt, sans rien demander (cf.
+    /// `EngineSafetyManager.manque`), et son aperçu, s'il est activé, demande
+    /// le droit lui-même à son premier démarrage.
     var requiresSpeech: Bool {
         switch Preferences.shared.voie {
         case .chatgpt:

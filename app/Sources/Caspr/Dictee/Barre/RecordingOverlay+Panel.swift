@@ -172,8 +172,8 @@ extension RecordingOverlay {
     ///   élargir la barre.
     /// - **Une seule** : un simple indicateur, qui dit dans quelle langue on
     ///   parle.
-    /// - **Sous ChatGPT, aperçu en direct activé** : le badge de la voie, et
-    ///   le menu des langues de l'aperçu à côté (cf.
+    /// - **Sous ChatGPT** : le badge de la voie, et le menu des langues de
+    ///   macOS à côté (cf.
     ///   `Status.badgeAvecLesLangues`).
     ///
     /// Les modules ne sont pas ici : ils sont passés **au-dessus de la carte, à

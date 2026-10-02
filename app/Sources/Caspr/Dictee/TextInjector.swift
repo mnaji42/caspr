@@ -33,12 +33,6 @@ final class TextInjector {
 
     var hasPermission: Bool { AXIsProcessTrusted() }
 
-    /// Ouvre la fenêtre système de demande d'autorisation.
-    func requestPermission() {
-        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
-        AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
-    }
-
     func inject(_ text: String) async throws {
         guard !text.isEmpty else { return }
         guard hasPermission else { throw InjectionError.accessibilityDenied }

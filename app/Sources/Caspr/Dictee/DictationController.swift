@@ -364,7 +364,7 @@ final class DictationController {
             return "Micro refusé — ouvrir Réglages › Micro depuis le menu de Caspr."
         }
         guard injector.hasPermission else {
-            injector.requestPermission()
+            Permissions.requestAccessibility()
             return "Accessibilité requise — voir le menu de Caspr."
         }
         return nil

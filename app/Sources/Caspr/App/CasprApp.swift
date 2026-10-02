@@ -876,10 +876,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openAXSettings() {
         // Ouvre le dialogue système si l'app n'a jamais été inscrite, ce qui
         // la fait apparaître dans la liste ; sinon le volet seul suffit.
-        if !AXIsProcessTrusted() {
-            let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
-            AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
-        }
+        if !AXIsProcessTrusted() { Permissions.requestAccessibility() }
         Permissions.openAccessibilitySettings()
     }
 }

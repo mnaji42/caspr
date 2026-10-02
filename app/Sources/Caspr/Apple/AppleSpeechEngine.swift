@@ -76,7 +76,11 @@ final class AppleSpeechEngine: TranscripteurMacOS {
         try Task.checkCancellation()
 
         guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(
-            compatibleWith: [transcriber]) else {
+            compatibleWith: [transcriber]),
+              let source = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+                                         sampleRate: AudioRecorder.targetSampleRate,
+                                         channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: source, to: format) else {
             throw EngineError.unavailable
         }
 
@@ -93,9 +97,7 @@ final class AppleSpeechEngine: TranscripteurMacOS {
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         try await analyzer.start(inputSequence: stream)
 
-        for buffer in Self.buffers(from: samples, to: format) {
-            continuation.yield(AnalyzerInput(buffer: buffer))
-        }
+        Self.ceder(samples, par: converter, dans: continuation)
         continuation.finish()
 
         // ## Ce `try?` valait un bug muet, et il l'a produit
@@ -121,36 +123,20 @@ final class AppleSpeechEngine: TranscripteurMacOS {
         }
     }
 
-    /// Découpe les échantillons en tampons au format de l'analyseur.
+    /// Convertit les échantillons au format de l'analyseur, et les lui cède
+    /// tranche par tranche.
     ///
-    /// Par morceaux plutôt qu'en un seul bloc : le moteur travaille en flux, et
-    /// un tampon de dix minutes le ferait allouer d'un coup ce qu'il aurait pu
-    /// consommer au fil de l'eau.
-    private static func buffers(from samples: [Float],
-                                to format: AVAudioFormat) -> [AVAudioPCMBuffer] {
-        guard let source = AVAudioFormat(commonFormat: .pcmFormatFloat32,
-                                         sampleRate: AudioRecorder.targetSampleRate,
-                                         channels: 1, interleaved: false),
-              let converter = AVAudioConverter(from: source, to: format) else { return [] }
-
-        let chunk = 16_000                     // une seconde
-        var out: [AVAudioPCMBuffer] = []
-        var offset = 0
-
-        while offset < samples.count {
-            let count = min(chunk, samples.count - offset)
-            guard let input = AVAudioPCMBuffer(pcmFormat: source,
-                                               frameCapacity: AVAudioFrameCount(count)) else { break }
-            input.frameLength = AVAudioFrameCount(count)
-            samples[offset..<(offset + count)].withUnsafeBufferPointer { source in
-                input.floatChannelData![0].update(from: source.baseAddress!, count: count)
-            }
-
-            let ratio = format.sampleRate / AudioRecorder.targetSampleRate
+    /// Chaque tranche part dès qu'elle est convertie : les rendre toutes dans
+    /// un tableau d'abord allouait l'enregistrement converti d'un coup, en
+    /// plus de lui.
+    private static func ceder(_ samples: [Float], par converter: AVAudioConverter,
+                              dans continuation: AsyncStream<AnalyzerInput>.Continuation) {
+        let format = converter.outputFormat
+        let ratio = format.sampleRate / AudioRecorder.targetSampleRate
+        AudioRecorder.parSeconde(samples) { input in
             guard let converted = AVAudioPCMBuffer(
                 pcmFormat: format,
-                frameCapacity: AVAudioFrameCount(Double(count) * ratio) + 1) else { break }
-
+                frameCapacity: AVAudioFrameCount(Double(input.frameLength) * ratio) + 1) else { return }
             var consumed = false
             var error: NSError?
             converter.convert(to: converted, error: &error) { _, status in
@@ -162,9 +148,9 @@ final class AppleSpeechEngine: TranscripteurMacOS {
                 status.pointee = .haveData
                 return input
             }
-            if error == nil, converted.frameLength > 0 { out.append(converted) }
-            offset += count
+            if error == nil, converted.frameLength > 0 {
+                continuation.yield(AnalyzerInput(buffer: converted))
+            }
         }
-        return out
     }
 }

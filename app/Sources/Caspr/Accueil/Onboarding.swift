@@ -24,12 +24,6 @@ final class OnboardingWindowController {
     private var window: NSWindow?
     private var closeObserver: NSObjectProtocol?
 
-    /// N'ouvre que si l'accueil n'a jamais été mené à terme.
-    func showIfNeeded() {
-        guard !Preferences.shared.onboarded else { return }
-        show()
-    }
-
     func show() {
         if let window {
             window.showCentered()

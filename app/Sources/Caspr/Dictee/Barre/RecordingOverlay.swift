@@ -608,7 +608,7 @@ final class RecordingOverlay {
         } ?? "Aucun fichier de notes\nEn choisir un dans le menu de Caspr"
 
         micMode = AVCaptureDevice.activeMicrophoneMode
-        micButton.attributedTitle = Self.buttonTitle(Self.microphoneModeLabel)
+        micButton.attributedTitle = Self.buttonTitle(AudioRecorder.microphoneModeShortLabel)
         micButton.toolTip = "Mode micro du système\nCliquer pour le changer"
 
         previewLabel.toolTip = Self.previewExplanation
@@ -715,19 +715,6 @@ final class RecordingOverlay {
         return "Notes › \(short)"
     }
 
-    /// Mode micro courant, tel que macOS le rapporte.
-    ///
-    /// Lecture seule : Apple ne laisse aucune application imposer ce réglage,
-    /// c'est un choix de l'utilisateur. On peut en revanche ouvrir le panneau
-    /// système, ce qui évite d'aller le chercher dans le Centre de contrôle.
-    private static var microphoneModeLabel: String {
-        switch AVCaptureDevice.activeMicrophoneMode {
-        case .voiceIsolation: "Isolement"
-        case .wideSpectrum: "Large"
-        default: "Standard"
-        }
-    }
-
     /// La raison, puis ce qu'on peut encore en faire.
     ///
     /// Deux graisses et deux gris : la première ligne dit ce qui s'est passé,
@@ -814,6 +801,6 @@ final class RecordingOverlay {
         let mode = AVCaptureDevice.activeMicrophoneMode
         guard mode != micMode else { return }
         micMode = mode
-        micButton.attributedTitle = Self.buttonTitle(Self.microphoneModeLabel)
+        micButton.attributedTitle = Self.buttonTitle(AudioRecorder.microphoneModeShortLabel)
     }
 }

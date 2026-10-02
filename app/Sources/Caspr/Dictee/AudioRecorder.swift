@@ -81,11 +81,15 @@ final class AudioRecorder: @unchecked Sendable {
     ///
     /// Partagé entre la barre et les réglages : la barre l'affichait seule,
     /// ce qui laissait croire que c'était un réglage de dictée qu'on avait
-    /// oublié de mettre ailleurs.
-    static var microphoneModeLabel: String {
+    /// oublié de mettre ailleurs. Les réglages le disent en entier, la barre
+    /// en un mot — elle n'a pas la place.
+    static var microphoneModeLabel: String { microphoneMode(court: false) }
+    static var microphoneModeShortLabel: String { microphoneMode(court: true) }
+
+    private static func microphoneMode(court: Bool) -> String {
         switch AVCaptureDevice.activeMicrophoneMode {
-        case .voiceIsolation: "Isolement de la voix"
-        case .wideSpectrum: "Large spectre"
+        case .voiceIsolation: court ? "Isolement" : "Isolement de la voix"
+        case .wideSpectrum: court ? "Large" : "Large spectre"
         default: "Standard"
         }
     }
@@ -243,6 +247,30 @@ final class AudioRecorder: @unchecked Sendable {
 
     func cancel() {
         _ = stop()
+    }
+
+    /// Rend un enregistrement aux moteurs, une seconde à la fois, au format
+    /// où il a été capturé : 16 kHz mono en flottants.
+    ///
+    /// Tranche par tranche plutôt qu'en un tableau de tous les tampons : une
+    /// dictée de dix minutes pèse déjà près de 40 Mo, et la doubler d'un coup
+    /// n'apporte rien à des moteurs qui la lisent en flux.
+    static func parSeconde(_ samples: [Float], _ corps: (AVAudioPCMBuffer) -> Void) {
+        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: targetSampleRate,
+                                         channels: 1, interleaved: false) else { return }
+        let seconde = Int(targetSampleRate)
+        var debut = 0
+        while debut < samples.count {
+            let compte = min(seconde, samples.count - debut)
+            guard let tampon = AVAudioPCMBuffer(pcmFormat: format,
+                                                frameCapacity: AVAudioFrameCount(compte)) else { return }
+            tampon.frameLength = AVAudioFrameCount(compte)
+            samples[debut..<(debut + compte)].withUnsafeBufferPointer { source in
+                tampon.floatChannelData![0].update(from: source.baseAddress!, count: compte)
+            }
+            corps(tampon)
+            debut += compte
+        }
     }
 
     private func append(_ buffer: AVAudioPCMBuffer,

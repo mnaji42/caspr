@@ -8,10 +8,11 @@
 # La version reste lisible : elle nomme le volume monté, et elle est dans le
 # bundle.
 #
-# Ce paquet est signé ad hoc, pas avec un certificat Apple Developer. Sur une
-# autre machine, macOS refusera de l'ouvrir au premier essai ; l'utilisateur
-# devra passer par Réglages Système › Confidentialité et sécurité. C'est
-# assumé pour l'instant et documenté dans le README — pas un oubli.
+# Ce paquet est signé avec un certificat auto-signé stable (importé par la CI,
+# cf. CASPR_SIGN_IDENTITY), pas avec un Developer ID. Sur une autre machine,
+# macOS refusera de l'ouvrir au premier essai ; l'utilisateur devra passer
+# par Réglages Système › Confidentialité et sécurité. C'est assumé pour
+# l'instant et documenté dans le README — pas un oubli.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

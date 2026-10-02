@@ -201,9 +201,9 @@ final class LegacySpeechEngine: TranscripteurMacOS {
         audio.requiresOnDeviceRecognition = true
         audio.shouldReportPartialResults = false
 
-        for buffer in Self.buffers(from: samples) {
-            audio.append(buffer)
-        }
+        // Du PCM flottant à la fréquence d'origine : la requête n'a pas besoin
+        // de conversion, contrairement à l'analyseur de macOS 26.
+        AudioRecorder.parSeconde(samples) { audio.append($0) }
         audio.endAudio()
 
         // Annulable : une Dictée mal éteinte accepte la tâche et ne rend
@@ -227,36 +227,6 @@ final class LegacySpeechEngine: TranscripteurMacOS {
         }
 
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    // MARK: - Outils
-
-    /// Découpe les échantillons en tampons, au format que le moteur attend.
-    ///
-    /// `SFSpeechAudioBufferRecognitionRequest` accepte du PCM flottant à la
-    /// fréquence d'origine : pas de conversion nécessaire, contrairement à
-    /// l'analyseur de macOS 26 qui impose la sienne.
-    private static func buffers(from samples: [Float]) -> [AVAudioPCMBuffer] {
-        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32,
-                                         sampleRate: AudioRecorder.targetSampleRate,
-                                         channels: 1, interleaved: false)
-        else { return [] }
-
-        let chunk = 16_000                     // une seconde
-        var out: [AVAudioPCMBuffer] = []
-        var offset = 0
-        while offset < samples.count {
-            let count = min(chunk, samples.count - offset)
-            guard let buffer = AVAudioPCMBuffer(
-                pcmFormat: format, frameCapacity: AVAudioFrameCount(count)) else { break }
-            buffer.frameLength = AVAudioFrameCount(count)
-            samples[offset..<(offset + count)].withUnsafeBufferPointer { source in
-                buffer.floatChannelData![0].update(from: source.baseAddress!, count: count)
-            }
-            out.append(buffer)
-            offset += count
-        }
-        return out
     }
 
     /// La réponse de la reconnaissance, rendue une seule fois : le rappel est

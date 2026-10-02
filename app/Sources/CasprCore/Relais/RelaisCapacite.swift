@@ -32,14 +32,10 @@ public enum RelaisCapacite: String, CaseIterable, Codable {
     /// Comment on l'obtient, dit à qui ne l'a pas encore.
     public var commentAcquerir: String {
         switch self {
-        case .dicter:
-            "Montrer le micro, l'arrêt et la zone de texte."
-        case .envoyer:
-            "Montrer le bouton d'envoi."
-        case .recuperer:
-            "Montrer le bouton « copier » sous une réponse."
-        case .direAHauteVoix:
-            "Montrer le bouton « Lire à haute voix » sous une réponse."
+        case .dicter: "Montrer le micro, l'arrêt et la zone de texte."
+        case .envoyer: "Montrer le bouton d'envoi."
+        case .recuperer: "Montrer le bouton « copier » sous une réponse."
+        case .direAHauteVoix: "Montrer le bouton « Lire à haute voix » sous une réponse."
         }
     }
 

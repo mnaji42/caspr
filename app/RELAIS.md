@@ -91,9 +91,11 @@ modules pré-remplis :
 | **Réorganiser** | la matière à remettre en ordre | au curseur ou en note, après la réponse de ChatGPT |
 | **Discuter** | une question | nulle part : la page reste ouverte et prend le clavier |
 
-« Nouveau module… », sous la liste, en crée un qui envoie et écrit la
-réponse, et ouvre sa carte : son nom, ce qu'il écrit, sa consigne, son
-affichage et la lecture s'y règlent. Il rejoint la barre dès que
+« Nouveau module… », sous la liste, ouvre la carte d'un module qui n'existe
+pas encore : son nom, ce qu'il écrit (la réponse, par défaut), sa consigne, son
+affichage et la lecture s'y règlent, et rien n'est rangé avant « Créer » — un
+module rangé au premier clic rejoignait la barre sans nom ni consigne. Créé, il
+rejoint la barre dès que
 ses capacités sont acquises, sans qu'une ligne du tuyau de dictée ne change :
 celui-ci ne lit d'un module que son envoi, `ecrit`, sa consigne, son affichage
 effectif et la lecture. Un module de l'utilisateur se supprime ; un livré, non.

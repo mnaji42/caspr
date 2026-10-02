@@ -387,10 +387,9 @@ struct RelaisModuleTests {
 
     @Test("Un module créé n'est pas intégré, et seul lui se supprime")
     func createdModuleIsTheOnlyOneDeleted() {
-        var modules = RelaisCatalogue.livres
-        let un = RelaisCatalogue.ajouter(nom: "Traduire en anglais", a: &modules)
-        let deux = RelaisCatalogue.ajouter(nom: "Traduire en anglais", a: &modules)
-        #expect(!un.integre && un.envoi == .remplacer && un.consigne == .facultative)
+        let (un, deux) = (RelaisCatalogue.nouveau(), RelaisCatalogue.nouveau())
+        var modules = RelaisCatalogue.livres + [un, deux]
+        #expect(!un.integre && un.envoi == .remplacer && un.consigne == .facultative && un.nom.isEmpty)
         #expect(un.identifiant != deux.identifiant)
         #expect(modules.count == 5)
         RelaisCatalogue.supprimer(un.identifiant, de: &modules)

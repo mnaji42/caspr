@@ -10,8 +10,8 @@ import CasprCore
 /// boutons qui la pilotent n'auraient rien à piloter.
 struct RelaisReglages: View {
     @ObservedObject private var magasin = RelaisMagasin.partage
-    /// Celui qu'on vient de créer : sa carte s'ouvre sur ses réglages.
-    @State private var cree: String?
+    /// Celui qu'on est en train de créer (cf. `RelaisModuleCard.brouillon`).
+    @State private var brouillon: RelaisModule?
 
     var body: some View {
         // Une carte pour la session et ce que Caspr a appris, puis une carte
@@ -23,14 +23,14 @@ struct RelaisReglages: View {
 
         SectionLabel("Modules")
         ForEach(magasin.modules) { module in
-            RelaisModuleCard(module: module, selecteurs: magasin.selecteurs, ouvert: module.id == cree)
+            RelaisModuleCard(module: module, selecteurs: magasin.selecteurs)
         }
-        // Créé tout de suite, et réglé sur sa carte, qui s'ouvre dessus : son
-        // nom, ce qu'il écrit et sa consigne y sont, l'affichage et la
-        // lecture comme pour tout module. Une fenêtre de plus pour les
-        // demander d'abord n'apprendrait rien de plus.
-        ButtonRow {
-            Button("Nouveau module…") { cree = magasin.ajouter(nom: "Nouveau module").id }
+        // Réglé sur la carte même où on le relira ensuite : son nom, ce qu'il
+        // écrit, sa consigne, l'affichage et la lecture comme pour tout module.
+        if let nouveau = brouillon {
+            RelaisModuleCard(module: nouveau, selecteurs: magasin.selecteurs, brouillon: $brouillon)
+        } else {
+            ButtonRow { Button("Nouveau module…") { brouillon = RelaisCatalogue.nouveau() } }
         }
 
         let depart = magasin.depart != RelaisPage.accueil
@@ -149,15 +149,12 @@ struct RelaisSession: View, ValidatingComponent {
     /// ressaisir un mot de passe. On demande donc confirmation, en disant ce
     /// qui part et ce qui reste.
     private func deconnecter() {
-        let a = NSAlert()
-        a.messageText = "Se déconnecter de ChatGPT ?"
-        a.informativeText = "La session est effacée de Caspr — cookies et stockage local. "
-            + "Il faudra vous reconnecter pour dicter à nouveau.\n\n"
-            + "Le calibrage des boutons est conservé : il ne dépend pas de la session."
-        a.addButton(withTitle: "Se déconnecter")
-        a.addButton(withTitle: "Annuler")
-        NSApp.activate(ignoringOtherApps: true)
-        guard a.runModal() == .alertFirstButtonReturn else { return }
+        guard RelaisDialogues.choisir(
+            "Se déconnecter de ChatGPT ?",
+            "La session est effacée de Caspr — cookies et stockage local. "
+                + "Il faudra vous reconnecter pour dicter à nouveau.\n\n"
+                + "Le calibrage des boutons est conservé : il ne dépend pas de la session.",
+            ["Se déconnecter", "Annuler"]) == 0 else { return }
         Task { await Relais.partage.deconnecter() }
     }
 

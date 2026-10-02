@@ -103,18 +103,14 @@ public enum RelaisCatalogue {
         return modules.first { $0.identifiant == brut.identifiant } ?? brut
     }
 
-    /// Un module de l'utilisateur, ajouté à `modules`.
+    /// Un module de l'utilisateur, à régler avant d'être ajouté.
     ///
     /// Il remplace le texte par la réponse de ChatGPT : c'est ce qu'on crée
-    /// un module pour faire — traduire, reformuler, résumer —, le reste se
-    /// règle ensuite sur sa carte. L'identifiant est tiré au sort, pour qu'un
-    /// renommage ne le change pas et qu'un nom pris ne gêne personne.
-    @discardableResult
-    public static func ajouter(nom: String, a modules: inout [RelaisModule]) -> RelaisModule {
-        let module = RelaisModule(identifiant: UUID().uuidString, nom: nom,
-                                  consigne: .facultative, envoi: .remplacer)
-        modules.append(module)
-        return module
+    /// un module pour faire — traduire, reformuler, résumer. Sans nom : c'est
+    /// à l'utilisateur de le donner. L'identifiant est tiré au sort, pour
+    /// qu'un renommage ne le change pas et qu'un nom pris ne gêne personne.
+    public static func nouveau() -> RelaisModule {
+        RelaisModule(identifiant: UUID().uuidString, nom: "", consigne: .facultative, envoi: .remplacer)
     }
 
     /// Retire un module de l'utilisateur ; un livré ne se supprime pas, il
@@ -136,20 +132,6 @@ public enum RelaisCatalogue {
         }
     }
 
-    /// Les livrés, avec l'affichage qui valait pour toute la fonctionnalité.
-    ///
-    /// Il appartient maintenant à chaque module, et devient la valeur de
-    /// départ de ceux qui écrivent : un réglage qu'on a pris la peine de faire
-    /// ne disparaît pas parce que le code a changé d'avis sur l'endroit où le
-    /// ranger. « Discuter » garde la page, où sa réponse existe.
-    public static func livres(affichage: RelaisAffichage) -> [RelaisModule] {
-        livres.map { module in
-            var m = module
-            if m.ecrit { m.affichage = affichage }
-            return m
-        }
-    }
-
     /// Traduit une fois les formes d'avant dans `defaults` ; ce qui a été
     /// fait, pour le journal.
     ///
@@ -159,8 +141,15 @@ public enum RelaisCatalogue {
     public static func migrer(_ defaults: UserDefaults) -> [String] {
         var faits: [String] = []
         if let affichage = defaults.string(forKey: cleAffichage).flatMap(RelaisAffichage.init(rawValue:)) {
+            // L'affichage qui valait pour toute la fonctionnalité appartient
+            // maintenant à chaque module, et devient la valeur de départ des
+            // livrés qui écrivent : un réglage qu'on a pris la peine de faire
+            // ne disparaît pas parce que le code a changé d'avis sur l'endroit
+            // où le ranger. « Discuter » garde la page, où sa réponse existe.
+            var livres = Self.livres
+            for i in livres.indices where livres[i].ecrit { livres[i].affichage = affichage }
             let enregistres = defaults.data(forKey: cleModules).map(RelaisModule.liste(depuis:)) ?? []
-            let modules = fusion(enregistres, livres: livres(affichage: affichage))
+            let modules = fusion(enregistres, livres: livres)
             if modules.count != enregistres.count {
                 ranger(modules, sous: cleModules, dans: defaults)
                 faits.append("affichage du relais (\(affichage.rawValue)) repris par les modules livrés")

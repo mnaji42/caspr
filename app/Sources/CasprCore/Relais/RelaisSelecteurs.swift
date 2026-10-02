@@ -74,27 +74,19 @@ public struct RelaisSelecteurs: Codable, Equatable {
     public var lectureMenuParent = ""
 
     public subscript(cible: RelaisCible) -> String {
-        get {
-            switch cible {
-            case .micro: micro
-            case .stop: stop
-            case .composeur: composeur
-            case .envoi: envoi
-            case .reponse: reponse
-            case .copier: copier
-            case .lecture: lecture
-            }
-        }
-        set {
-            switch cible {
-            case .micro: micro = newValue
-            case .stop: stop = newValue
-            case .composeur: composeur = newValue
-            case .envoi: envoi = newValue
-            case .reponse: reponse = newValue
-            case .copier: copier = newValue
-            case .lecture: lecture = newValue
-            }
+        get { self[keyPath: Self.champ(cible)] }
+        set { self[keyPath: Self.champ(cible)] = newValue }
+    }
+
+    private static func champ(_ cible: RelaisCible) -> WritableKeyPath<Self, String> {
+        switch cible {
+        case .micro: \.micro
+        case .stop: \.stop
+        case .composeur: \.composeur
+        case .envoi: \.envoi
+        case .reponse: \.reponse
+        case .copier: \.copier
+        case .lecture: \.lecture
         }
     }
 

@@ -31,9 +31,9 @@ son numéro et ce que tu as vu. Les premiers vérifient ce qui est irréversible
 l'app à zéro.
 
 **Le journal** : garde un Terminal ouvert pendant tous les essais avec
-`log stream --predicate 'subsystem == "fr.lyriastudio.caspr"' --level info`.
+`/usr/bin/log stream --predicate 'subsystem == "fr.lyriastudio.caspr"' --level info`. Le chemin complet n'est pas un détail : dans zsh, `log` tout court est une commande interne du shell, qui répond « too many arguments ».
 Quand un essai dit « dans le journal », c'est là qu'il faut regarder. Après
-coup : `log show --last 15m --info --predicate 'subsystem == "fr.lyriastudio.caspr"' | grep -E "relais|écho"`.
+coup : `/usr/bin/log show --last 15m --info --predicate 'subsystem == "fr.lyriastudio.caspr"' | grep -E "relais|écho"`.
 
 ---
 
@@ -109,7 +109,7 @@ coup : `log show --last 15m --info --predicate 'subsystem == "fr.lyriastudio.cas
 
 ## 3. La migration
 
-10. `log show --last 10m --info --predicate 'subsystem == "fr.lyriastudio.caspr"' | grep migration`
+10. `/usr/bin/log show --last 10m --info --predicate 'subsystem == "fr.lyriastudio.caspr"' | grep migration`
     Attendu, entre autres :
     - « agent fr.lyriastudio.caspr.engine mis à la corbeille » (son plist). Pas
       de ligne « sorti de launchd » : le démon n'était pas chargé (essai 3), et
@@ -266,7 +266,7 @@ de le couper.
 ### L'écho : le son de la page (E2 — à prouver ici)
 
 26. Après l'essai 23, regarde la ligne de l'écho dans le journal :
-    `log show --last 5m --info --predicate 'subsystem == "fr.lyriastudio.caspr"' | grep "écho"`
+    `/usr/bin/log show --last 5m --info --predicate 'subsystem == "fr.lyriastudio.caspr"' | grep "écho"`
     Attendu : une ligne par dictée, du genre « relais : écho — 2,4 s reçues
     pour 2,6 s d'écoute, piste 48000 Hz, contexte running à 16000 Hz, crête
     0,1xx, 1 appel à getUserMedia ». Les secondes reçues sont proches des

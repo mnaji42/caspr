@@ -10,15 +10,19 @@ import CasprCore
 /// au lieu de la lire.
 ///
 /// Le reste ne se déplie qu'à la demande. Un module se règle rarement ; le lire
-/// doit rester immédiat.
+/// doit rester immédiat. Celui qu'on vient de créer s'ouvre dessus (`ouvert`) :
+/// on le crée pour le régler.
 struct RelaisModuleCard: View {
     let module: RelaisModule
     let selecteurs: RelaisSelecteurs
+    var ouvert = false
 
     @State private var deplie = false
     @State private var avant = ""
     @State private var apres = ""
     @State private var avecConsigne = false
+    @State private var nom = ""
+    @State private var envoi = RelaisEnvoi.aucun
 
     private var manquantes: [RelaisCapacite] { module.capacitesManquantes(selecteurs) }
 
@@ -51,17 +55,19 @@ struct RelaisModuleCard: View {
                      + manquantes.map(\.libelle).joined(separator: " », « ")
                      + " ». Lancez la calibration ci-dessus.", warning: true)
             }
-            // Rien à déplier pour un module qui n'envoie rien : son seul
-            // réglage est l'affichage, et il est déjà dans l'en-tête. Un bouton
-            // qui ouvre un panneau vide se lit comme une promesse non tenue.
-            // Pas de panneau pour un module qui envoie ce qu'on dit tel quel :
-            // il n'y a rien à y régler, et l'ouvrir sur du vide se lit comme une
-            // promesse non tenue.
+            // Pas de panneau pour un module sans consigne, Brut ou Discuter :
+            // leur seul réglage, l'affichage, est déjà dans l'en-tête, et un
+            // bouton qui ouvre sur du vide se lit comme une promesse non tenue.
             if module.consigne != .aucune {
                 Divider().opacity(0.25)
                 bascule
-                if deplie { consigneReglages }
+                if deplie { reglages }
             }
+        }
+        .onAppear {
+            guard ouvert, !deplie else { return }
+            charger()
+            deplie = true
         }
     }
 
@@ -124,18 +130,33 @@ struct RelaisModuleCard: View {
 
     // MARK: - La consigne
 
+    private func charger() {
+        (avant, apres, nom, envoi) = (module.avant, module.apres, module.nom, module.envoi)
+        avecConsigne = module.consigne == .essentielle || !avant.isEmpty || !apres.isEmpty
+    }
+
+    /// Le module tel que le panneau le règle. Un livré ne change que sa
+    /// consigne : son nom et son envoi suivent les versions (cf.
+    /// `avecLesReglagesDe`).
+    private var regle: RelaisModule {
+        var m = module
+        (m.avant, m.apres) = (avant, apres)
+        guard !module.integre else { return m }
+        let nom = nom.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !nom.isEmpty { m.nom = nom }
+        m.envoi = envoi
+        return m
+    }
+
     private var bascule: some View {
         Button {
-            if !deplie {
-                avant = module.avant
-                apres = module.apres
-                avecConsigne = module.consigne == .essentielle || !avant.isEmpty || !apres.isEmpty
-            }
+            if !deplie { charger() }
             withAnimation(.easeOut(duration: 0.18)) { deplie.toggle() }
         } label: {
             HStack(spacing: 8) {
+                let quoi = module.integre ? "la consigne" : "le module"
                 Image(systemName: "text.quote").font(.system(size: 12))
-                Text(deplie ? "Masquer la consigne" : "Modifier la consigne…")
+                Text(deplie ? "Masquer \(quoi)" : "Modifier \(quoi)…")
                     .font(.system(size: 12, weight: .medium))
                 Spacer(minLength: 0)
                 Text(module.avant.isEmpty ? "aucune" : "personnalisée")
@@ -151,11 +172,19 @@ struct RelaisModuleCard: View {
     }
 
     @ViewBuilder
-    private var consigneReglages: some View {
+    private var reglages: some View {
+        if !module.integre {
+            Row(label: "Nom") {
+                TextField("", text: $nom).textFieldStyle(.roundedBorder).frame(maxWidth: 240)
+            }
+            Row(label: "Ce qu'il écrit") {
+                PillPicker(options: RelaisEnvoi.allCases.map { ($0, $0.libelle) }, selection: $envoi)
+            }
+        }
         // Une case plutôt que deux champs toujours ouverts : la plupart des
         // modules n'ont pas de consigne, et deux zones de texte vides occupent
-        // l'écran sans rien dire.
-        if module.consigne == .facultative {
+        // l'écran sans rien dire. Rien à encadrer pour qui n'envoie rien.
+        if module.consigne == .facultative, envoi != .aucun {
             OptionCheck(title: "Ajouter une consigne autour de ce qui est dicté",
                         isOn: Binding(get: { avecConsigne },
                                       set: { actif in
@@ -163,20 +192,23 @@ struct RelaisModuleCard: View {
                                           if !actif { avant = ""; apres = "" }
                                       }))
         }
-        if avecConsigne || module.consigne == .essentielle {
+        if (avecConsigne && envoi != .aucun) || module.consigne == .essentielle {
             Note("Le texte dicté est glissé entre ces deux blocs.")
             champ("Avant", texte: $avant)
             champ("Après", texte: $apres)
         }
         ButtonRow {
-            Button("Enregistrer") {
-                var maj = module
-                maj.avant = avant
-                maj.apres = apres
-                RelaisMagasin.partage.remplacer(maj)
-            }
-            .disabled(avant == module.avant && apres == module.apres)
-            if module.integre {
+            Button("Enregistrer") { RelaisMagasin.partage.remplacer(regle) }
+                .disabled(regle == module)
+            if !module.integre {
+                Button("Supprimer…") {
+                    if RelaisDialogues.choisir("Supprimer « \(module.nom) » ?",
+                                               "Sa consigne et ses réglages seront perdus.",
+                                               ["Supprimer", "Annuler"]) == 0 {
+                        RelaisMagasin.partage.supprimer(module)
+                    }
+                }
+            } else {
                 Button("Revenir à l'origine") {
                     guard let origine = RelaisCatalogue.livres
                         .first(where: { $0.identifiant == module.identifiant })

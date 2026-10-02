@@ -10,6 +10,8 @@ import CasprCore
 /// boutons qui la pilotent n'auraient rien à piloter.
 struct RelaisReglages: View {
     @ObservedObject private var magasin = RelaisMagasin.partage
+    /// Celui qu'on vient de créer : sa carte s'ouvre sur ses réglages.
+    @State private var cree: String?
 
     var body: some View {
         // Une carte pour la session et ce que Caspr a appris, puis une carte
@@ -21,7 +23,14 @@ struct RelaisReglages: View {
 
         SectionLabel("Modules")
         ForEach(magasin.modules) { module in
-            RelaisModuleCard(module: module, selecteurs: magasin.selecteurs)
+            RelaisModuleCard(module: module, selecteurs: magasin.selecteurs, ouvert: module.id == cree)
+        }
+        // Créé tout de suite, et réglé sur sa carte, qui s'ouvre dessus : son
+        // nom, ce qu'il écrit et sa consigne y sont, l'affichage et la
+        // lecture comme pour tout module. Une fenêtre de plus pour les
+        // demander d'abord n'apprendrait rien de plus.
+        ButtonRow {
+            Button("Nouveau module…") { cree = magasin.ajouter(nom: "Nouveau module").id }
         }
 
         let depart = magasin.depart != RelaisPage.accueil

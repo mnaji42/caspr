@@ -91,4 +91,12 @@ final class RelaisMagasin: ObservableObject {
         guard let i = modules.firstIndex(where: { $0.identifiant == module.identifiant }) else { return }
         modules[i] = module
     }
+
+    /// Un module de l'utilisateur, en fin de liste (cf.
+    /// `RelaisCatalogue.ajouter`). Il rejoint la barre dès que ses capacités
+    /// sont acquises : le tuyau de dictée ne lit que ce qu'il déclare (163).
+    func ajouter(nom: String) -> RelaisModule { RelaisCatalogue.ajouter(nom: nom, a: &modules) }
+
+    /// Choisi sur la barre, il y cède la place à Brut (cf. `retenu`).
+    func supprimer(_ module: RelaisModule) { RelaisCatalogue.supprimer(module.identifiant, de: &modules) }
 }

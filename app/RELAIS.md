@@ -42,7 +42,7 @@ structure des sélecteurs, catalogue des modules), rangés dans
 | `RelaisMagasin.swift` | Ce que le relais a appris et ce qu'on en a réglé — les sélecteurs, les modules, le module choisi, le point de départ —, en mémoire et publiés : les écrans l'observent au lieu de se relire, et la page n'en garde pas de copie. Écrits sous les clés `relais.*` de toujours, relus par `RelaisCatalogue`. |
 | `RelaisCycle.swift` (dans `CasprCore`) | La machine d'une dictée, en table : ses phases (`RelaisPhase`), leur libellé et la sortie que la barre dit avec le chrono, et ce que valent la touche de dictée et la croix à chacune (`RelaisCycle.decider`), et quel échec de la page mène au repli (`RelaisCycle.replie`). Aucune ligne ne vient de l'horloge. |
 | `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. La carte de session (`RelaisSession`) est aussi celle de l'accueil, et c'est elle qui dit ce que la voie exige pour dicter. |
-| `RelaisModuleCard.swift` | Le réglage d'un module : ce qu'il fait, lu de son envoi, sa consigne, son affichage. |
+| `RelaisModuleCard.swift` | Le réglage d'un module : ce qu'il fait, lu de son envoi, sa consigne, son affichage ; pour un module de l'utilisateur, aussi son nom, son envoi, et « Supprimer… ». |
 | `RelaisCatalogue.swift` (dans `CasprCore`) | Les modules livrés, leur fusion avec ceux qu'on a rangés, celui qui est retenu, les formes d'avant (traduites une fois, par `Migration.run`), et la relecture de ce qui est rangé sous `relais.*` — un test y relit le calibrage et les modules rangés par `main`, et les fait relire par une réplique du type d'avant. |
 
 ### Ce qu'on montre pendant la dictée
@@ -90,6 +90,13 @@ modules pré-remplis :
 | **Brut** | le texte lui-même | au curseur ou en note, rien n'est envoyé |
 | **Réorganiser** | la matière à remettre en ordre | au curseur ou en note, après la réponse de ChatGPT |
 | **Discuter** | une question | nulle part : la page reste ouverte et prend le clavier |
+
+« Nouveau module… », sous la liste, en crée un qui envoie et écrit la
+réponse, et ouvre sa carte : son nom, ce qu'il écrit, sa consigne, son
+affichage et la lecture s'y règlent. Il rejoint la barre dès que
+ses capacités sont acquises, sans qu'une ligne du tuyau de dictée ne change :
+celui-ci ne lit d'un module que son envoi, `ecrit`, sa consigne, son affichage
+effectif et la lecture. Un module de l'utilisateur se supprime ; un livré, non.
 
 Un module déclare les **capacités** dont il a besoin, et une capacité ne se
 choisit pas : elle s'acquiert, par calibration ou par autorisation système. La

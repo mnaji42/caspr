@@ -72,7 +72,10 @@ peut pas les satisfaire toutes deux.
 dans l'autre rôle : cliquer une telle fenêtre n'active pas l'application, et ⌘C
 part vers celle qui l'est. La vue web passe de l'une à l'autre ; elle vit dans
 la barre par défaut, rangée hors champ — jamais retirée de l'écran, le système
-suspendant une fenêtre qu'il croit cachée.
+suspendant une fenêtre qu'il croit cachée. Rangée, elle le reste quand on
+branche ou débranche un écran : AppKit ramène sur un écran visible toute fenêtre
+qui n'est sur aucun, et la barre surgissait seule, sourde à Échap
+(`BarreRelais.rangee`). Seul `poser` la montre.
 
 ### Les modules
 

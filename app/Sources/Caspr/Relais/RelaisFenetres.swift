@@ -27,10 +27,6 @@ import CasprCore
 final class BarreRelais: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
-}
-
-extension RelaisPage {
-    // MARK: - Mesures
 
     /// Position hors champ de la fenêtre quand le relais travaille en silence.
     ///
@@ -39,7 +35,69 @@ extension RelaisPage {
     /// une WKWebView dont la fenêtre est retirée de l'écran (`orderOut`) voit
     /// son JavaScript ralenti par le système, ce qui suffirait à faire échouer
     /// l'attente de la transcription.
-    private static let horsChamp = NSPoint(x: -19_000, y: -20_000)
+    static let horsChamp = NSPoint(x: -19_000, y: -20_000)
+
+    /// Rangée hors champ, et décidée telle : rien d'autre que `poser` ne doit
+    /// la ramener à l'écran.
+    ///
+    /// Brancher ou débrancher un écran fait ramener par AppKit, sur un écran
+    /// visible, toute fenêtre qui n'est plus sur aucun — et une barre hors
+    /// champ ne l'est jamais. Le propriétaire l'a vue, capture à l'appui,
+    /// surgir seule au milieu de l'écran sans dictée en cours : pas clé, donc
+    /// sourde à Échap, elle y restait jusqu'au cycle de dictée suivant.
+    private(set) var rangee = false
+
+    override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask,
+                  backing: NSWindow.BackingStoreType, defer flag: Bool) {
+        super.init(contentRect: contentRect, styleMask: style, backing: backing, defer: flag)
+        // Le filet, si AppKit la déplace sans passer par `constrainFrameRect`.
+        let centre = NotificationCenter.default
+        centre.addObserver(self, selector: #selector(aBouge),
+                           name: NSWindow.didMoveNotification, object: self)
+        centre.addObserver(self, selector: #selector(ecransChanges),
+                           name: NSApplication.didChangeScreenParametersNotification, object: nil)
+    }
+
+    /// Hors champ, en restant à l'écran (cf. `horsChamp`). L'état vient
+    /// après le déplacement : rien ne doit croire rangée une barre qui n'y
+    /// est pas encore.
+    func ranger() {
+        setFrameOrigin(Self.horsChamp)
+        rangee = true
+    }
+
+    /// Sous les yeux. L'état tombe avant : le filet ne doit pas renvoyer hors
+    /// champ une barre qu'on montre — pas même pendant une dictée où l'on
+    /// branche un écran.
+    func poser(_ cadre: NSRect) {
+        rangee = false
+        setFrame(cadre, display: true)
+    }
+
+    /// Mesuré sur macOS 26 : un panneau sans bordure n'est pas contraint, et
+    /// `super` rend déjà `horsChamp` tel quel. Le replacement des écrans passe
+    /// donc par un autre chemin, que le filet rattrape ; ceci ne tient la
+    /// règle que si AppKit se mettait un jour à contraindre ces panneaux.
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        rangee ? frameRect : super.constrainFrameRect(frameRect, to: screen)
+    }
+
+    /// Sans boucle possible : remettre hors champ une barre qui y est déjà ne
+    /// la déplace pas.
+    @objc private func aBouge() {
+        if rangee, frame.origin != Self.horsChamp { setFrameOrigin(Self.horsChamp) }
+    }
+
+    /// Au tour suivant : AppKit replace ses fenêtres après avoir dit le
+    /// changement, et c'est ce replacement qu'il faut défaire.
+    @objc private func ecransChanges() {
+        DispatchQueue.main.async { [weak self] in self?.aBouge() }
+    }
+}
+
+extension RelaisPage {
+    // MARK: - Mesures
+
     static let enVue = NSRect(x: 200, y: 200, width: 980, height: 760)
     /// Juste la pastille de ChatGPT, et rien autour. Plus petite que la barre
     /// de Caspr : la dictée est ce qu'on regarde, le relais n'est qu'un témoin.
@@ -68,7 +126,7 @@ extension RelaisPage {
         // qui suit l'utilisateur d'un bureau à l'autre est une fenêtre dont on
         // ne se débarrasse pas.
 
-        barre = BarreRelais(contentRect: NSRect(origin: Self.horsChamp, size: Self.tailleBarre),
+        barre = BarreRelais(contentRect: NSRect(origin: BarreRelais.horsChamp, size: Self.tailleBarre),
                             styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered, defer: false)
         barre.isReleasedWhenClosed = false
@@ -219,13 +277,12 @@ extension RelaisPage {
         guard let ecran = NSScreen.main else { return }
         let cadre = ecran.visibleFrame
         let taille = compact || affichage == .rien ? Self.tailleBarre : Self.enVue.size
-        barre.setFrame(NSRect(x: cadre.midX - taille.width / 2,
-                              y: compact || affichage == .rien
-                                 ? cadre.minY + Self.hauteurBarre
-                                 : cadre.midY - taille.height / 2,
-                              width: taille.width,
-                              height: taille.height),
-                       display: true)
+        barre.poser(NSRect(x: cadre.midX - taille.width / 2,
+                           y: compact || affichage == .rien
+                              ? cadre.minY + Self.hauteurBarre
+                              : cadre.midY - taille.height / 2,
+                           width: taille.width,
+                           height: taille.height))
         barre.alphaValue = affichage == .rien ? 0 : 1
         barre.ignoresMouseEvents = affichage == .rien
         barre.orderFrontRegardless()
@@ -242,7 +299,7 @@ extension RelaisPage {
 
     /// La barre est-elle sous les yeux — posée sur un écran, et opaque ?
     ///
-    /// Elle ne se retire jamais de l'écran (cf. `horsChamp`) : `isVisible`
+    /// Elle ne se retire jamais de l'écran (cf. `BarreRelais.horsChamp`) : `isVisible`
     /// vaut vrai rangée comme affichée, et transparente pour « Rien ». Une
     /// discussion réglée sur « Barre » la laisse à l'écran après la dictée,
     /// pendant que la réponse est lue : Échap doit pouvoir la fermer, comme
@@ -267,7 +324,7 @@ extension RelaisPage {
         // à rallumer.
         barre.alphaValue = 1
         barre.ignoresMouseEvents = false
-        barre.setFrameOrigin(Self.horsChamp)
+        barre.ranger()
         barre.orderFrontRegardless()
         surAffichage?()
     }

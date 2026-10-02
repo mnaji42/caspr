@@ -189,10 +189,9 @@ public enum LegacyCleanup {
 
     /// Ce que l'installation du moteur a déposé, et qui appartient à Caspr.
     ///
-    /// La distinction qui compte est celle de `Uninstall.enginePaths`, et
-    /// pour la même raison : se tromper d'emplacement ne produit pas une
-    /// erreur, ça jette le dossier de quelqu'un d'autre. Mais la migration va
-    /// un cran plus loin dans la prudence, parce que personne ne l'a demandée :
+    /// Se tromper d'emplacement ne produit pas une erreur, ça jette le dossier
+    /// de quelqu'un d'autre. D'où trois règles, les mêmes pour la migration et
+    /// le désinstalleur, qui n'agit plus autrement :
     ///
     /// - le dossier du moteur dans « Application Support » et l'outil `uv` que
     ///   Caspr y a récupéré partent toujours — ils n'appartiennent qu'à lui ;
@@ -213,8 +212,8 @@ public enum LegacyCleanup {
         guard let project else { return found }
         // Comparé par `path`, jamais comme deux `URL` : la barre oblique finale
         // que `deletingLastPathComponent()` ajoute rend l'égalité d'URL
-        // toujours fausse — cf. `Uninstall.enginePaths`, où ce piège a laissé
-        // un dépôt survivre à la case qui promettait de le retirer.
+        // toujours fausse — ce piège a laissé, dans le désinstalleur, un dépôt
+        // survivre à la case qui promettait de le retirer.
         let clone = URL(fileURLWithPath: project).standardizedFileURL
             .deletingLastPathComponent()
         let canonical = home.appending(path: ".caspr").standardizedFileURL

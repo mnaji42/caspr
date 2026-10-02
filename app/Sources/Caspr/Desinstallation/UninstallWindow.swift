@@ -41,6 +41,10 @@ private struct UninstallView: View {
     @State private var selected: Set<Uninstall.Item> = []
     @State private var report: [String]?
     @State private var initialised = false
+    /// Ce qui est là, relevé une fois à l'ouverture : cocher une case ne
+    /// change rien au disque.
+    @State private var present: [Uninstall.Item] = []
+    @State private var details: [Uninstall.Item: String] = [:]
 
     private var title: String {
         report == nil ? "Désinstaller Caspr" : "Caspr est désinstallé"
@@ -78,7 +82,9 @@ private struct UninstallView: View {
             guard !initialised else { return }
             initialised = true
             selected = Set(Uninstall.Item.allCases)
+            present = Uninstall.Item.allCases.filter(Uninstall.isPresent)
         }
+        .task { details = await Uninstall.details() }
     }
 
     // MARK: Choix
@@ -97,7 +103,6 @@ private struct UninstallView: View {
                 // téléchargé, un service jamais installé. Une case morte n'informe
                 // pas — elle fait douter de ce qu'on a installé, à l'instant
                 // précis où l'on veut être sûr de ce qu'on efface.
-                let present = Uninstall.Item.allCases.filter(Uninstall.isPresent)
                 ForEach(present) { item in
                     VStack(alignment: .leading, spacing: 3) {
                         OptionCheck(title: item.label, isOn: Binding(
@@ -106,7 +111,7 @@ private struct UninstallView: View {
                                 if on { selected.insert(item) } else { selected.remove(item) }
                             }))
 
-                        Text(Uninstall.detail(for: item))
+                        Text(details[item] ?? "")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
                             .padding(.leading, 20)

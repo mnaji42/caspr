@@ -15,13 +15,12 @@ import CasprCore
 /// Caspr n'installe plus rien de lui-même. Mais jusqu'en septembre 2026 il
 /// savait installer un moteur local : un service lancé à l'ouverture de
 /// session, un environnement Python, des poids de un à trois gigaoctets.
-/// `Migration` les met à la corbeille au lancement ; ce désinstalleur garde
-/// pourtant de quoi les retirer, parce qu'il est le filet de qui n'aurait
-/// jamais lancé la version qui migre — une copie ancienne remplacée à la main,
-/// par exemple. Ces trois lignes n'apparaissent **que si** quelque chose
-/// reste sur le disque ; chez tous les autres, la fenêtre ne les montre pas.
-/// Les emplacements viennent de `LegacyCleanup`, la même table que la
-/// migration.
+/// `Migration` les retire à chaque lancement de cette version — celle-là même
+/// qui ouvre ce désinstalleur. Il n'en reste donc que si une corbeille a
+/// échoué, ou pendant les secondes que dure le balayage. Pour ce cas, une
+/// seule ligne, et le même geste que la migration
+/// (`Migration.retirerLesRestes`) : une seule politique de ce qui part, et
+/// jamais le dépôt de travail d'un développeur.
 ///
 /// **Rien n'est effacé définitivement : tout part à la corbeille.** C'est la
 /// convention de macOS, et surtout c'est ce qui sépare une erreur d'un
@@ -30,8 +29,8 @@ import CasprCore
 ///
 /// `@MainActor` parce que tout ce que ce type interroge l'est — les
 /// autorisations, l'historique — et qu'il n'est appelé que par une
-/// fenêtre. Les lectures de disque qu'il fait sont courtes et ponctuelles :
-/// les sortir du fil principal compliquerait sans rien gagner.
+/// fenêtre. Seules les tailles, qui parcourent des dossiers entiers, se
+/// mesurent ailleurs (cf. `details`).
 @MainActor
 enum Uninstall {
 
@@ -40,10 +39,8 @@ enum Uninstall {
     enum Item: String, CaseIterable, Identifiable {
         case settings
         case permissions
-        case service
-        case engine
-        case logs
-        case model
+        case caches
+        case restes
 
         var id: String { rawValue }
 
@@ -51,10 +48,8 @@ enum Uninstall {
             switch self {
             case .settings: "Réglages et historique"
             case .permissions: "Autorisations micro, accessibilité, dictée"
-            case .service: "Ancien moteur local — service"
-            case .engine: "Ancien moteur local — Python et ses bibliothèques"
-            case .logs: "Journaux et fichiers temporaires"
-            case .model: "Ancien moteur local — modèle"
+            case .caches: "Fichiers temporaires"
+            case .restes: "Restes de l'ancien moteur local"
             }
         }
 
@@ -67,26 +62,18 @@ enum Uninstall {
                 "Retire Caspr des Réglages Système — micro, accessibilité et "
                     + "reconnaissance vocale. Sans ça, il y reste listé alors "
                     + "qu'il n'existe plus."
-            case .service:
-                "Le service qu'une ancienne version de Caspr lançait à "
-                    + "l'ouverture de session. Plus rien ne s'en sert."
-            case .engine:
+            case .caches:
+                "Le cache de la page ChatGPT, et ceux que macOS crée sous le "
+                    + "nom de Caspr. Sans valeur une fois l'application partie."
+            case .restes:
                 // « Python » inquiète à juste titre : il faut dire lequel part,
                 // et surtout lesquels ne partent pas.
-                "L'environnement Python qu'une ancienne version de Caspr avait "
-                    + "installé — torch, transformers et l'outil `uv`, **dans "
-                    + "le dossier de Caspr** et nulle part ailleurs. Ni le "
-                    + "Python de votre système, ni celui de Homebrew, ni les "
-                    + "versions que `uv` garde pour vos autres projets ne sont "
-                    + "touchés. Plus rien ne s'en sert ; le retirer libère plus "
-                    + "d'un gigaoctet."
-            case .logs:
-                "Sans valeur une fois l'application partie."
-            case .model:
-                "Les poids que l'ancien moteur local avait téléchargés depuis "
-                    + "Hugging Face. Seuls les siens : les autres modèles du "
-                    + "cache Hugging Face ne sont pas touchés. Plus rien ne "
-                    + "s'en sert."
+                "Ce qu'une version d'avant septembre 2026 avait installé : un "
+                    + "service, un environnement Python dans le dossier de Caspr "
+                    + "ou dans `~/.caspr`, un modèle, des journaux. Caspr les "
+                    + "retire de lui-même ; s'il en reste, c'est qu'un retrait a "
+                    + "échoué. Ni le Python de votre système, ni celui de "
+                    + "Homebrew, ni un dépôt de travail ne sont touchés."
             }
         }
     }
@@ -164,108 +151,20 @@ enum Uninstall {
     private static var preferencesFile: URL {
         home.appending(path: "Library/Preferences/\(bundleIdentifier).plist")
     }
-    /// Ne contient plus, chez qui l'avait installé, que la déclaration et
-    /// l'environnement de l'ancien moteur local.
-    ///
-    /// Il n'est jamais retiré d'un bloc : ce qu'il contient appartient à des
-    /// cases différentes, et un fichier que cette version ne connaît pas n'a
-    /// pas à partir sans qu'on l'ait coché. Le dossier lui-même s'en va à la
-    /// fin, s'il ne reste rien dedans.
     private static var supportDirectory: URL {
         LegacyCleanup.supportDirectory(home: home)
     }
 
-    /// La déclaration que l'installation de l'ancien moteur local laissait :
-    /// elle dit où vit son environnement Python.
-    private static var engineDescriptor: URL {
-        LegacyCleanup.engineDescriptor(home: home)
-    }
-
-    /// Ce que l'installation de l'ancien moteur local a laissé sur la machine.
-    ///
-    /// Déduit du descripteur, jamais d'un chemin écrit en dur — et la
-    /// distinction n'est pas cosmétique ici. Se tromper d'emplacement dans un
-    /// désinstalleur ne produit pas un message d'erreur : ça met à la
-    /// corbeille le dossier de quelqu'un d'autre.
-    ///
-    /// D'où la règle sur le dépôt cloné : il ne part **que** s'il se trouve
-    /// exactement là où la commande d'installation le met, `~/.caspr`. Sur
-    /// une machine de développement, `project` désigne le dépôt de travail ;
-    /// en remonter d'un cran et le jeter effacerait le code source et tout ce
-    /// qui n'y est pas encore commité. Dans ce cas seul l'environnement
-    /// Python s'en va — c'est lui qui pèse, et lui seul se régénère.
-    ///
-    /// Plus large que `LegacyCleanup.engineLocations`, qui ne touche jamais un
-    /// dépôt de travail : la migration agit sans que personne l'ait demandé,
-    /// ce désinstalleur agit sur une case cochée.
-    private static var enginePaths: [(url: URL, label: String)] {
-        let fm = FileManager.default
-        var found: [(URL, String)] = []
-
-        // L'outil, quand c'est Caspr qui l'a récupéré. Celui de Homebrew
-        // n'est jamais touché : il n'appartient pas à cette application, et
-        // d'autres projets s'en servent.
-        let tool = supportDirectory.appending(path: "tools")
-        if fm.fileExists(atPath: tool.path) { found.append((tool, "uv")) }
-
-        guard let project = (try? Data(contentsOf: engineDescriptor))
-            .flatMap(LegacyCleanup.engineProject(descriptor:))
-        else { return found }
-        let projectURL = URL(fileURLWithPath: project).standardizedFileURL
-
-        // Installation faite depuis l'application : tout tient dans un dossier
-        // qui n'appartient qu'à Caspr, code et environnement compris.
-        let own = supportDirectory.appending(path: "engine").standardizedFileURL
-        if projectURL.path == own.path, fm.fileExists(atPath: own.path) {
-            found.append((own, "moteur Python"))
-            return found
-        }
-
-        // Installation faite au Terminal, du temps où c'était la seule voie.
-        // Le dépôt cloné ne part que s'il est exactement là où la commande le
-        // mettait — comparé par `path`, jamais comme deux `URL` :
-        // `deletingLastPathComponent()` rend « …/.caspr/ » quand
-        // `appending(path:)` rend « …/.caspr », et l'égalité d'URL porte sur
-        // la chaîne entière, barre oblique comprise. Le test échouait donc
-        // toujours, et le dépôt d'un utilisateur survivait à la case qui
-        // promettait de le retirer.
-        let clone = projectURL.deletingLastPathComponent()
-        let canonical = home.appending(path: ".caspr").standardizedFileURL
-        if clone.path == canonical.path, fm.fileExists(atPath: clone.path) {
-            found.append((clone, "moteur Python"))
-            return found
-        }
-
-        // Dépôt de travail d'un développeur : seul l'environnement s'en va.
-        // Remonter d'un cran et jeter le dossier parent effacerait le code
-        // source et tout ce qui n'y est pas commité.
-        let venv = projectURL.appending(path: ".venv")
-        if fm.fileExists(atPath: venv.path) {
-            found.append((venv, "bibliothèques Python du moteur"))
-        }
-        return found
-    }
-    /// Les journaux de l'ancien moteur local. L'application n'y écrit plus —
-    /// son journal passe par `OSLog` —, et la migration retire ce dossier au
-    /// premier lancement d'une version récente ; mais qui désinstalle sans
-    /// l'avoir lancée le retrouverait sans cette ligne.
-    private static var logsDirectory: URL {
-        home.appending(path: "Library/Logs/Caspr")
-    }
-    /// Les caches, aux trois endroits où ils atterrissent.
-    ///
-    /// `Library/Caches/caspr`, plus personne ne le crée : l'ancien moteur local
-    /// y ouvrait son socket. Il reste dans la liste pour la même raison que
-    /// les journaux. Les deux autres, macOS les fabrique dans le dos de
-    /// l'application, sous l'identifiant de bundle : un dossier de cache dès
-    /// qu'une API système en demande un — le cache disque de la page ChatGPT
-    /// y vit —, et `HTTPStorages` à la première requête réseau, c'est-à-dire
-    /// dès la première vérification de mise à jour. Ni l'un ni l'autre n'était
+    /// Les caches que macOS fabrique dans le dos de l'application, sous
+    /// l'identifiant de bundle : un dossier de cache dès qu'une API système en
+    /// demande un — le cache disque de la page ChatGPT y vit —, et
+    /// `HTTPStorages` à la première requête réseau, c'est-à-dire dès la
+    /// première vérification de mise à jour. Ni l'un ni l'autre n'était
     /// retiré, et un balayage après désinstallation les retrouvait tous les
-    /// deux. Ceux de l'ancien nom, Sofler, sont repris par la migration.
+    /// deux. Ceux de l'ancien moteur local et de l'ancien nom, Sofler, sont
+    /// des restes (cf. `restes`).
     private static var cacheDirectories: [URL] {
-        [home.appending(path: "Library/Caches/caspr"),
-         home.appending(path: "Library/Caches/\(bundleIdentifier)"),
+        [home.appending(path: "Library/Caches/\(bundleIdentifier)"),
          home.appending(path: "Library/HTTPStorages/\(bundleIdentifier)")]
     }
     /// La session ChatGPT du relais.
@@ -285,52 +184,47 @@ enum Uninstall {
         home.appending(path: "Library/WebKit/\(bundleIdentifier)")
     }
 
-    /// L'agent launchd de l'ancien moteur local — le premier des deux labels,
-    /// l'autre étant celui de l'ancien nom, que `Migration` retire déjà.
-    private static var serviceLabel: String { LegacyCleanup.agentLabels[0] }
-
-    private static var launchAgent: URL {
-        LegacyCleanup.agentPlist(serviceLabel, home: home)
-    }
-    /// Uniquement les poids de l'ancien moteur local, variante par variante,
-    /// avec leurs verrous. Le cache Hugging Face est partagé avec tout autre
-    /// projet qui utilise la bibliothèque : l'effacer en entier ferait
-    /// retélécharger des gigaoctets qui ne nous appartiennent pas.
-    private static var modelLocations: [LegacyCleanup.Location] {
-        LegacyCleanup.modelLocations(home: home)
-            .filter { FileManager.default.fileExists(atPath: $0.url.path) }
+    /// Ce que l'ancien moteur local a laissé et qui est encore là : la même
+    /// table que la migration, qui les retire au lancement.
+    private static var restes: [URL] {
+        let descriptor = LegacyCleanup.engineDescriptor(home: home)
+        let project = (try? Data(contentsOf: descriptor)).flatMap(LegacyCleanup.engineProject(descriptor:))
+        let emplacements = LegacyCleanup.agentLabels.map { LegacyCleanup.agentPlist($0, home: home) }
+            + [descriptor]
+            + (LegacyCleanup.engineLocations(home: home, project: project)
+                + LegacyCleanup.modelLocations(home: home)
+                + LegacyCleanup.otherLocations(home: home)).map(\.url)
+        return emplacements.filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
-    /// Ce que l'élément occupe, prêt à afficher. Vide s'il n'y a rien.
-    static func detail(for item: Item) -> String {
-        switch item {
-        case .settings:
-            let entries = TranscriptionHistory.storedCount
-            let base = entries > 0 ? "\(entries) transcription(s) récente(s)" : "réglages seuls"
-            // La session ChatGPT est dite, pas seulement retirée.
-            //
-            // Elle partait déjà avec les réglages, mais en silence : personne
-            // ne devine qu'une case « Réglages et historique » décide aussi
-            // d'une session ouverte sur un service tiers. Or c'est
-            // l'information qui compte le plus dans cet écran — laisser
-            // derrière soi un compte connecté est précisément ce qu'on vient y
-            // éviter, et une suppression qu'on ne voit pas ne rassure personne.
-            guard FileManager.default.fileExists(atPath: relaisSession.path) else { return base }
-            return base + ", session ChatGPT connectée"
-        case .permissions:
-            return Permissions.allGranted ? "accordées" : "partiellement accordées"
-        case .service:
-            return FileManager.default.fileExists(atPath: launchAgent.path)
-                ? "installé" : "non installé"
-        case .engine:
-            let paths = enginePaths
-            guard !paths.isEmpty else { return "déclaration seule" }
-            return size(of: paths.map(\.url))
-        case .logs:
-            return size(of: [logsDirectory] + cacheDirectories)
-        case .model:
-            return size(of: modelLocations.map(\.url))
+    /// Ce que chaque élément occupe, prêt à afficher ; vide s'il n'y a rien.
+    ///
+    /// Mesuré une fois, à l'ouverture de la fenêtre, et hors du fil
+    /// principal : les tailles parcourent des dossiers entiers, et la vue les
+    /// redemandait à chaque case cochée.
+    static func details() async -> [Item: String] {
+        let entries = TranscriptionHistory.storedCount
+        var settings = entries > 0 ? "\(entries) transcription(s) récente(s)" : "réglages seuls"
+        // La session ChatGPT est dite, pas seulement retirée.
+        //
+        // Elle partait déjà avec les réglages, mais en silence : personne
+        // ne devine qu'une case « Réglages et historique » décide aussi
+        // d'une session ouverte sur un service tiers. Or c'est
+        // l'information qui compte le plus dans cet écran — laisser
+        // derrière soi un compte connecté est précisément ce qu'on vient y
+        // éviter, et une suppression qu'on ne voit pas ne rassure personne.
+        if FileManager.default.fileExists(atPath: relaisSession.path) {
+            settings += ", session ChatGPT connectée"
         }
+        let caches = cacheDirectories
+        let restes = restes
+        let (tailleCaches, tailleRestes) = await Task.detached(priority: .userInitiated) {
+            (size(of: caches), size(of: restes))
+        }.value
+        return [.settings: settings,
+                .permissions: Permissions.allGranted ? "accordées" : "partiellement accordées",
+                .caches: tailleCaches,
+                .restes: tailleRestes]
     }
 
     /// L'élément a-t-il quelque chose à retirer ? Sinon la fenêtre ne le
@@ -340,14 +234,8 @@ enum Uninstall {
         switch item {
         case .settings: return fm.fileExists(atPath: preferencesFile.path)
         case .permissions: return true
-        case .service: return fm.fileExists(atPath: launchAgent.path)
-        case .engine:
-            return !enginePaths.isEmpty
-                || fm.fileExists(atPath: engineDescriptor.path)
-        case .logs:
-            return fm.fileExists(atPath: logsDirectory.path)
-                || cacheDirectories.contains { fm.fileExists(atPath: $0.path) }
-        case .model: return !modelLocations.isEmpty
+        case .caches: return cacheDirectories.contains { fm.fileExists(atPath: $0.path) }
+        case .restes: return !restes.isEmpty
         }
     }
 
@@ -361,29 +249,18 @@ enum Uninstall {
     static func perform(_ items: Set<Item>) -> [String] {
         var report: [String] = []
 
-        // Le service se relancerait tout seul : il part en premier, avant les
-        // fichiers dont il dépend.
-        if items.contains(.service) {
-            Commande.executer("/bin/launchctl", ["bootout", "gui/\(getuid())/\(serviceLabel)"])
-            report.append(trash(launchAgent, "service de l'ancien moteur local"))
+        // Le démon d'abord, puis ses fichiers : le geste de la migration.
+        // Cochée d'avance même absente (cf. `UninstallView`) : sans rien à
+        // retirer, rien à dire.
+        if items.contains(.restes), isPresent(.restes) {
+            report.append(Migration.retirerLesRestes(home: home)
+                ? "✓ restes de l'ancien moteur local — mis à la corbeille"
+                : "✗ restes de l'ancien moteur local — certains n'ont pas pu partir, "
+                    + "voir le journal")
         }
 
-        // Après le service, qui s'exécutait depuis cet environnement Python :
-        // le sortir d'abord évite de retirer le sol sous un processus vivant.
-        if items.contains(.engine) {
-            for path in enginePaths {
-                report.append(trash(path.url, path.label))
-            }
-            // Le descripteur part avec le moteur qu'il décrit. Laissé seul, il
-            // survivait à toute désinstallation raisonnable — et une
-            // réinstallation retrouvait une déclaration pointant vers un
-            // moteur qui n'existait plus.
-            report.append(trash(engineDescriptor, "déclaration du moteur"))
-        }
-
-        if items.contains(.logs) {
-            report.append(trash(logsDirectory, "journaux"))
-            // Un seul compte rendu pour les trois emplacements : leur nombre
+        if items.contains(.caches) {
+            // Un seul compte rendu pour les deux emplacements : leur nombre
             // est un détail d'implémentation de macOS, pas une information
             // que quelqu'un attend en désinstallant.
             let manager = FileManager.default
@@ -396,15 +273,6 @@ enum Uninstall {
             report.append(present.isEmpty
                 ? "· fichiers temporaires — rien à retirer"
                 : "✓ fichiers temporaires — mis à la corbeille")
-        }
-
-        if items.contains(.model) {
-            // Un dossier et un verrou par variante : autant de lignes
-            // identiques, qu'une seule suffit à dire.
-            let lines = modelLocations.map {
-                trash($0.url, "modèle de l'ancien moteur local")
-            }
-            report.append(contentsOf: Set(lines).sorted())
         }
 
         if items.contains(.settings) {
@@ -421,8 +289,12 @@ enum Uninstall {
                 report.append(trash(relaisSession, "session ChatGPT du relais"))
             }
             // Le démon de préférences en garde une copie en mémoire et
-            // réécrirait le fichier qu'on vient de retirer.
-            Commande.executer("/usr/bin/killall", ["cfprefsd"])
+            // réécrirait le fichier qu'on vient de retirer : on lui fait
+            // oublier ce domaine-ci. Le tuer, comme on le faisait, tuait celui
+            // de toutes les applications de la session. Après la corbeille, et
+            // non avant : vidé d'abord, le fichier n'y aurait plus rien gardé.
+            UserDefaults.standard.removePersistentDomain(forName: bundleIdentifier)
+            CFPreferencesAppSynchronize(bundleIdentifier as CFString)
         }
 
         if items.contains(.permissions) {
@@ -493,7 +365,7 @@ enum Uninstall {
         }
     }
 
-    private static func size(of urls: [URL]) -> String {
+    nonisolated private static func size(of urls: [URL]) -> String {
         var total: Int64 = 0
         for url in urls {
             guard let walker = FileManager.default.enumerator(

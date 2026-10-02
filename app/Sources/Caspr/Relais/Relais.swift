@@ -788,7 +788,18 @@ final class Relais: ObservableObject {
             // épargnée parce que visible, elle restait devant avec le clavier,
             // et les frappes suivantes partaient dans ChatGPT. Sauf celle
             // d'une discussion en cours.
-            default: if !(enDiscussion && page.estVisible) { ranger(page) }
+            //
+            // Rien n'écoute — le micro n'a pas été cliqué —, mais WebKit peut
+            // tenir le sien depuis la dictée d'avant : il est rendu, et la
+            // page préparée, comme à toute fin (15, 67) ; dans la
+            // préparation, que l'appui suivant attend avant son clic. Une
+            // page sans pont y est reconstruite au lieu d'attendre l'appui.
+            default:
+                if !(enDiscussion && page.estVisible) { ranger(page) }
+                lancerPreparation { [weak self] page in
+                    await page.rendreLeMicro()
+                    await self?.preparer(page)
+                }
             }
         }
     }

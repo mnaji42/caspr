@@ -188,6 +188,17 @@ final class Relais: ObservableObject {
         calibrationEnCours ? .calibration : dicteeEnCours ? .dictee : .libre
     }
 
+    /// Ce qui interdit de toucher à la page maintenant, s'il y a quelque
+    /// chose : un flux qui la pilote, ou une dictée macOS qui garde le micro
+    /// et devant laquelle la page ne doit pas naître (cf. `ecouteMacOS`).
+    ///
+    /// Une seule réponse pour la carte qui grise ses boutons et pour la
+    /// calibration qui refuse de partir : chacune tenait la sienne, et rien
+    /// ne les gardait d'accord.
+    var empechement: String? {
+        occupation.raison ?? (ecouteMacOS ? "Une dictée macOS est en cours." : nil)
+    }
+
     /// Une dictée ChatGPT a la page, de l'appui à la fin de son cycle — écrit
     /// par `VoieChatGPT.entrer`, et par lui seul.
     @Published var dicteeEnCours = false
@@ -919,7 +930,7 @@ final class Relais: ObservableObject {
     /// survivraient pas, et la préparation pouvait même la recharger sous la
     /// main qui désigne le micro.
     func prendrePourCalibrer() -> RelaisPage? {
-        if let refus = ecouteMacOS ? "Une dictée macOS est en cours." : occupation.raison {
+        if let refus = empechement {
             RelaisDialogues.alerter("Pas maintenant", refus + " Terminez-la avant de calibrer.")
             return nil
         }

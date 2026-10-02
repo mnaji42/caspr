@@ -110,8 +110,8 @@ struct RelaisSession: View, ValidatingComponent {
                     }
                 }
             }
-            .disabled(empechement != nil)
-            if let raison = empechement {
+            .disabled(relais.empechement != nil)
+            if let raison = relais.empechement {
                 Note(raison + " Les réglages de la page attendent qu'elle se termine.",
                      warning: true)
             }
@@ -138,7 +138,7 @@ struct RelaisSession: View, ValidatingComponent {
             ButtonRow {
                 Button("Se connecter…") { Relais.partage.ouvrirFenetre() }
             }
-            .disabled(empechement != nil)
+            .disabled(relais.empechement != nil)
         case .inconnu:
             Note("La page n'a pas encore dit si vous êtes connecté : elle le dira "
                  + "à son prochain chargement, ou à l'ouverture de sa fenêtre.")
@@ -182,14 +182,5 @@ struct RelaisSession: View, ValidatingComponent {
                 .help(acquise ? capacite.libelle : capacite.commentAcquerir)
             }
         }
-    }
-
-    /// Ce qui interdit de toucher à la page maintenant, s'il y a quelque
-    /// chose : un flux qui la pilote, ou une dictée macOS qui garde le micro
-    /// et devant laquelle la page ne doit pas naître (cf.
-    /// `Relais.ecouteMacOS`).
-    private var empechement: String? {
-        if let raison = relais.occupation.raison { return raison }
-        return relais.ecouteMacOS ? "Une dictée macOS est en cours." : nil
     }
 }

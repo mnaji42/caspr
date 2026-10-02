@@ -27,6 +27,11 @@ struct LanguagePicker: View, ValidatingComponent {
     /// Les locales qu'`SpeechTranscriber` propose ici. Vide tant que la mesure
     /// n'est pas revenue, et vide aussi quand ce moteur n'existe pas.
     @State private var systemLocales: Set<String> = []
+    /// Les langues que la Dictée sait traiter hors ligne, parmi celles
+    /// qu'`SpeechTranscriber` ne propose pas. Mesurées avec lui, une fois :
+    /// chaque question crée des reconnaisseurs, et la vue la posait pour
+    /// chaque ligne à chaque frappe dans la recherche.
+    @State private var dicteeLocales: Set<String> = []
     @State private var measured = false
 
     static func validate() -> ComponentValidationError? {
@@ -43,7 +48,12 @@ struct LanguagePicker: View, ValidatingComponent {
         // frappe dans la recherche ferait un aller-retour par caractère.
         .task {
             guard !measured else { return }
-            systemLocales = Set(await Language.systemSupportedLocales())
+            let system = Set(await Language.systemSupportedLocales())
+            let reste = Language.catalog.map(\.code).filter { !system.contains($0) }
+            dicteeLocales = await Task.detached(priority: .userInitiated) {
+                Set(reste.filter { LegacySpeechEngine.isAvailable(for: $0) })
+            }.value
+            systemLocales = system
             measured = true
         }
     }
@@ -239,8 +249,7 @@ struct LanguagePicker: View, ValidatingComponent {
         case .apple: break
         }
         if !measured { return true }
-        if systemLocales.contains(language.code) { return true }
-        return LegacySpeechEngine.isAvailable(for: language.code)
+        return systemLocales.contains(language.code) || dicteeLocales.contains(language.code)
     }
 
     private func indisponibilityReason(_ language: Language) -> String {

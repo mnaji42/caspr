@@ -75,10 +75,14 @@ public enum EngineChoice: String, CaseIterable, Sendable, Codable {
     /// La Dictée n'est donc jamais proposée comme choix : elle écrit là où
     /// Apple Intelligence ne sait pas, et seulement là. Mesurée sur 129
     /// dictées, elle avale environ 44 % des mots.
-    public static func automatic(appleReady: Bool, legacyReady: Bool,
-                                 appleNotRefused: Bool) -> EngineChoice {
+    ///
+    /// Les deux dernières questions ne se posent que si la première ne suffit
+    /// pas : chacune crée des reconnaisseurs et relit les préférences du
+    /// système, et Apple Intelligence est prête presque toujours.
+    public static func automatic(appleReady: Bool, legacyReady: @autoclosure () -> Bool,
+                                 appleNotRefused: @autoclosure () -> Bool) -> EngineChoice {
         if appleReady { return .apple }
-        if legacyReady { return .appleLegacy }
-        return appleNotRefused ? .apple : .appleLegacy
+        if legacyReady() { return .appleLegacy }
+        return appleNotRefused() ? .apple : .appleLegacy
     }
 }

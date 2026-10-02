@@ -59,10 +59,6 @@ final class VoieApple {
     /// Le niveau du micro, pour la barre.
     var niveau: Float { recorder.level }
 
-    /// La version de macOS qui écrit, choisie à l'instant sur ce que la
-    /// machine sait faire dans la langue (cf. `EngineSafetyManager`).
-    var version: EngineChoice { EngineSafetyManager.effectiveEngine }
-
     /// Ce que la barre montre sous cette voie.
     func statutDeLaBarre(peutChoisirLaNote: Bool) -> RecordingOverlay.Status {
         RecordingOverlay.Status(
@@ -118,8 +114,7 @@ final class VoieApple {
         // muet se voit ici, une transcription vide se voit plus loin.
         let crete = samples.reduce(Float(0)) { max($0, abs($1)) }
         Log.info("fin d'enregistrement : \(String(format: "%.1f", seconds)) s capturées, "
-                 + "crête \(String(format: "%.3f", crete)), "
-                 + "moteur \(version.rawValue)")
+                 + "crête \(String(format: "%.3f", crete))")
         return samples
     }
 
@@ -159,8 +154,12 @@ final class VoieApple {
     func transcrireEtLivrer(_ samples: [Float], _ dictee: DicteeEnCours,
                             langue: String, apercuConserve: @autoclosure () -> String?) async -> String? {
         let debut = ContinuousClock.now
+        // Choisie une fois, à l'instant et pour la langue de la
+        // transcription (cf. `EngineSafetyManager`) : chaque relecture
+        // recrée des reconnaisseurs. Un « Réessayer » la rechoisit.
+        let version = EngineSafetyManager.engine(for: langue)
         do {
-            let text = try await transcrire(samples, langue: langue)
+            let text = try await transcrire(samples, langue: langue, par: version)
             guard !Task.isCancelled else {
                 livraison.conserver(audio: samples, apercu: text.isEmpty ? apercuConserve() ?? apercu.texte : text,
                                     apresLeRelais: dictee.voie == .chatgpt, echec: nil)
@@ -194,7 +193,7 @@ final class VoieApple {
             }
             overlay.hide()
             try await livraison.livrer(text, dictee)
-            Log.info("transcrit en \(Log.ms(depuis: debut)) ms, \(text.count) caractères")
+            Log.info("transcrit en \(Log.ms(depuis: debut)) ms par \(version.rawValue), \(text.count) caractères")
             return nil
         } catch {
             if error is CancellationError || Task.isCancelled {
@@ -214,7 +213,7 @@ final class VoieApple {
                 return insertion.localizedDescription
             }
             let minutes = Double(samples.count) / AudioRecorder.targetSampleRate / 60
-            Log.error("échec de transcription : \(error.localizedDescription) — "
+            Log.error("échec de transcription (\(version.rawValue)) : \(error.localizedDescription) — "
                       + "\(String(format: "%.1f", minutes)) min conservées")
             livraison.conserver(audio: samples,
                                 apercu: apercuConserve() ?? apercu.texte,
@@ -224,11 +223,12 @@ final class VoieApple {
         }
     }
 
-    /// Transcrit un enregistrement avec la version retenue à l'instant.
+    /// Transcrit un enregistrement avec la version retenue.
     ///
     /// La Dictée en dernier recours : elle existe partout, et c'est elle qui
     /// dira pourquoi elle ne peut pas écrire, plutôt qu'une version absente.
-    private func transcrire(_ samples: [Float], langue: String) async throws -> String {
+    private func transcrire(_ samples: [Float], langue: String,
+                            par version: EngineChoice) async throws -> String {
         let transcripteur: any TranscripteurMacOS = switch version {
         case .apple: intelligence ?? dicteeSysteme
         case .appleLegacy: dicteeSysteme

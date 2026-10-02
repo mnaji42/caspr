@@ -139,10 +139,9 @@ final class VoieApple {
     /// insertion réussie, et « Réessayer » permet de relancer sans reparler.
     ///
     /// Elle dure une seconde d'ordinaire, des minutes quand Apple
-    /// Intelligence télécharge d'abord son modèle : la tâche qui l'appelle
-    /// peut être annulée (cf. `DictationController.interrompreLaTranscription`).
-    /// Annulée, rien n'est inséré ni affiché, et l'audio est gardé comme
-    /// après un échec — avec le texte, s'il était déjà là.
+    /// Intelligence télécharge d'abord son modèle : on peut l'interrompre
+    /// jusqu'à ce que la livraison commence (cf. `interrompre`). Interrompue,
+    /// rien n'est inséré ni affiché, et l'audio est gardé comme après un échec.
     ///
     /// `apercuConserve` : ce que l'aperçu en direct avait écrit du même audio,
     /// gardé avec lui comme second recours — celui d'un « Réessayer ». `nil`
@@ -158,18 +157,31 @@ final class VoieApple {
     /// ici : la machine a pu changer depuis.
     func transcrireEtLivrer(_ samples: [Float], _ dictee: DicteeEnCours,
                             langue: String, version: EngineChoice? = nil,
-                            apercuConserve: @autoclosure () -> String?) async -> String? {
+                            apercuConserve: @escaping @autoclosure () -> String?) async -> String? {
         let debut = ContinuousClock.now
+        let apresLeRelais = dictee.voie == .chatgpt
+        let id = UUID()
+        interruptible = (id, { [livraison, apercu] in
+            livraison.conserver(audio: samples, apercu: apercuConserve() ?? apercu.texte,
+                                apresLeRelais: apresLeRelais, echec: nil)
+        })
+        // Une transcription finie autrement — échec, texte vide — ne
+        // s'interrompt plus ; celle d'une dictée plus récente, si.
+        defer { if interruptible?.id == id { interruptible = nil } }
+        // Interrompue avant même d'avoir commencé : un « Réessayer » ou un
+        // repli dont la tâche n'avait pas encore tourné.
+        guard !Task.isCancelled else {
+            interrompre()
+            return nil
+        }
         // Choisie une fois par dictée (cf. `EngineSafetyManager`) : chaque
         // relecture recrée des reconnaisseurs.
         let version = version ?? EngineSafetyManager.engine(for: langue)
         do {
             let text = try await transcrire(samples, langue: langue, par: version)
-            guard !Task.isCancelled else {
-                livraison.conserver(audio: samples, apercu: text.isEmpty ? apercuConserve() ?? apercu.texte : text,
-                                    apresLeRelais: dictee.voie == .chatgpt, echec: nil)
-                return nil
-            }
+            // Interrompue : l'audio est déjà au menu, gardé à l'instant de
+            // l'interruption (cf. `interrompre`).
+            guard !Task.isCancelled else { return nil }
             guard !text.isEmpty else {
                 // Le dernier chemin réellement muet de l'application : le
                 // moteur répond, sans erreur, avec une chaîne vide. Rien n'est
@@ -186,7 +198,7 @@ final class VoieApple {
                 // la dictée oblige à tout redire.
                 livraison.conserver(audio: samples,
                                     apercu: apercuConserve() ?? apercu.texte,
-                                    apresLeRelais: dictee.voie == .chatgpt,
+                                    apresLeRelais: apresLeRelais,
                                     echec: "Rien n'a été entendu")
                 // Un échec et non un retour au repos : la barre renvoie au
                 // menu, et le menu affichait « Prêt ». Envoyer quelqu'un
@@ -196,17 +208,23 @@ final class VoieApple {
                     + "(\(version.fullLabel)) — "
                     + "audio conservé, « Réessayer » ci-dessous."
             }
+            // Le texte est là : ce qui suit est une livraison, plus une
+            // attente. Elle n'est plus interruptible, et Échap, sans barre à
+            // l'écran, doit revenir tout de suite à l'application où l'on
+            // colle (cf. `DictationController.ajusterEchap`).
+            interruptible = nil
+            enLivraison = true
+            surLivraison?()
+            // Sans rappel au retour : l'état que pose l'appelant juste après
+            // décide d'Échap — le reprendre entre les deux le ferait clignoter.
+            defer { enLivraison = false }
             overlay.hide()
             try await livraison.livrer(text, dictee)
             Log.info("transcrit en \(Log.ms(depuis: debut)) ms par \(version.rawValue), \(text.count) caractères")
             return nil
         } catch {
-            if error is CancellationError || Task.isCancelled {
-                Log.info("transcription interrompue — audio conservé")
-                livraison.conserver(audio: samples, apercu: apercuConserve() ?? apercu.texte,
-                                    apresLeRelais: dictee.voie == .chatgpt, echec: nil)
-                return nil
-            }
+            // Interrompue : déjà conservée, à l'instant même (cf. `interrompre`).
+            if error is CancellationError || Task.isCancelled { return nil }
             // Transcrite mais pas insérée, la dictée est dans l'historique :
             // c'est là qu'on la reprend, et non par « Réessayer » ou l'aperçu,
             // qui échoueraient pareil tant que la cause demeure. L'audio n'est
@@ -222,10 +240,35 @@ final class VoieApple {
                       + "\(String(format: "%.1f", minutes)) min conservées")
             livraison.conserver(audio: samples,
                                 apercu: apercuConserve() ?? apercu.texte,
-                                apresLeRelais: dictee.voie == .chatgpt)
+                                apresLeRelais: apresLeRelais)
             return "\(error.localizedDescription) — audio conservé, "
                 + "« Réessayer » dans le menu."
         }
+    }
+
+    /// La transcription en cours tant qu'on peut l'interrompre, et de quoi
+    /// garder son audio au menu.
+    private var interruptible: (id: UUID, conserver: () -> Void)?
+
+    /// Le texte de la transcription est en train d'être livré.
+    private(set) var enLivraison = false
+    /// Appelé quand la livraison commence.
+    var surLivraison: (() -> Void)?
+
+    /// Garde au menu l'audio de la transcription en cours, sans rien insérer ;
+    /// la tâche qui transcrit est annulée par l'appelant.
+    ///
+    /// Gardé ici, à l'instant, et non par la tâche quand elle rend la main :
+    /// rien ne garantit que le téléchargement du modèle d'Apple Intelligence
+    /// suive l'annulation. La tâche pouvait finir des minutes plus tard, et son
+    /// audio écrasait alors le recours d'une dictée faite entre-temps, avec
+    /// l'aperçu de celle-ci. Le téléchargement, lui, peut bien aller à son
+    /// terme : la dictée suivante en profitera.
+    func interrompre() {
+        guard let interruptible else { return }
+        self.interruptible = nil
+        Log.info("transcription interrompue — audio conservé")
+        interruptible.conserver()
     }
 
     /// Transcrit un enregistrement avec la version retenue.

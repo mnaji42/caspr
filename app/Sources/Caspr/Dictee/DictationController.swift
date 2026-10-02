@@ -111,8 +111,10 @@ final class DictationController {
                                               annonce: annonce, motif: motif)
             }
         }
-        // Échap suit ce que le relais montre (cf. `ajusterEchap`).
+        // Échap suit ce que le relais montre (cf. `ajusterEchap`), et la
+        // livraison d'une transcription macOS, qui cache la barre.
         Relais.partage.surAffichageChange = { [weak self] in self?.ajusterEchap() }
+        macOS.surLivraison = { [weak self] in self?.ajusterEchap() }
         // Le module du relais se choisit sur la barre, au moment de parler.
         overlay.onSelectModule = { [weak self] index in
             guard let self else { return }
@@ -235,14 +237,16 @@ final class DictationController {
             commencer()
         case .recording:
             fin = Task { await finirParMacOS() }
-        case .processing where voieDuCycle == .apple:
+        case .processing where transcriptionMacOSEnCours:
             // La touche interrompt une transcription qui s'éternise ; l'audio
             // reste au menu, et l'échec le dit.
             interrompreLaTranscription(
                 echec: "Transcription interrompue — audio conservé, « Réessayer » dans le menu.")
         case .starting, .processing:
             // Seul le dialogue d'autorisation du micro peut retenir le
-            // démarrage macOS, et il se ferme par ses propres boutons.
+            // démarrage macOS, et il se ferme par ses propres boutons. Une
+            // transcription macOS qui livre son texte ne dure qu'un instant,
+            // et l'interrompre en plein collage n'aurait pas de sens.
             break
         }
     }
@@ -293,15 +297,18 @@ final class DictationController {
             Feedback.cancelled()
             voieDuCycle = nil
             state = .idle
-        case .processing where voieDuCycle == .apple:
+        case .processing where transcriptionMacOSEnCours:
             interrompreLaTranscription(echec: nil)
         case .starting, .processing:
             break
         }
     }
 
-    /// Une transcription macOS est en cours, et peut être interrompue.
-    var transcriptionMacOSEnCours: Bool { state == .processing && voieDuCycle == .apple }
+    /// Une transcription macOS est en cours, et peut être interrompue : elle
+    /// ne livre pas encore son texte.
+    var transcriptionMacOSEnCours: Bool {
+        state == .processing && voieDuCycle == .apple && !macOS.enLivraison
+    }
 
     /// Interrompt la transcription macOS en cours, sans rien insérer.
     ///
@@ -314,6 +321,9 @@ final class DictationController {
     func interrompreLaTranscription(echec: String? = nil) {
         guard transcriptionMacOSEnCours else { return }
         Log.info("transcription macOS interrompue")
+        // L'audio d'abord, avant d'annuler : c'est l'interruption qui le
+        // garde, pas la tâche (cf. `VoieApple.interrompre`).
+        macOS.interrompre()
         fin?.cancel()
         fin = nil
         overlay.hide()
@@ -431,7 +441,8 @@ final class DictationController {
     /// ChatGPT n'a pas rendu ce texte, que le menu garde avant l'échec de
     /// macOS — la barre, elle, dit ce qui reste à faire (cf. `Livraison.conserver`).
     private func transcrireParMacOS(_ samples: [Float], _ dictee: DicteeEnCours, version: EngineChoice? = nil,
-                                    apercuConserve: @autoclosure () -> String? = nil, annonce: String? = nil,
+                                    apercuConserve: @escaping @autoclosure () -> String? = nil,
+                                    annonce: String? = nil,
                                     motif: String? = nil) async {
         state = .processing
         // Le micro est déjà rendu, à l'arrêt du magnétophone.
@@ -566,13 +577,15 @@ final class DictationController {
     /// chemin, et l'un d'eux l'oubliait toujours. Pris pendant l'écoute ; rendu
     /// pendant l'attente de ChatGPT, qui peut durer des minutes pendant qu'on
     /// travaille ailleurs ; pris pendant celle de macOS, qu'on attend des
-    /// yeux et qu'il interrompt ; au repos, pris seulement devant une discussion
+    /// yeux et qu'il interrompt, mais rendu dès qu'elle livre son texte — la
+    /// barre est alors cachée, et Échap appartient à l'application où l'on
+    /// colle ; au repos, pris seulement devant une discussion
     /// affichée (cf. `Relais.discussionAffichee`) — Caspr est alors au repos,
     /// mais une fenêtre attend qu'on en sorte.
     private func ajusterEchap() {
         let voulu = switch state {
         case .recording: true
-        case .processing: voieDuCycle == .apple
+        case .processing: transcriptionMacOSEnCours
         case .starting: false
         case .idle, .failed: Relais.partage.discussionAffichee
         }

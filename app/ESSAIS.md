@@ -745,6 +745,9 @@ de le couper.
      avec « Transcription interrompue — audio conservé ». Le menu propose
      « Réessayer avec le moteur », qui écrit le texte. Refais-le avec la croix
      de la barre, puis avec Échap : même chose, sans message d'erreur.
+     Puis une dictée de quelques mots dans un champ de texte, Échap appuyé
+     dès que la barre disparaît : le texte s'écrit, et Échap arrive au champ
+     (Caspr ne le garde que tant que la barre est là).
 
 91b. Voie macOS : pendant une dictée, connecte des AirPods (ou débranche un
      casque), puis continue de parler et arrête.

@@ -147,18 +147,10 @@ enum TargetWriter {
     /// Localise un fichier par son nom via Spotlight.
     private static func locate(fileNamed name: String,
                                preferring hints: [String]) -> URL? {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
-        task.arguments = ["-name", name]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = FileHandle.nullDevice
+        let trouves = Commande.executer("/usr/bin/mdfind", ["-name", name], sortie: true)
+        guard trouves.statut != -1 else { return nil }
 
-        guard (try? task.run()) != nil else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
-
-        let candidates = (String(data: data, encoding: .utf8) ?? "")
+        let candidates = trouves.sortie
             .split(separator: "\n")
             .map { URL(fileURLWithPath: String($0)) }
             .filter { $0.lastPathComponent == name }

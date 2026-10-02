@@ -364,8 +364,7 @@ enum Uninstall {
         // Le service se relancerait tout seul : il part en premier, avant les
         // fichiers dont il dépend.
         if items.contains(.service) {
-            runTool("/bin/launchctl",
-                    ["bootout", "gui/\(getuid())/\(serviceLabel)"])
+            Commande.executer("/bin/launchctl", ["bootout", "gui/\(getuid())/\(serviceLabel)"])
             report.append(trash(launchAgent, "service de l'ancien moteur local"))
         }
 
@@ -423,7 +422,7 @@ enum Uninstall {
             }
             // Le démon de préférences en garde une copie en mémoire et
             // réécrirait le fichier qu'on vient de retirer.
-            runTool("/usr/bin/killall", ["cfprefsd"])
+            Commande.executer("/usr/bin/killall", ["cfprefsd"])
         }
 
         if items.contains(.permissions) {
@@ -444,7 +443,7 @@ enum Uninstall {
             // rattachée à l'application, plafonnée à une seule à la fois
             // (cf. `LivePreview.reserve`), et disparaît avec elle.
             for service in ["Microphone", "Accessibility", "SpeechRecognition"] {
-                runTool("/usr/bin/tccutil", ["reset", service, bundleIdentifier])
+                Commande.executer("/usr/bin/tccutil", ["reset", service, bundleIdentifier])
             }
             report.append("✓ autorisations révoquées")
         }
@@ -492,16 +491,6 @@ enum Uninstall {
         } catch {
             return "✗ \(label) — \(error.localizedDescription)"
         }
-    }
-
-    private static func runTool(_ path: String, _ arguments: [String]) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = arguments
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try? process.run()
-        process.waitUntilExit()
     }
 
     private static func size(of urls: [URL]) -> String {

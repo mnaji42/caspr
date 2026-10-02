@@ -32,20 +32,21 @@ import Foundation
 /// droit de s'exécuter. Seule la notarisation le supprime, et elle suppose un
 /// compte Apple Developer. Ce qui est réglé ici, c'est la deuxième fois — et
 /// toutes les suivantes.
-@MainActor
+///
+/// Hors du fil principal : `xattr` est un processus qu'on attend.
 enum Quarantine {
 
-    /// Retire l'attribut du bundle courant, si présent et si on peut écrire.
+    /// Retire l'attribut de `bundle`, si présent et si on peut écrire.
+    ///
+    /// `bundle` : le bundle réellement installé (`Uninstall.appBundle`, lu sur
+    /// le fil principal), pas la copie translocalisée que macOS exécute tant
+    /// que l'attribut est là. Retirer l'attribut du fantôme ne servirait à
+    /// rien : il disparaît à la fermeture, et l'original garde le sien.
     ///
     /// Silencieux en cas d'échec : un compte sans droit d'écriture sur
     /// l'application n'y peut rien, et l'en informer au lancement serait une
     /// inquiétude pour un problème qu'il ne peut pas résoudre.
-    static func clearFromOwnBundle() {
-        // Le bundle réellement installé, pas la copie translocalisée que macOS
-        // exécute tant que l'attribut est là. Retirer l'attribut du fantôme ne
-        // servirait à rien : il disparaît à la fermeture, et l'original garde
-        // le sien. Cf. Uninstall.appBundle.
-        let bundle = Uninstall.appBundle
+    static func clear(bundle: URL) {
         guard has(bundle) else { return }
 
         let fm = FileManager.default
@@ -54,16 +55,15 @@ enum Quarantine {
             return
         }
 
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
-        task.arguments = ["-dr", "com.apple.quarantine", bundle.path]
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-        guard (try? task.run()) != nil else { return }
-        task.waitUntilExit()
-        Log.info(task.terminationStatus == 0
-                 ? "quarantaine retirée du bundle"
-                 : "quarantaine : xattr a répondu \(task.terminationStatus)")
+        let statut = retirer(de: bundle)
+        Log.info(statut == 0 ? "quarantaine retirée du bundle" : "quarantaine : xattr a répondu \(statut)")
+    }
+
+    /// Retire l'attribut de tout ce que contient `url` ; rend le statut de
+    /// `xattr`.
+    @discardableResult
+    static func retirer(de url: URL) -> Int32 {
+        Commande.executer("/usr/bin/xattr", ["-dr", "com.apple.quarantine", url.path]).statut
     }
 
     /// L'attribut est-il posé ? Vérifié avant de lancer un processus : sur une

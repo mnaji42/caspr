@@ -66,14 +66,7 @@ enum Permissions {
     /// identité, cf. scripts/make-signing-cert.sh. Ceci répare l'existant.
     @discardableResult
     static func resetAccessibility() -> Bool {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
-        task.arguments = ["reset", "Accessibility", "fr.lyriastudio.caspr"]
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-        guard (try? task.run()) != nil else { return false }
-        task.waitUntilExit()
-        return task.terminationStatus == 0
+        Commande.executer("/usr/bin/tccutil", ["reset", "Accessibility", "fr.lyriastudio.caspr"]).reussi
     }
 
     /// Résumé lisible de l'état courant, affiché dans le menu.

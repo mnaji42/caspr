@@ -220,7 +220,9 @@ final class UpdateInstaller {
 
             phase = .relaunching
             Log.info("update: \(UpdateChecker.currentVersion) → \(release.version)")
-            Self.relaunch(installed)
+            // Le temps que la fenêtre affiche « redémarrage » (cf.
+            // `Commande.relancer`).
+            Commande.relancer(installed, delai: 0.8)
         } catch {
             Log.error("update: \(error.localizedDescription)")
             phase = .failed(error.localizedDescription)
@@ -322,7 +324,7 @@ final class UpdateInstaller {
         // le dialogue « développeur non identifié » ; on l'a remplacé par un
         // contrôle plus strict — même certificat que la copie déjà installée —
         // et non par rien.
-        _ = run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", staged.path])
+        Quarantine.retirer(de: staged)
     }
 
     /// Le nouveau bundle est-il signé par la même main que celui qui tourne ?
@@ -394,61 +396,13 @@ final class UpdateInstaller {
                 ["-f", installed.path])
     }
 
-    /// Quitte, puis rouvre — dans cet ordre, et sans recouvrement.
-    ///
-    /// Un `open` lancé avant de quitter donnerait deux Caspr en même temps,
-    /// donc deux surveillances du raccourci clavier : une dictée sur deux
-    /// s'écrirait en double. Le petit veilleur ci-dessous attend simplement
-    /// que ce processus-ci ait disparu. Détaché du nôtre, il est adopté par
-    /// launchd et survit à notre sortie.
-    private static func relaunch(_ app: URL) {
-        let watcher = Process()
-        watcher.executableURL = URL(fileURLWithPath: "/bin/sh")
-        // Le PID et le chemin passent en arguments positionnels plutôt que dans
-        // le texte du script : rien à échapper, et un chemin contenant une
-        // espace ne devient pas deux mots.
-        watcher.arguments = [
-            "-c",
-            """
-            while /bin/kill -0 "$1" 2>/dev/null; do /bin/sleep 0.2; done
-            /bin/sleep 0.3
-            /usr/bin/open "$2"
-            """,
-            "caspr-relaunch",
-            String(ProcessInfo.processInfo.processIdentifier),
-            app.path,
-        ]
-        watcher.standardOutput = FileHandle.nullDevice
-        watcher.standardError = FileHandle.nullDevice
-        try? watcher.run()
-
-        // Laisse le temps à la fenêtre d'afficher « redémarrage » : une
-        // application qui disparaît sans un mot au clic d'un bouton se lit
-        // comme un plantage, pas comme une mise à jour réussie.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            NSApp.terminate(nil)
-        }
-    }
-
     // MARK: - Outils
 
     @discardableResult
     private nonisolated static func run(_ path: String, _ arguments: [String])
         -> (status: Int32, error: String) {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: path)
-        task.arguments = arguments
-        let pipe = Pipe()
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = pipe
-        guard (try? task.run()) != nil else { return (-1, "\(path) introuvable") }
-        // Lu avant d'attendre : un tube plein bloquerait le processus fils, qui
-        // ne se terminerait jamais et ferait pendre l'application.
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
-        let text = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return (task.terminationStatus, text)
+        let fait = Commande.executer(path, arguments)
+        return (fait.statut, fait.erreur)
     }
 
     // MARK: - Échecs

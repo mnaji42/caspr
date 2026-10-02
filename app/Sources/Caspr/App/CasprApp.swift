@@ -147,8 +147,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // l'image disque, rien de ce qui suit ne tiendra.
 
         // Hors du chemin critique : ça ne conditionne rien de ce lancement-ci,
-        // seulement le confort des suivants.
-        Task.detached { await MainActor.run { Quarantine.clearFromOwnBundle() } }
+        // seulement le confort des suivants. Le bundle se lit ici, sur le fil
+        // principal ; `xattr` tourne ailleurs.
+        let bundle = Uninstall.appBundle
+        Task.detached(priority: .utility) { Quarantine.clear(bundle: bundle) }
 
         // Après le reste : rien ici ne conditionne l'usage de l'application,
         // et le résultat n'arrive qu'une fois le réseau revenu.
@@ -192,7 +194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onPrimary: { [weak self] in
                 guard let self else { return }
                 if installed {
-                    relaunch(from: destination, ejecting: volume)
+                    // Éjecter compte autant que réinstaller : c'est la fenêtre
+                    // restée ouverte sur l'icône de l'image qui provoque le
+                    // double-clic au mauvais endroit.
+                    Commande.relancer(destination, ejecter: volume)
                 } else {
                     install(to: destination)
                 }
@@ -219,17 +224,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try? fm.removeItem(at: destination)
             try fm.copyItem(at: Bundle.main.bundleURL, to: destination)
             // Recopiée depuis une image téléchargée, elle hérite de la
-            // quarantaine. La retirer ici évite que la copie fraîchement
-            // installée redemande l'autorisation à chaque ouverture.
-            let strip = Process()
-            strip.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
-            strip.arguments = ["-dr", "com.apple.quarantine", destination.path]
-            try? strip.run()
-            strip.waitUntilExit()
+            // quarantaine. La retirer évite que la copie fraîchement installée
+            // redemande l'autorisation à chaque ouverture — ici, sur le fil
+            // principal, parce qu'elle doit l'être avant de se rouvrir.
+            Quarantine.retirer(de: destination)
             // L'image disque part avec : c'est elle qui laissait une fenêtre
             // ouverte sur une icône devenue inutile, et c'est cette icône qui
             // se fait double-cliquer au tour suivant.
-            relaunch(from: destination, ejecting: sourceVolume)
+            Commande.relancer(destination, ejecter: sourceVolume)
         } catch {
             let failure = NSAlert()
             failure.alertStyle = .warning
@@ -252,41 +254,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             forKeys: [.volumeURLKey, .volumeIsRemovableKey, .volumeIsReadOnlyKey])
         guard let volume = values?.volume, volume.path != "/" else { return nil }
         return (values?.volumeIsReadOnly ?? false) ? volume : nil
-    }
-
-    /// Ouvre la copie installée, éjecte l'image, et se retire.
-    ///
-    /// L'ordre est imposé par la situation : on ne peut pas éjecter un volume
-    /// depuis un processus qui s'y exécute. Un veilleur détaché attend donc
-    /// notre disparition, démonte l'image, puis ouvre la bonne copie. Adopté
-    /// par launchd, il survit à notre sortie.
-    ///
-    /// Éjecter compte autant que réinstaller : c'est la fenêtre restée ouverte
-    /// sur l'icône de l'image qui provoque le double-clic au mauvais endroit,
-    /// et la refermer supprime la question au lieu d'y répondre.
-    private func relaunch(from bundle: URL, ejecting volume: URL?) {
-        let watcher = Process()
-        watcher.executableURL = URL(fileURLWithPath: "/bin/sh")
-        watcher.arguments = [
-            "-c",
-            """
-            while /bin/kill -0 "$1" 2>/dev/null; do /bin/sleep 0.2; done
-            /bin/sleep 0.4
-            if [ -n "$3" ]; then
-                /usr/bin/hdiutil detach "$3" -quiet 2>/dev/null \
-                    || /usr/bin/hdiutil detach "$3" -force -quiet 2>/dev/null
-            fi
-            /usr/bin/open "$2"
-            """,
-            "caspr-install",
-            String(ProcessInfo.processInfo.processIdentifier),
-            bundle.path,
-            volume?.path ?? "",
-        ]
-        watcher.standardOutput = FileHandle.nullDevice
-        watcher.standardError = FileHandle.nullDevice
-        try? watcher.run()
-        NSApp.terminate(nil)
     }
 
     /// Demande le micro au lancement plutôt qu'à la première dictée.

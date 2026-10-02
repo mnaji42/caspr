@@ -87,9 +87,7 @@ final class Relais: ObservableObject {
     @Published private(set) var ecouteMacOS = false
 
     /// Une dictée macOS ouvre le micro de Caspr.
-    func macOSPrendLeMicro() {
-        ecouteMacOS = true
-    }
+    func macOSPrendLeMicro() { ecouteMacOS = true }
 
     /// Détruit, avant que le magnétophone n'écoute, la page que plus rien ne
     /// réclame.
@@ -120,11 +118,10 @@ final class Relais: ObservableObject {
     func macOSRendLeMicro() {
         guard ecouteMacOS else { return }
         ecouteMacOS = false
-        switch Preferences.shared.voie {
-        case .chatgpt: suivreLaVoie()
-        // Rien n'a été retenu : la voie macOS ne veut pas de page.
-        case .apple: break
-        }
+        // Rien sur la voie macOS : elle ne veut pas de page, et ce n'est pas
+        // l'arrêt du magnétophone qui libère celle qu'un échec a gardée (cf.
+        // `libererLaPageGardee`).
+        if voieChatGPT { suivreLaVoie() }
     }
 
     /// Détruit la page que la voie macOS ne veut plus.

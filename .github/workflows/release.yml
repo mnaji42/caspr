@@ -51,6 +51,12 @@ jobs:
             exit 1
           fi
 
+      # Un tag dont les tests échouent ne publie rien : ils ne tournaient qu'à
+      # la main, et rien n'empêchait d'oublier.
+      - name: Tester
+        working-directory: app
+        run: swift test
+
       # Sans certificat, codesign signe « ad hoc » et l'exigence désignée
       # contient le hash du binaire : elle change à chaque version, donc macOS
       # révoque l'autorisation d'accessibilité de tous les utilisateurs à
@@ -69,6 +75,16 @@ jobs:
           CERT_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
         run: |
           if [ -z "$CERT_P12" ]; then
+            # Sur un tag, c'est une erreur : la release partirait signée ad
+            # hoc, la mise à jour intégrée la refuserait (autre signature), et
+            # l'accessibilité de tous serait révoquée. Seul un lancement à la
+            # main, qui éprouve la chaîne sans rien publier, s'en contente.
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              echo "::error::Aucun certificat sur un tag : une release ad hoc" \
+                   "casserait la mise à jour intégrée et l'accessibilité de" \
+                   "tous les utilisateurs."
+              exit 1
+            fi
             echo "::warning::Aucun certificat : signature ad hoc." \
                  "Les utilisateurs devront ré-accorder l'accessibilité après" \
                  "cette mise à jour."

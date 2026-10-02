@@ -1,0 +1,39 @@
+# Les tests de CasprCore, à chaque push et à chaque pull request.
+#
+# Ils ne tournaient qu'à la main (`cd app && swift test`) : rien ne disait
+# qu'une branche les cassait avant qu'on n'y pense. La release les relance
+# aussi, avant de construire quoi que ce soit (cf. release.yml).
+name: Tests
+
+on:
+  push:
+    branches: ["main", "refonte-*"]
+  pull_request:
+
+jobs:
+  swift-test:
+    # Le même runner que la release : l'app compile contre le SDK de macOS 26.
+    runs-on: macos-26
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode le plus récent disponible
+        run: |
+          latest="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
+          swift --version
+
+      - name: Vérifier que le SDK connaît macOS 26
+        run: |
+          sdk="$(xcrun --show-sdk-version)"
+          echo "SDK macOS $sdk"
+          if [ "${sdk%%.*}" -lt 26 ]; then
+            echo "::error::SDK macOS $sdk — l'app exige le SDK 26."
+            exit 1
+          fi
+
+      - name: Construire et tester
+        working-directory: app
+        run: swift build && swift test

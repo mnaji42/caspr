@@ -493,7 +493,14 @@ de le couper.
     discussion par le menu.
 
 57. Dicte sans rien dire, pendant au moins une demi-seconde.
-    Attendu : la barre dit « Rien n'a été entendu », sans attente longue.
+    Attendu : la barre dit « Rien n'a été entendu », sans attente longue, et
+    le menu ne propose ni « Réessayer » ni « Insérer l'aperçu ». Sur la voie
+    ChatGPT, la barre peut d'abord dire « ChatGPT n'a rien transcrit —
+    transcription par macOS… » : la crête a dépassé 0,03, et macOS vérifie.
+    Dans tous les cas, note la crête de la ligne « relais : écho » du journal
+    (fais-le trois fois, dont une en appuyant fort sur la touche) : c'est la
+    mesure qui manque pour fixer `RelaisRepli.creteDeParole` au-dessus du
+    bruit d'un appui muet.
 
 58. Réglages › Historique : décoche « Conserver l'historique des dictées ».
     Rends le fichier de notes illisible : `chmod 000 ~/Desktop/notes-caspr.md`.

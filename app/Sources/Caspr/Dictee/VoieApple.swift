@@ -155,9 +155,14 @@ final class VoieApple {
     /// aperçu a suivie (cf. `DictationController.versionDuCycle`). `nil` pour
     /// un « Réessayer » ou le son d'une page ChatGPT, qui la choisissent
     /// ici : la machine a pu changer depuis.
+    ///
+    /// `silence` : le texte vide, et l'aperçu lu, prouvent-ils un appui sans
+    /// parole ? Le repli d'une zone que ChatGPT a rendue vide (cf.
+    /// `RelaisRepli.silence`) ; partout ailleurs, un vide garde l'audio.
     func transcrireEtLivrer(_ samples: [Float], _ dictee: DicteeEnCours,
                             langue: String, version: EngineChoice? = nil,
-                            apercuConserve: @escaping @autoclosure () -> String?) async -> String? {
+                            apercuConserve: @escaping @autoclosure () -> String?,
+                            silence: (String) -> Bool = { _ in false }) async -> String? {
         let debut = ContinuousClock.now
         let apresLeRelais = dictee.voie == .chatgpt
         let id = UUID()
@@ -193,11 +198,15 @@ final class VoieApple {
                 // entendu.
                 Log.error("le moteur a rendu un texte vide "
                           + "(\(version.rawValue), \(Log.ms(depuis: debut)) ms)")
+                let apercuLu = apercuConserve() ?? apercu.texte
+                if silence(apercuLu) {
+                    overlay.showFailure("Rien n'a été entendu")
+                    return "rien entendu non plus — avez-vous parlé ?"
+                }
                 // L'audio est conservé : une version mal configurée rend le
                 // vide aussi sûrement qu'un micro coupé, et dans ce cas jeter
                 // la dictée oblige à tout redire.
-                livraison.conserver(audio: samples,
-                                    apercu: apercuConserve() ?? apercu.texte,
+                livraison.conserver(audio: samples, apercu: apercuLu,
                                     apresLeRelais: apresLeRelais,
                                     echec: "Rien n'a été entendu")
                 // Un échec et non un retour au repos : la barre renvoie au

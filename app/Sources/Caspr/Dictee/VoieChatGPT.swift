@@ -25,11 +25,10 @@ final class VoieChatGPT {
     /// L'état commun, projeté par chaque phase (cf. `entrer`).
     var surEtat: (DictationController.State) -> Void = { _ in }
     /// Le repli par macOS, une fois la dictée ChatGPT finie : le son de la
-    /// page, la dictée figée, ce que la barre dira s'il aboutit, et pourquoi
-    /// on s'est passé de ChatGPT, que le menu gardera s'il échoue (cf.
-    /// `replier`).
+    /// page, la dictée figée, ce que la barre dira s'il aboutit, et l'échec
+    /// de ChatGPT qui l'a amené — `nil` pour la touche (cf. `replier`).
     var surRepliParMacOS: (_ son: [Float], _ dictee: DicteeEnCours, _ annonce: String?,
-                           _ motif: String) -> Void = { _, _, _, _ in }
+                           _ cause: RelaisErreur?) -> Void = { _, _, _, _ in }
 
     /// La phase de la dictée en cours ; `nil` hors d'une dictée ChatGPT.
     private(set) var phase: RelaisPhase?
@@ -279,11 +278,10 @@ final class VoieChatGPT {
             // dès maintenant (cf. `DictationController`) : si macOS échoue à
             // son tour, elle dira son échec à lui, et un quota atteint ne se
             // lirait plus qu'au menu.
-            let motif = RelaisRepli.motif(apres: cause)
             let echantillons = relais.prendreLeSon()
             couper()
             terminer(fin)
-            surRepliParMacOS(echantillons, dictee, annonce, motif)
+            surRepliParMacOS(echantillons, dictee, annonce, cause)
         case .inserer(let texte), .insererLApercu(let texte):
             // L'aperçu, lui, n'est au menu que si on l'y met : une insertion
             // refusée l'y retrouve, comme le brut, qui y est depuis sa lecture.

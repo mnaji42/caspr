@@ -160,4 +160,19 @@ struct RelaisRepliTests {
         #expect(RelaisRepli.annonce(.transcrireParMacOS, apres: .rienTranscrit, son: 600, parle: 600)
                 == "ChatGPT n'a rien transcrit — transcrit par macOS")
     }
+
+    /// Un appui muet dont le clic dépasse le seuil de la crête : macOS,
+    /// repris sur ce son, n'y entend rien non plus. Ce n'était qu'un
+    /// silence, qui finit sans rien au menu (34, 57).
+    @Test("Une zone vide que macOS ne transcrit pas non plus est un silence")
+    func silenceConfirmeParMacOS() {
+        #expect(RelaisRepli.silence(apres: .rienTranscrit, apercu: ""))
+        #expect(RelaisRepli.silence(apres: .rienTranscrit, apercu: " \n"))
+        // L'aperçu a écrit : une voix, que le menu garde.
+        #expect(!RelaisRepli.silence(apres: .rienTranscrit, apercu: "bonjour"))
+        // Abandonnée ou refusée, la dictée n'est pas jugée sur macOS : un vide
+        // y garde l'audio, comme partout ailleurs.
+        #expect(!RelaisRepli.silence(apres: nil, apercu: ""))
+        #expect(!RelaisRepli.silence(apres: .pageInterrompue, apercu: ""))
+    }
 }

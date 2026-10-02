@@ -45,6 +45,17 @@ public enum RelaisRepli: Equatable, Sendable {
         crete >= creteDeParole || !apercu.allSatisfy(\.isWhitespace)
     }
 
+    /// macOS, sur le son d'une zone que ChatGPT a rendue vide, n'y entend
+    /// rien non plus : deux moteurs, le même son, aucun mot. C'était un
+    /// silence que la crête a pris pour une voix — le clic de la touche, un
+    /// souffle —, et la dictée finit comme un appui sans parole : « Rien n'a
+    /// été entendu », rien au menu (34, 57). Le seuil de `parole` peut ainsi
+    /// rester bas sans qu'un appui muet laisse un son à « Réessayer ». Un
+    /// aperçu écrit prouve une voix, lui : il reste au menu, avec le son.
+    public static func silence(apres cause: RelaisErreur?, apercu: String) -> Bool {
+        cause == .rienTranscrit && apercu.allSatisfy(\.isWhitespace)
+    }
+
     /// Le brut d'abord, puis le son entier, puis l'aperçu : la transcription
     /// de macOS relit toute la phrase, l'aperçu l'a écrite en l'entendant.
     ///

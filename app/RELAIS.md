@@ -299,6 +299,7 @@ c'était possible de récupérer quand même le texte via Apple Intelligence ».
 | Ni brut ni son utilisable, mais un aperçu écrit | l'aperçu | « Aperçu de macOS inséré — … » |
 | Module qui n'écrit nulle part (Discuter) | rien ; ce qu'on a va au menu | « Gardé dans le menu de Caspr » |
 | La zone revient vide alors que la page entendait une voix (crête de l'écho de 0,03 au moins, ou un aperçu écrit) | comme un échec prouvé : le son transcrit par macOS, sinon l'aperçu, sinon le menu | « ChatGPT n'a rien transcrit — transcrit par macOS » |
+| … et macOS n'y entend rien non plus, sans aperçu écrit | rien : c'était un silence (le clic de la touche, un souffle) | « Rien n'a été entendu », rien au menu |
 | Rien du tout | le chemin d'échec, ou d'abandon, d'avant l'écho | inchangé |
 
 L'ordre est celui de `RelaisRepli.choisir` : le brut, puis le son entier,
@@ -314,8 +315,13 @@ appuyer sans parler est un geste ordinaire. Avec une voix, ce n'est pas un
 silence mais une dictée que ChatGPT a perdue — un toast d'erreur déjà
 effacé, une panne qu'il n'affiche pas —, et elle replie. Le seuil est bas,
 délibérément : un bruit pris pour une voix ne coûte qu'un passage de macOS
-sur ce bruit, une voix prise pour un bruit coûtait la dictée. La ligne de
-l'écho donne la crête de chaque dictée, de quoi l'éprouver.
+sur ce bruit, une voix prise pour un bruit coûtait la dictée. Et ce passage
+tranche : si macOS n'entend rien non plus dans ce son, sans aperçu écrit, deux
+moteurs s'accordent sur un silence, et la dictée finit comme un appui sans
+parole — « Rien n'a été entendu », rien au menu (`RelaisRepli.silence`). Le
+seuil ne décide donc que du détour par macOS, jamais de l'issue. Il n'est pas
+encore mesuré sur un appui muet : la ligne de l'écho donne la crête de chaque
+dictée, et l'essai 57 la relève.
 
 Si macOS échoue à son tour, la raison de ChatGPT reste lisible : le menu garde
 les deux (« <raison>. Repli par macOS : <échec> »), et « Réessayer » reste
@@ -770,9 +776,9 @@ find app/Sources/Caspr/Relais app/Sources/CasprCore/Relais -name '*.swift' \
 Le chiffre de chaque étape, et ce qui l'explique fichier par fichier, sont
 dans les messages de commit.
 
-À la fin de la refonte : **3 445**, pour 3 464 avant elle (2e95724) et un
-plafond visé de 2 900 ; le chemin ChatGPT avec `VoieChatGPT` (441, contre
-187) : 3 886 pour 3 651 avant elle et 3 250 visés. Le relais est sous son
+À la fin de la refonte : **3 448**, pour 3 464 avant elle (2e95724) et un
+plafond visé de 2 900 ; le chemin ChatGPT avec `VoieChatGPT` (440, contre
+187) : 3 888 pour 3 651 avant elle et 3 250 visés. Le relais est sous son
 point de départ, pas « nettement » : **sur la taille, E3 n'est pas tenu.**
 Il a gagné l'écho, le repli, la machine, les preuves et les modules qu'on
 crée, et perdu ses copies — la dernière passe a mis toutes les attentes sur

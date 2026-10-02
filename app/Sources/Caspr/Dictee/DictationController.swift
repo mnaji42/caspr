@@ -101,14 +101,16 @@ final class DictationController {
         // dictée par-dessus. L'aperçu qu'on en a lu pendant l'écoute, s'il y
         // en a eu un, reste le recours si macOS échoue — lu à l'échec, et non
         // ici : arrêté à l'instant, il finit encore d'écrire la fin.
-        chatgpt.surRepliParMacOS = { [weak self] son, dictee, annonce, motif in
+        chatgpt.surRepliParMacOS = { [weak self] son, dictee, annonce, cause in
             guard let self else { return }
             voieDuCycle = .apple
             state = .processing
+            let motif = RelaisRepli.motif(apres: cause)
             montrerLaTranscription("\(motif) — transcription par macOS…")
             fin = Task {
                 await self.transcrireParMacOS(son, dictee, apercuConserve: self.chatgpt.apercu.texte,
-                                              annonce: annonce, motif: motif)
+                                              annonce: annonce, motif: motif,
+                                              silence: { RelaisRepli.silence(apres: cause, apercu: $0) })
             }
         }
         // Échap suit ce que le relais montre (cf. `ajusterEchap`), et la
@@ -440,14 +442,16 @@ final class DictationController {
     /// de là où l'on croit (cf. `RelaisRepli.annonce`). `motif` : pourquoi
     /// ChatGPT n'a pas rendu ce texte, que le menu garde avant l'échec de
     /// macOS — la barre, elle, dit ce qui reste à faire (cf. `Livraison.conserver`).
+    /// `silence` : cf. `VoieApple.transcrireEtLivrer`.
     private func transcrireParMacOS(_ samples: [Float], _ dictee: DicteeEnCours, version: EngineChoice? = nil,
                                     apercuConserve: @escaping @autoclosure () -> String? = nil,
                                     annonce: String? = nil,
-                                    motif: String? = nil) async {
+                                    motif: String? = nil,
+                                    silence: (String) -> Bool = { _ in false }) async {
         state = .processing
         // Le micro est déjà rendu, à l'arrêt du magnétophone.
         let echec = await macOS.transcrireEtLivrer(samples, dictee, langue: language, version: version,
-                                                   apercuConserve: apercuConserve())
+                                                   apercuConserve: apercuConserve(), silence: silence)
         // Interrompue : l'état est déjà posé, et peut-être celui d'un cycle
         // ouvert depuis.
         guard !Task.isCancelled else { return }

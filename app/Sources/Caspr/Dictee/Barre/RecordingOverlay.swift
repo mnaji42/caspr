@@ -337,8 +337,8 @@ final class RecordingOverlay {
         // message qui n'en occupe qu'une.
         statusLabel.maximumNumberOfLines = 1
         statusLabel.stringValue = label
-        // Seulement devant une attente qui peut durer : celle de macOS dure
-        // une seconde, et rien ne l'interrompt.
+        // Seulement devant une attente qui se raconte, donc qui peut durer et
+        // qu'on peut interrompre — celle de ChatGPT, celle de macOS.
         waitCancelButton.isHidden = progress == nil
         panel.setContentSize(NSSize(width: Self.cardWidth,
                                     height: 2 * Self.padding + 20))

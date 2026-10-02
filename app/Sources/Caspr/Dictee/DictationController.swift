@@ -269,8 +269,6 @@ final class DictationController {
                 Feedback.cancelled()
             }
         case .recording:
-            // Une transcription macOS dure une seconde : seule l'écoute
-            // s'annule.
             macOS.annuler()
             overlay.hide()
             Feedback.cancelled()

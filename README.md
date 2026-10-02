@@ -34,7 +34,9 @@ dictation goes through it.
 | Where your voice goes | nowhere | to OpenAI, through your ChatGPT account |
 | Account | none | a ChatGPT account (email and password — Google sign-in refuses embedded pages) |
 | Internet | not needed | required |
-| Live preview while you speak | yes | no |
+| Live preview while you speak | yes | built, not yet confirmed on a real dictation (see below) |
+| Retry after a failure | yes — the recording is kept | yes — the raw transcription is kept, and the page's audio once confirmed |
+| Waiting for the result | seconds | as long as ChatGPT takes — never cut short by a timer |
 | What it adds | — | modules: raw text, reorganise, discuss |
 | Setup | a language model macOS may download | sign in, then automatic calibration |
 | What can break it | little — it is a system API | a redesign of chatgpt.com (see below) |
@@ -74,6 +76,28 @@ The instruction is **spoken**, not configured: "translate this into English"
 does not fit in a setting. If the second pass fails, you get the raw
 transcription — a ten-minute dictation is never lost — and the menu offers
 « Insérer la transcription brute de ChatGPT » to recover it after any failure.
+
+**There is no time limit.** A long dictation can take ChatGPT thirty seconds,
+or several minutes, to transcribe and answer; Caspr waits as long as it takes,
+and only stops waiting when you say so or when the page proves a failure (a
+refusal shown, the page's process killed, the session signed out). You can
+leave at any moment, instantly — the bar says how:
+
+- **the dictation key** gives up on ChatGPT and still delivers the best text
+  in hand: the raw transcription if ChatGPT has returned it, otherwise the
+  macOS transcription of the same audio (see below);
+- **the × on the bar** cancels everything and inserts nothing; whatever was in
+  hand stays in the menu.
+
+**One microphone.** While ChatGPT listens, the page holds the mic, and Caspr
+keeps an in-memory copy of the stream the page captures — never written to
+disk, unchanged and undelayed for ChatGPT, freed once the text is delivered.
+That copy is what lets macOS take over when you give up on ChatGPT, and what
+feeds a live preview while ChatGPT listens. It has been verified in a test
+harness, not yet on an installed build: until a real dictation logs the audio
+arriving (`relais : écho — N s reçues`), the app, this README and the website
+keep saying the ChatGPT path has no preview. If the copy receives nothing,
+the dictation behaves exactly as before, and the log says so.
 
 **Be clear about what this is.** Caspr drives ChatGPT's *web interface*, not
 an API. OpenAI changes that page without notice, and when a button moves, the
@@ -117,8 +141,9 @@ can be changed **without interrupting you**:
   The notes file is remembered independently, so switching back and forth
   costs one click, even mid-sentence.
 - **Module** (ChatGPT path) — raw, reorganise, discuss.
-- **Live preview** (macOS path) — what is being heard, as you speak. It
-  answers *"is the mic hearing me"*.
+- **Live preview** — what is being heard, as you speak, written by the macOS
+  engine. It answers *"is the mic hearing me"*. On the ChatGPT path it reads
+  the copy of the page's audio, once that is confirmed (see above).
 
 Destination and module are read **when the recording ends**, never when it
 starts. Pressing *Notes* halfway through a sentence sends that dictation to the
@@ -150,29 +175,52 @@ staying on the Mac.
 Either Caspr opens the microphone (macOS), or the ChatGPT page does. Never
 both: measured on the recording's peak level, **0.072 before the ChatGPT page
 existed, 0.000 on every dictation after** — the page holds the device, and
-Caspr's own capture records silence. So the two paths share nothing upstream;
-they meet at delivery:
+Caspr's own capture records silence. So the two paths share nothing upstream
+but the page's audio, copied in memory; they meet at delivery:
 
 ```
-             hotkey
-               │
-     ┌─────────┴──────────┐
-     │                    │
-┌────▼─────────────┐ ┌────▼──────────────────┐
-│  VoieApple       │ │  VoieChatGPT          │
-│  Caspr's mic →   │ │  a WKWebView drives   │
-│  Apple Intelli-  │ │  chatgpt.com: it      │
-│  gence, or the   │ │  listens, transcribes │
-│  system Dictation│ │  and may rework text  │
-└────┬─────────────┘ └────┬──────────────────┘
-     │   text             │   text
-     └─────────┬──────────┘
-          ┌────▼──────────────────────┐
-          │  Livraison                │
-          │  caret or notes file,     │
-          │  history, rescue options  │
-          └───────────────────────────┘
+                         hotkey  ·  × on the bar
+                                │
+         ┌──────────────────────┴───────────────────────────┐
+         │                                                  │
+┌────────▼─────────┐        ┌───────────────────────────────▼───────────────┐
+│  VoieApple       │        │  VoieChatGPT — a state machine (RelaisCycle)  │
+│  Caspr's mic →   │        │  demarrage → ecoute → transcription → envoi   │
+│  Apple Intelli-  │        │  → reponse → lecture → livraison              │
+│  gence, or the   │        │  one task, one generation number; the key and │
+│  system Dictation│        │  the × decide by table, never a timer         │
+└────────┬─────────┘        └──────┬──────────────────────────┬─────────────┘
+         │                         │                          │
+         │                 ┌───────▼──────────────┐   ┌───────▼──────────────┐
+         │                 │  RelaisDictee        │   │  the tee (RelaisEcho)│
+         │                 │  the scenario, on    │   │  in-memory copy of   │
+         │                 │  one wait primitive: │   │  the page's audio:   │
+         │                 │  observe the page,   │   │  live preview, and   │
+         │                 │  no deadline         │   │  macOS fallback      │
+         │                 └───────┬──────────────┘   └───────┬──────────────┘
+         │                 ┌───────▼──────────────┐           │
+         │                 │  RelaisPage + bridge │◄──────────┘
+         │                 │  a WKWebView on      │
+         │                 │  chatgpt.com, its JS │
+         │                 │  in its own world    │
+         │                 └───────┬──────────────┘
+         │   text                  │   text (or the macOS fallback)
+         └──────────────┬──────────┘
+               ┌────────▼──────────────────┐
+               │  Livraison                │
+               │  caret or notes file,     │
+               │  history, rescue options  │
+               └───────────────────────────┘
 ```
+
+The ChatGPT path is four layers, each leaning only on the one below:
+`CasprCore/Relais`, pure and tested (the machine's table, the scenario
+replayed against a fake page and a hand-driven clock, the fallback choice,
+the bridge's JavaScript, modules); the page (WebKit, no decisions); the
+page's life (created on the ChatGPT path only, prepared at the end of each
+dictation for the next one, rebuilt when frozen); and the path itself,
+`VoieChatGPT`. The details, and the rules learned the hard way, are in
+[`app/RELAIS.md`](app/RELAIS.md).
 
 ```
 caspr/
@@ -180,17 +228,20 @@ caspr/
 │   ├── RELAIS.md    what the ChatGPT path learned the hard way
 │   └── Sources/
 │       ├── CasprCore/                 pure logic, under tests
+│       │   └── Relais/        the ChatGPT path's decisions: state machine,
+│       │                      scenario, fallback, bridge JavaScript, modules
 │       └── Caspr/
 │           ├── App/          launch, menu bar, logs, permissions, migration
 │           ├── Dictee/       the cycle and where the text lands
 │           │   ├── DictationController.swift  hotkey, state, Escape
 │           │   ├── VoieApple.swift            macOS: mic, transcription
 │           │   ├── ApercuEnDirect.swift       the live preview, by the macOS engine
-│           │   ├── VoieChatGPT.swift          ChatGPT: the page listens and answers
+│           │   ├── VoieChatGPT.swift          ChatGPT: the state machine at work
 │           │   ├── Livraison.swift            insert, history, retry
 │           │   └── Barre/                     the floating bar
 │           ├── Apple/        Apple Intelligence, Dictation, their models
-│           ├── Relais/       the ChatGPT page and its calibration
+│           ├── Relais/       the ChatGPT page: WebKit, its bridge, the
+│           │                 audio tee, its life, calibration, settings
 │           ├── Reglages/     Settings, one file per tab (CarteVoie: switch paths)
 │           ├── Accueil/      the welcome window
 │           ├── MiseAJour/    updates
@@ -347,12 +398,13 @@ everyone's Accessibility grant on every update.
 | **Right ⌥** | start / stop dictation (press alone) |
 | **⌃⌥⌘D** | same, when you choose a keyboard shortcut instead |
 | **Escape** | cancel while recording (no text inserted) |
+| **×** on the bar | cancel at any moment, inserting nothing (ChatGPT path) |
 
 Tap **Right Option**, talk, tap again. Text lands at the cursor of the app you
 were in when you spoke. Holding the key for a second opens Settings. While
-ChatGPT is answering, the dictation key — not Escape — stops the wait: Escape
-is a global shortcut, and holding on to it for minutes would swallow it in
-every other app.
+ChatGPT is answering, the dictation key — not Escape — stops the wait, and
+still delivers the best text in hand: Escape is a global shortcut, and holding
+on to it for minutes would swallow it in every other app.
 
 **Why `⌃⌥⌘D`?** Three constraints narrow this down fast:
 
@@ -502,13 +554,17 @@ cd app && swift test
 ```
 
 The tests cover `CasprCore`, the logic kept free of system dependencies: the
-ChatGPT path's rules (a calibration that must still decode after an update,
-modules offered only when the page has learned what they need, the proofs an
-automatic calibration must gather before saving anything), the migration from
-the old local engine, the choice of path, text composition, version
-comparison, and the release notes the app displays. The app target itself —
-windows, the microphone, the web page — has no automated tests; it is checked
-by hand, on the installed app.
+ChatGPT path's rules (the state machine's whole table; a whole dictation
+replayed against a fake page and a hand-driven clock — five minutes of
+ChatGPT pass in an instant, and a call that never returns is abandoned in
+under 200 ms; the fallback's choices; the bridge's JavaScript, compiled and
+evaluated in JavaScriptCore; a calibration that must still decode after an
+update; modules offered only when the page has learned what they need; the
+proofs an automatic calibration must gather before saving anything), the
+migration from the old local engine, the choice of path, text composition,
+version comparison, and the release notes the app displays. The app target
+itself — windows, the microphone, the web page — has no automated tests; it
+is checked by hand, on the installed app.
 
 ---
 

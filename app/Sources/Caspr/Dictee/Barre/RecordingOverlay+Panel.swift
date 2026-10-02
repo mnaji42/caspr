@@ -366,11 +366,11 @@ extension RecordingOverlay {
     }
 
     /// Jette le panneau après un changement d'écrans, et le remonte aussitôt
-    /// si une dictée est en cours — sinon la barre disparaîtrait en plein
-    /// milieu d'une phrase.
+    /// tel qu'il était — sinon la barre disparaîtrait en plein milieu d'une
+    /// phrase, ou d'une attente qui n'a pas d'échéance.
     func rebuildForNewScreens() {
         guard panel != nil else { return }
-        let wasRecording = isRecording
+        let montre = mode
         let elapsed = startedAt
 
         stopProcessingGlow()
@@ -388,9 +388,18 @@ extension RecordingOverlay {
         tabsLayout = nil
         Log.info("écrans modifiés — panneau reconstruit")
 
-        guard wasRecording else { return }
-        showRecording(status)
-        startedAt = elapsed          // le chrono ne repart pas de zéro
+        switch montre {
+        case nil:
+            break
+        case .ecoute:
+            showRecording(status)
+            startedAt = elapsed          // le chrono ne repart pas de zéro
+        case .attente(let label, let progress):
+            showProcessing(label, progress: progress)
+        case .echec(let message, let hint):
+            // Relu cinq secondes de plus : mieux qu'un échec escamoté.
+            showFailure(message, hint: hint)
+        }
     }
 
     /// Bas de l'écran, centré — hors du regard et du texte en cours de saisie,

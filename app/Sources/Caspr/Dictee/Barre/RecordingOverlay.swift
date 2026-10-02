@@ -99,10 +99,26 @@ final class RecordingOverlay {
         var exitHint: String?
     }
 
+    /// Ce que la barre montre, retenu par chaque `show…` et oublié par
+    /// `hide` : de quoi la remonter à l'identique après un changement
+    /// d'écrans (cf. `rebuildForNewScreens`).
+    ///
+    /// On le devinait au chrono de l'écoute, que l'attente et l'échec
+    /// arrêtaient sans l'oublier : un écran branché pendant l'attente de
+    /// ChatGPT remontait une barre « en écoute… », et la touche, pressée
+    /// « pour arrêter », renonçait à ChatGPT. Après un échec, cette fausse
+    /// écoute annulait l'effacement et restait jusqu'à la dictée suivante.
+    enum Mode {
+        case ecoute
+        case attente(label: String, progress: (() -> ProcessingProgress?)?)
+        case echec(message: String, hint: String?)
+    }
+
+    private(set) var mode: Mode?
+
     var panel: NSPanel?
     private var timer: Timer?
-    /// Le battement de l'attente, distinct du chrono de l'écoute : ce dernier
-    /// dit aussi « on enregistre » (cf. `isRecording`).
+    /// Le battement de l'attente, distinct du chrono de l'écoute.
     private var processingTimer: Timer?
     private var processingProgress: (() -> ProcessingProgress?)?
     /// L'effacement différé d'un message d'échec. Annulé si une dictée
@@ -251,6 +267,7 @@ final class RecordingOverlay {
         dismissal?.cancel()
         dismissal = nil
 
+        mode = .ecoute
         startedAt = Date()
         stopProcessingGlow()
         stopProcessingProgress()
@@ -300,6 +317,8 @@ final class RecordingOverlay {
         dismissal?.cancel()
         dismissal = nil
         timer?.invalidate()
+        timer = nil
+        mode = .attente(label: label, progress: progress)
         container?.isHidden = true
         textRow?.isHidden = true
         tabsBelowCard?.isActive = false
@@ -408,6 +427,8 @@ final class RecordingOverlay {
         self.panel = panel
 
         timer?.invalidate()
+        timer = nil
+        mode = .echec(message: message, hint: hint)
         stopProcessingGlow()
         stopProcessingProgress()
         container?.isHidden = true
@@ -453,6 +474,7 @@ final class RecordingOverlay {
         dismissal = nil
         timer?.invalidate()
         timer = nil
+        mode = nil
         startedAt = nil
         stopProcessingGlow()
         stopProcessingProgress()
@@ -517,8 +539,6 @@ final class RecordingOverlay {
         processingGlow?.removeFromSuperlayer()
         processingGlow = nil
     }
-
-    var isRecording: Bool { timer != nil }
 
     func update(_ status: Status) {
         self.status = status

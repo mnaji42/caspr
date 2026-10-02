@@ -31,8 +31,8 @@ extension RelaisHorloge {
     /// LA façon d'attendre dans le relais : `juger` tous les `pas`, jusqu'à
     /// ce qu'il rende une valeur. Toutes les attentes passent par elle — la
     /// dictée (cf. `RelaisDictee.observer`), la page au repos, la
-    /// préparation que l'appui attend, le premier plan rendu, la
-    /// calibration — et chacune recopiait sa boucle, avec sa manière de
+    /// préparation que l'appui attend, le premier plan rendu, la copie de
+    /// la réponse, la calibration — et chacune recopiait sa boucle, avec sa manière de
     /// compter et de céder.
     ///
     /// Annulée, elle lève au pas suivant, ou dans l'instant si elle dort.

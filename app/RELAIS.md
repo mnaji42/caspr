@@ -127,10 +127,11 @@ rendre la valeur s'il y en a une, rendre `nil` passé la borne s'il y en a une,
 dormir un pas — annulable à chaque pas et pendant le sommeil. Sans borne,
 seule une valeur ou une erreur en sort. La dictée l'appelle par `observer`,
 la page au repos et la calibration par `RelaisPage.observer(auPlus:)`,
-l'appui qui attend la préparation et le premier plan rendu avant l'insertion
-directement. Une seule attente reste à part, et pour une raison : celle de la
-copie dans le presse-papiers, qui ne regarde pas la page et doit survivre une
-seconde à l'annulation pour défaire une copie déjà partie.
+l'appui qui attend la préparation, le premier plan rendu avant l'insertion et
+la copie dans le presse-papiers directement. La copie, qui doit survivre une
+seconde à l'annulation pour défaire une copie déjà partie, passe cette
+seconde-là sur la même primitive, dans une tâche que l'annulation n'atteint
+pas.
 
 Sur le chemin d'une dictée, `observer` : un instantané par quart de seconde,
 jusqu'à ce que `juger` rende une valeur.

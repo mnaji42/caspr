@@ -51,8 +51,8 @@ public protocol RelaisPressePapiers: AnyObject {
 /// temps. Restent les délais de geste, tous dans `RelaisDelai`.
 ///
 /// Toutes les attentes de la page passent par `observer` : une seule façon
-/// d'attendre, et une seule place pour chaque preuve. La copie seule attend
-/// aussi le presse-papiers, à sa façon (cf. `copier`).
+/// d'attendre, et une seule place pour chaque preuve. La copie attend aussi
+/// le presse-papiers, sur la même primitive (cf. `copier`).
 @MainActor
 public final class RelaisDictee {
     private let page: RelaisPageDictee
@@ -333,18 +333,18 @@ public final class RelaisDictee {
         // atterrit quand même, une fraction de seconde plus tard. Sortir
         // avant, c'était la laisser écraser le presse-papiers sans plus
         // personne pour le rendre. Il attend donc cette copie une seconde
-        // encore, la défait, et seulement alors lève.
-        var fin = horloge.maintenant + RelaisDelai.copie.duree
-        while presse.changeCount == avant {
-            if Task.isCancelled { fin = min(fin, horloge.maintenant + .seconds(1)) }
-            guard horloge.maintenant < fin else {
-                try Task.checkCancellation()
-                throw RelaisDelai.copie.erreur
-            }
-            // Le sommeil d'une tâche annulée rend la main aussitôt : on dort
-            // dans une tâche à part, que l'annulation n'atteint pas.
-            let horloge = horloge
-            await Task { try? await horloge.dormir(.milliseconds(100)) }.value
+        // encore, la défait, et seulement alors lève. Les deux attentes
+        // passent par la primitive ; la seconde dans une tâche à part, que
+        // l'annulation n'atteint pas.
+        let horloge = horloge, presse = presse
+        let copiee = { presse.changeCount != avant ? () : nil }
+        do {
+            guard try await horloge.guetter(toutes: .milliseconds(100), auPlus: RelaisDelai.copie.duree, copiee)
+                    != nil else { throw RelaisDelai.copie.erreur }
+        } catch is CancellationError {
+            _ = await Task { try? await horloge.guetter(toutes: .milliseconds(100), auPlus: .seconds(1), copiee) }.value
+            if presse.changeCount != avant { restaurer() }
+            throw CancellationError()
         }
         let texte = presse.texte() ?? ""
         restaurer()

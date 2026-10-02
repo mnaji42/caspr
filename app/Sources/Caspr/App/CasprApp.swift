@@ -3,7 +3,7 @@ import Combine
 
 /// Caspr vit dans la barre de menus, sans fenêtre ni icône au Dock.
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var hotkey: HotkeyMonitor!
     private var historyHotkey: HotkeyMonitor!
@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var reArmTimer: Timer?
     private var controller: DictationController!
     /// La discussion ChatGPT s'ouvre et se ferme sans que l'état de la
-    /// dictée change : le menu, qui en porte la sortie, doit suivre quand même.
+    /// dictée change : l'icône, qui la signale, doit suivre quand même.
     private var discussionWatch: AnyCancellable?
 
     private let preferences = PreferencesWindowController()
@@ -37,10 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         discussionWatch = Relais.partage.$enDiscussion
             .removeDuplicates()
             .dropFirst()
-            // L'icône aussi, et pas seulement le menu : c'est elle qui dit
-            // qu'un fil attend quand rien d'autre n'est à l'écran. `render`
-            // rafraîchit le menu au passage. Dans une tâche : `@Published`
-            // prévient avant d'écrire, l'état se relit un tour plus tard.
+            // L'icône : c'est elle qui dit qu'un fil attend quand rien
+            // d'autre n'est à l'écran. Dans une tâche : `@Published` prévient
+            // avant d'écrire, l'état se relit un tour plus tard.
             .sink { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
@@ -49,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Un seul menu, rempli à chaque ouverture (cf. `menuNeedsUpdate`).
+        let menu = NSMenu()
+        menu.delegate = self
+        statusItem.menu = menu
         render(.idle)
 
         // L'accueil ne connaît pas la fenêtre des Réglages, et n'a aucune
@@ -109,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // La voie peut changer depuis les Réglages, le menu ou le raccourci ;
-        // l'icône et le menu doivent suivre dans les trois cas.
+        // l'icône doit suivre dans les trois cas.
         NotificationCenter.default.addObserver(
             forName: .casprVoieChanged, object: nil, queue: .main
         ) { [weak self] _ in
@@ -124,10 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // répondu : configurer des langues et des autorisations sur une
             // copie en lecture seule serait du travail à refaire, puisque les
             // autorisations tiennent au chemin et que ce chemin va disparaître.
-            if promptToInstallIfNeeded() {
-                await refreshMenu()
-                return
-            }
+            if promptToInstallIfNeeded() { return }
             // Au premier lancement, l'accueil prend la main sur le micro : il
             // l'explique avant de le demander. Les deux en même temps feraient
             // surgir le dialogue système derrière la fenêtre d'accueil, et
@@ -137,7 +137,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 onboarding.show()
             }
-            await refreshMenu()
         }
 
         // Avant tout le reste de l'asynchrone : si l'application tourne depuis
@@ -155,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // rien : il fallait ouvrir les Réglages pour l'apprendre. Une
             // fonction qu'on active pour être prévenu ne prévenait personne.
             updateNotice.showIfNeeded()
-            if UpdateChecker.shared.newer != nil { await refreshMenu() }
+            if UpdateChecker.shared.newer != nil { render(controller.state) }
         }
     }
 
@@ -300,7 +299,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // demande-ci s'en passait, et rien ne garantissait qu'elle continue de
         // s'en passer — un chemin de moins qui puisse diverger.
         await PermissionsMonitor.shared.requestMicrophone()
-        await refreshMenu()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -370,11 +368,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.toolTip = message
             Log.error("échec : \(message)")
         }
-        Task { await refreshMenu() }
     }
 
-    private func refreshMenu() async {
-        let menu = NSMenu()
+    /// Le menu se remplit à l'ouverture, et seulement là.
+    ///
+    /// Il était reconstruit d'avance, à chaque changement d'état et après
+    /// quelques gestes : tout ce qui changeait autrement y restait figé — l'âge
+    /// d'une transcription (« à l'instant » des heures plus tard), un micro
+    /// accordé dans les Réglages Système toujours marqué refusé, un historique
+    /// effacé depuis les Réglages qu'on pouvait encore réinsérer.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        remplirMenu(menu)
+    }
+
+    private func remplirMenu(_ menu: NSMenu) {
 
         // Configuration inachevée : le menu se réduit à ce qui a du sens.
         //
@@ -400,7 +408,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(NSMenuItem(title: "Quitter Caspr",
                                     action: #selector(NSApplication.terminate(_:)),
                                     keyEquivalent: "q"))
-            statusItem.menu = menu
             return
         }
 
@@ -450,8 +457,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(dictate)
 
         // La bascule de voie, juste sous la dictée qu'elle commande. Le menu
-        // est reconstruit à chaque changement d'état et de voie : la coche
-        // dit toujours ce que fera le prochain appui.
+        // est rempli à l'ouverture : la coche dit toujours ce que fera le
+        // prochain appui.
         let voieLabel = voieShortcutActif
             ? (prefs.voieShortcut.map { "  \($0.label)" } ?? "") : ""
         let voie = NSMenuItem(title: "Écrire avec ChatGPT\(voieLabel)",
@@ -667,7 +674,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem(title: "Quitter Caspr", action: #selector(NSApplication.terminate(_:)),
                                 keyEquivalent: "q"))
-        statusItem.menu = menu
     }
 
     // MARK: - Actions
@@ -740,10 +746,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Déroule le menu de la barre de menus par programme.
     private func openMenu() {
-        Task {
-            await refreshMenu()
-            statusItem.button?.performClick(nil)
-        }
+        statusItem.button?.performClick(nil)
     }
 
     /// Option maintenue : on ouvre les réglages, et on renonce à la dictée en
@@ -786,7 +789,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         voieHotkey.unregister()
         brancherLaDictee()
         registerVoieShortcut()
-        Task { await refreshMenu() }
     }
 
     /// Branche le déclencheur de la dictée que les réglages désignent.
@@ -854,12 +856,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Écrit ce que l'aperçu avait transcrit, plutôt que de le jeter.
     @objc private func insertPreview() {
         controller.insertPendingPreview()
-        Task { await refreshMenu() }
     }
 
     @objc private func discard() {
         controller.discardPending()
-        Task { await refreshMenu() }
     }
 
     @objc private func reinsert(_ sender: NSMenuItem) {
@@ -869,7 +869,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func clearHistory() {
         controller.history.clear()
-        Task { await refreshMenu() }
     }
 
     @objc private func openMicSettings() {

@@ -36,7 +36,10 @@ struct DestinationCard: View, ValidatingComponent {
     static func validate() -> ComponentValidationError? {
         let prefs = Preferences.shared
         guard prefs.destination == .notes else { return nil }
-        return prefs.noteFile == nil ? .notesFileMissing : nil
+        // Le chemin est gardé même absent (cf. `Preferences.noteFile`) : c'est
+        // le fichier qu'on regarde.
+        let present = prefs.noteFile.map { FileManager.default.isWritableFile(atPath: $0.path) } ?? false
+        return present ? nil : .notesFileMissing
     }
 
     private var hasFile: Bool { prefs.noteFile != nil }

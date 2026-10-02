@@ -560,7 +560,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // rien d'autre ne le signale. C'est le seul filet contre une demi-heure
         // de dictée écrite dans un fichier qu'on avait oublié.
         if let url = controller.target.fileURL {
-            let locked = NSMenuItem(title: "▸ Écrit dans \(url.lastPathComponent)",
+            let introuvable = FileManager.default.isWritableFile(atPath: url.path) ? "" : " (introuvable)"
+            let locked = NSMenuItem(title: "▸ Écrit dans \(url.lastPathComponent)\(introuvable)",
                                     action: #selector(revealTarget), keyEquivalent: "")
             locked.target = self
             locked.toolTip = "\(url.path)\n\nSe change dans Réglages › Général."

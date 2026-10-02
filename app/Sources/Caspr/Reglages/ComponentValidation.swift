@@ -53,7 +53,8 @@ enum ComponentValidationError: Equatable, LocalizedError {
         case .chatgptNotCalibrated:
             "Caspr doit encore apprendre les boutons de la page ChatGPT."
         case .notesFileMissing:
-            "Choisissez le fichier dans lequel écrire."
+            "Choisissez le fichier dans lequel écrire : aucun n'est retenu, "
+                + "ou il est introuvable."
         }
     }
 }

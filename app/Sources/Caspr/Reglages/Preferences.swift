@@ -380,11 +380,12 @@ final class Preferences {
         storedPrimaryLanguage = storedPrimary.flatMap { languages.contains($0) ? $0 : nil }
             ?? languages[0]
 
-        // Un fichier supprimé ou renommé depuis la dernière session ne doit
-        // pas rester proposé comme destination : la dictée y serait perdue.
-        noteFile = defaults.string(forKey: Key.noteFile)
-            .map { URL(fileURLWithPath: $0) }
-            .flatMap { FileManager.default.isWritableFile(atPath: $0.path) ? $0 : nil }
+        // Gardé tel quel, même absent à l'instant. Un volume externe ou
+        // iCloud pas encore monté à l'ouverture de session le faisait oublier
+        // pour toute la session, et la dictée partait sans un mot au curseur.
+        // C'est l'écriture qui vérifie qu'il est là (cf.
+        // `TargetWriter.append`), et son échec garde le texte.
+        noteFile = defaults.string(forKey: Key.noteFile).map { URL(fileURLWithPath: $0) }
         // Au curseur par défaut : c'est ce qu'on attend d'une dictée, et le
         // fichier de notes suppose d'en avoir désigné un.
         destination = Destination(rawValue: defaults.string(forKey: Key.destination) ?? "")

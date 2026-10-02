@@ -43,11 +43,14 @@ enum TargetWriter {
     enum WriteError: LocalizedError {
         case notWritable(String)
         case notReadable(String)
+        case missing(String)
 
         var errorDescription: String? {
             switch self {
             case .notWritable(let name):
                 return "Écriture impossible dans \(name). Vérifier les droits du fichier."
+            case .missing(let name):
+                return "Fichier de notes introuvable : \(name)."
             case .notReadable(let name):
                 return "\(name) n'a pas pu être relu (droits, ou texte qui n'est "
                     + "pas en UTF-8) : rien n'y a été écrit."
@@ -56,18 +59,22 @@ enum TargetWriter {
     }
 
     static func append(_ text: String, to url: URL) throws {
-        // Un fichier absent part de rien ; un fichier présent qu'on ne sait
-        // pas relire, jamais. Le `try?` qui les confondait rendait une chaîne
-        // vide pour un fichier illisible — encodé autrement qu'en UTF-8, ou
-        // aux droits retirés —, et l'écriture atomique qui suit le
-        // remplaçait alors tout entier par la seule dictée.
-        let existing: String
-        if FileManager.default.fileExists(atPath: url.path) {
-            do { existing = try String(contentsOf: url, encoding: .utf8) }
-            catch { throw WriteError.notReadable(url.lastPathComponent) }
-        } else {
-            existing = ""
+        // Un fichier absent n'est jamais recréé : on ne désigne que des
+        // fichiers qui existent, et l'absence dit qu'il a été supprimé, ou que
+        // son volume n'est pas monté — l'écrire recréerait un fichier jeté, ou
+        // l'écrirait sous un /Volumes vide. L'échec garde le texte dans
+        // l'historique.
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw WriteError.missing(url.lastPathComponent)
         }
+        // Un fichier qu'on ne sait pas relire, jamais non plus. Le `try?` qui
+        // le confondait avec un fichier vide rendait une chaîne vide pour un
+        // fichier illisible — encodé autrement qu'en UTF-8, ou aux droits
+        // retirés —, et l'écriture atomique qui suit le remplaçait alors tout
+        // entier par la seule dictée.
+        let existing: String
+        do { existing = try String(contentsOf: url, encoding: .utf8) }
+        catch { throw WriteError.notReadable(url.lastPathComponent) }
         let updated = TextComposition.appending(text, to: existing)
         guard updated != existing else { return }
         do {

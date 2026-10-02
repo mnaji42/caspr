@@ -16,8 +16,7 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
                  type: WKMediaCaptureType,
                  decisionHandler: @escaping (WKPermissionDecision) -> Void) {
         let hote = origin.host
-        let autorise = hote == "chatgpt.com" || hote.hasSuffix(".chatgpt.com")
-                    || hote == "openai.com"  || hote.hasSuffix(".openai.com")
+        let autorise = Self.estChatGPT(hote: hote) || hote == "openai.com" || hote.hasSuffix(".openai.com")
         decisionHandler(autorise ? .grant : .deny)
     }
 

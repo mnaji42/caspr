@@ -8,10 +8,12 @@ final class RelaisPage: NSObject {
     /// Ce que le relais sait de la session, à un instant donné.
     enum Connexion { case connecte, deconnecte, inconnu }
 
-    static func estChatGPT(_ url: URL) -> Bool {
-        guard let hote = url.host() else { return false }
-        return hote == "chatgpt.com" || hote.hasSuffix(".chatgpt.com")
-    }
+    static func estChatGPT(_ url: URL) -> Bool { url.host().map(estChatGPT(hote:)) ?? false }
+
+    /// La seule définition de « chez ChatGPT » : le point de départ, le micro
+    /// accordé et l'écho la lisent tous trois, et trois copies d'une règle
+    /// de sécurité finissent par ne plus dire la même chose.
+    static func estChatGPT(hote: String) -> Bool { hote == "chatgpt.com" || hote.hasSuffix(".chatgpt.com") }
 
     static let accueil = URL(string: "https://chatgpt.com/")!
 

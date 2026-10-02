@@ -158,9 +158,8 @@ final class RelaisEcho {
         // Les popups de connexion partagent la configuration, donc ce
         // gestionnaire : seul le cadre principal de la page, sur chatgpt.com,
         // est entendu.
-        let hote = message.frameInfo.securityOrigin.host
         guard arme, message.frameInfo.isMainFrame, message.webView === webView,
-              hote == "chatgpt.com" || hote.hasSuffix(".chatgpt.com"),
+              RelaisPage.estChatGPT(hote: message.frameInfo.securityOrigin.host),
               let corps = message.body as? String, corps.utf8.count <= 64 * 1024 else { return }
         if corps.hasPrefix("{") {
             // Fusionné : le statut d'un appel à getUserMedia, sans contexte,

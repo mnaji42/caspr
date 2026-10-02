@@ -1,5 +1,6 @@
 import AppKit
 import CasprCore
+import Observation
 
 /// Les dernières transcriptions, pour les réinsérer sans reparler.
 ///
@@ -9,7 +10,13 @@ import CasprCore
 /// Seul le **texte** est conservé, jamais l'audio. Le stockage passe par les
 /// préférences de l'app : effacer une entrée la supprime réellement, sans
 /// fichier résiduel ni passage par la corbeille.
+///
+/// Observable : l'onglet Historique lit l'historique lui-même. Il en tenait
+/// une copie, reprise à l'ouverture et après chacun de ses propres gestes —
+/// une dictée faite l'onglet ouvert, ou « Effacer » depuis le menu, n'y
+/// apparaissait pas avant d'en changer.
 @MainActor
+@Observable
 final class TranscriptionHistory {
     /// Le format écrit vit dans CasprCore, où il est testé : il doit se
     /// relire dans les versions d'avant comme dans celles d'après.

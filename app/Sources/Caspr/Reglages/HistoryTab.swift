@@ -2,40 +2,25 @@ import AppKit
 import SwiftUI
 
 /// Les dernières transcriptions, et ce qu'on en garde.
+///
+/// L'historique est lu directement, et non recopié (cf.
+/// `TranscriptionHistory`) : une dictée faite l'onglet ouvert s'y ajoute.
 struct HistoryTab: View {
-    let history: TranscriptionHistory
-    @State private var entries: [TranscriptionHistory.Entry] = []
+    @Bindable var history: TranscriptionHistory
     /// Le bouton qui vient de copier : l'entrée, ou sa transcription brute.
     @State private var justCopied: String?
-    @State private var enabled = true
-    @State private var limit = TranscriptionHistory.defaultLimit
 
     var body: some View {
         SettingsToggleRow(
             title: "Conserver l'historique des dictées",
             description: "Garde en mémoire vos dernières transcriptions locales "
                 + "pour les réutiliser sans reparler.",
-            note: enabled ? nil
+            note: history.isEnabled ? nil
                 : "Rien n'est écrit. Les transcriptions passées ne sont pas "
                   + "conservées, même localement.",
-            isOn: $enabled)
-            .onChange(of: enabled) { _, on in
-                history.isEnabled = on
-                entries = history.entries
-            }
-            // Lu à l'ouverture, sinon jamais. Les trois états partaient de
-            // valeurs par défaut et n'étaient repris de l'historique qu'au
-            // basculement d'un réglage : la page s'ouvrait donc sur « Aucune
-            // transcription » alors que le menu de la barre en listait cinq,
-            // et le nombre d'entrées conservées affichait le défaut plutôt que
-            // le réglage en vigueur.
-            .onAppear {
-                enabled = history.isEnabled
-                limit = history.limit
-                entries = history.entries
-            }
+            isOn: $history.isEnabled)
 
-        if enabled {
+        if history.isEnabled {
             AccentCard {
                 capacityRow
                 Divider().opacity(0.25)
@@ -57,7 +42,7 @@ struct HistoryTab: View {
                 Text("Nombre d'entrées conservées")
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(.white)
-                Text(.init("Caspr conserve uniquement les **\(limit)** "
+                Text(.init("Caspr conserve uniquement les **\(history.limit)** "
                            + "dernières dictées. Les plus anciennes sont "
                            + "écrasées."))
                     .font(.system(size: 11))
@@ -66,18 +51,14 @@ struct HistoryTab: View {
             }
             Spacer(minLength: 0)
             PillPicker(options: TranscriptionHistory.limits.map { ($0, "\($0)") },
-                       selection: $limit)
-                .onChange(of: limit) { _, new in
-                    // Réduire tronque, ça n'efface pas — cf. `TranscriptionHistory`.
-                    history.limit = new
-                    entries = history.entries
-                }
+                       // Réduire tronque, ça n'efface pas — cf. `TranscriptionHistory`.
+                       selection: $history.limit)
         }
     }
 
     @ViewBuilder
     private var list: some View {
-        if entries.isEmpty {
+        if history.entries.isEmpty {
             Text("Aucune transcription dans l'historique pour l'instant.")
                 .font(.system(size: 12))
                 .foregroundStyle(Style.textTertiary)
@@ -85,7 +66,7 @@ struct HistoryTab: View {
                 .padding(.vertical, 12)
         } else {
             VStack(spacing: 2) {
-                ForEach(entries) { entry in
+                ForEach(history.entries) { entry in
                     row(entry)
                 }
             }
@@ -169,9 +150,8 @@ struct HistoryTab: View {
 
     private var footerRow: some View {
         HStack {
-            DangerLink("Effacer l'historique", enabled: !entries.isEmpty) {
+            DangerLink("Effacer l'historique", enabled: !history.entries.isEmpty) {
                 history.clear()
-                entries = []
             }
             Spacer()
             Text("Seul le texte est conservé · 0 Mo d'audio stocké")

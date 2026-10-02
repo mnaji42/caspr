@@ -336,7 +336,8 @@ relais entre les deux mondes, la CSP —, pas encore par une ligne
 manque, la carte de la voie, le README et le site continuent de dire que la
 voie ChatGPT n'a pas d'aperçu ; la première dictée qui la montre les rend
 fausses. Sans elle, rien ne casse : un écho muet ramène la dictée à ce
-qu'elle était avant lui.
+qu'elle était avant lui. Les essais 26 à 30 d'`ESSAIS.md` sont ceux qui le
+prouvent, ou non ; le repli, la croix et l'aperçu en dépendent.
 
 ## Ce qu'on montre pendant la dictée
 
@@ -737,3 +738,23 @@ find app/Sources/Caspr/Relais app/Sources/CasprCore/Relais -name '*.swift' \
 
 Le chiffre de chaque étape, et ce qui l'explique fichier par fichier, sont
 dans les messages de commit.
+
+À la fin de la refonte : **3 464**, autant qu'avant elle (2e95724), pour un
+plafond visé de 2 900 ; le chemin ChatGPT avec `VoieChatGPT` : 3 898 pour
+3 250. Le relais a gagné l'écho, le repli, la machine, les preuves et les
+modules qu'on crée, et perdu ses copies ; ce qui reste ne se retire plus
+qu'en retirant une fonction — une décision, pas un nettoyage. Les ordres de
+grandeur, en lignes mesurées :
+
+| Retirer… | ≈ lignes | Ce qu'on perd |
+|---|---|---|
+| le parcours automatique de la calibration | 350 | six clics par calibration, accueil compris |
+| ou le parcours manuel des cinq repères | 150 | le repli quand l'automate ne sait pas lire la page |
+| la lecture à haute voix | 125 | les modules qui parlent (+ ≈ 12 dans `VoieChatGPT`) |
+| le point de départ (projet dédié) | 45 | les conversations de Caspr rangées à part |
+| la migration des formats d'avant la 0.15 | 45 | la mise à jour depuis la 0.14 et avant |
+| le diagnostic | 23 | « sur quoi as-tu cliqué ? » sans recalibrer |
+
+Sous 2 900, il faut par exemple l'automatique, la lecture, le point de
+départ, la migration et le diagnostic (≈ 590, vers 2 875). Avec le manuel à
+la place de l'automatique, on reste vers 3 075.

@@ -42,17 +42,32 @@ enum DictationTarget: Equatable {
 enum TargetWriter {
     enum WriteError: LocalizedError {
         case notWritable(String)
+        case notReadable(String)
 
         var errorDescription: String? {
             switch self {
             case .notWritable(let name):
                 return "Écriture impossible dans \(name). Vérifier les droits du fichier."
+            case .notReadable(let name):
+                return "\(name) n'a pas pu être relu (droits, ou texte qui n'est "
+                    + "pas en UTF-8) : rien n'y a été écrit."
             }
         }
     }
 
     static func append(_ text: String, to url: URL) throws {
-        let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        // Un fichier absent part de rien ; un fichier présent qu'on ne sait
+        // pas relire, jamais. Le `try?` qui les confondait rendait une chaîne
+        // vide pour un fichier illisible — encodé autrement qu'en UTF-8, ou
+        // aux droits retirés —, et l'écriture atomique qui suit le
+        // remplaçait alors tout entier par la seule dictée.
+        let existing: String
+        if FileManager.default.fileExists(atPath: url.path) {
+            do { existing = try String(contentsOf: url, encoding: .utf8) }
+            catch { throw WriteError.notReadable(url.lastPathComponent) }
+        } else {
+            existing = ""
+        }
         let updated = TextComposition.appending(text, to: existing)
         guard updated != existing else { return }
         do {

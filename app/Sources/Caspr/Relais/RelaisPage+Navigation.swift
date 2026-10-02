@@ -62,12 +62,8 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if webView === self.webView { chargementEnCours = false }
-        guard webView === self.webView else {
-            // Un popup a fini de naviguer : la connexion a pu aboutir dans la
-            // fenêtre principale sans qu'elle en soit informée.
-            Task { await rafraichirEtiquette() }
-            return
-        }
+        // Aussi quand c'est un popup qui a fini de naviguer : la connexion a
+        // pu aboutir dans la fenêtre principale sans qu'elle en soit informée.
         Task { await rafraichirEtiquette() }
     }
 

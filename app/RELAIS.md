@@ -39,11 +39,11 @@ structure des sélecteurs, catalogue des modules), rangés dans
 | `RelaisErreur.swift` (dans `CasprCore`) | Ce qui peut échouer, et comment la barre et le menu le disent. |
 | `RelaisScripts.swift` (dans `CasprCore`) | Le JavaScript injecté — le pont (cliquer, lire, vider, et un seul guetteur de clic pour calibrer, `guetter`) et l'écho —, en chaînes Swift pour que les tests l'atteignent : une faute de syntaxe casse `swift test` au lieu de laisser la page sans pont. |
 | `RelaisCalibrationAuto.swift` | Le parcours de la calibration automatique : essayer les boutons, ne retenir que ceux dont l'effet se voit. Il rend des preuves (`RelaisPreuves`, dans `CasprCore`) ; c'est `RelaisCalibration` qui enregistre. |
-| `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
+| `RelaisMagasin.swift` | Ce que le relais a appris et ce qu'on en a réglé — les sélecteurs, les modules, le module choisi, le point de départ —, en mémoire et publiés : les écrans l'observent au lieu de se relire, et la page n'en garde pas de copie. Écrits sous les clés `relais.*` de toujours, relus par `RelaisCatalogue`. |
 | `RelaisCycle.swift` (dans `CasprCore`) | La machine d'une dictée, en table : ses phases (`RelaisPhase`), leur libellé et la sortie que la barre dit avec le chrono, et ce que valent la touche de dictée et la croix à chacune (`RelaisCycle.decider`), et quel échec de la page mène au repli (`RelaisCycle.replie`). Aucune ligne ne vient de l'horloge. |
 | `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. La carte de session (`RelaisSession`) est aussi celle de l'accueil, et c'est elle qui dit ce que la voie exige pour dicter. |
 | `RelaisModuleCard.swift` | Le réglage d'un module : ce qu'il fait, lu de son envoi, sa consigne, son affichage. |
-| `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
+| `RelaisCatalogue.swift` (dans `CasprCore`) | Les modules livrés, leur fusion avec ceux qu'on a rangés, celui qui est retenu, les formes d'avant (traduites une fois, par `Migration.run`), et la relecture de ce qui est rangé sous `relais.*` — un test y relit le calibrage et les modules rangés par `main`, et les fait relire par une réplique du type d'avant. |
 
 ### Ce qu'on montre pendant la dictée
 
@@ -247,8 +247,8 @@ distingue de la voie macOS, et pourquoi.
   comme un « Réessayer ». Le pendant de `VoieApple.swift`, qui ne partage avec
   elle que la livraison.
 - **`DicteeEnCours.swift`** — le module et la destination, figés à l'arrêt de
-  l'écoute et portés jusqu'à la livraison : `RelaisCatalogue.courant` relit
-  les préférences à chaque accès, et l'aller-retour ChatGPT sépare les
+  l'écoute et portés jusqu'à la livraison : le module retenu suit la
+  pastille de la barre à chaque instant, et l'aller-retour ChatGPT sépare les
   lectures de plusieurs minutes.
 - **`Livraison.swift`** — la queue commune aux deux voies : insérer au curseur
   ou dans les notes, l'historique. Et le retour à l'application où l'on

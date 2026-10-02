@@ -222,7 +222,7 @@ final class Relais: ObservableObject {
         return neuve
     }
 
-    var estCalibre: Bool { RelaisSelecteurs.charger().estCalibre }
+    var estCalibre: Bool { RelaisMagasin.partage.selecteurs.estCalibre }
 
     /// La session ChatGPT telle que la page l'a montrée en dernier.
     ///
@@ -530,7 +530,7 @@ final class Relais: ObservableObject {
         // La préparation a reconstruit une page muette : la barre que l'appui
         // avait ouverte était celle de l'ancienne, et la neuve, rangée hors
         // champ, verrait ses rendus différés — le bouton d'arrêt avec eux.
-        if let avant, page !== avant { afficherBarre(module: RelaisCatalogue.courant) }
+        if let avant, page !== avant { afficherBarre(module: RelaisMagasin.partage.retenu) }
         return scenario(try pageActive())
     }
 
@@ -793,14 +793,13 @@ final class Relais: ObservableObject {
     /// la main l'URL d'un projet ChatGPT sans se tromper, et elle est sous les
     /// yeux de qui vient d'y naviguer.
     func adopterPageDeDepart() {
-        guard let page, let url = page.adresseCourante, RelaisPage.estChatGPT(url) else {
+        guard let url = page?.adresseCourante, RelaisMagasin.partage.adopter(url) else {
             RelaisDialogues.alerter("Point de départ",
                          "Ouvrez d'abord la fenêtre du relais et allez sur la page "
                          + "ChatGPT que vous voulez utiliser — un projet dédié, par "
                          + "exemple.")
             return
         }
-        RelaisPage.depart = url
         RelaisDialogues.alerter("Point de départ enregistré", """
             Les conversations créées par Caspr partiront désormais de cette page :
 
@@ -813,12 +812,10 @@ final class Relais: ObservableObject {
     }
 
     func oublierPageDeDepart() {
-        RelaisPage.reinitialiserDepart()
+        RelaisMagasin.partage.revenirALAccueil()
         RelaisDialogues.alerter("Point de départ",
                      "Retour à la page d'accueil de ChatGPT.")
     }
-
-    var departPersonnalise: Bool { RelaisPage.departEstPersonnalise }
 
     // MARK: - Réglages
 
@@ -896,11 +893,11 @@ final class Relais: ObservableObject {
 
     /// Apprendre les boutons de la page sans les faire montrer : Caspr les
     /// essaie lui-même, et ne retient que ceux dont il a vu l'effet.
-    func calibrerAutomatiquement(_ termine: (() -> Void)? = nil) { calibration.lancer(.automatique, termine: termine) }
+    func calibrerAutomatiquement() { calibration.lancer(.automatique) }
 
     /// Les faire montrer, clic par clic : le repli d'une page que l'automate
     /// ne sait pas lire.
-    func calibrerALaMain(_ termine: (() -> Void)? = nil) { calibration.lancer(.manuel, termine: termine) }
+    func calibrerALaMain() { calibration.lancer(.manuel) }
 
     /// Met fin à la calibration, d'où qu'on le demande.
     func abandonnerCalibration() { calibration.abandonner() }

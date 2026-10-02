@@ -5,7 +5,7 @@ import CasprCore
 ///
 /// Tout ce qui décide de ce que devient le texte, figé une fois et porté
 /// jusqu'à la livraison. Le module et la destination étaient relus à chaque
-/// étape — `RelaisCatalogue.courant` relit les préférences à chaque accès —
+/// étape — le module retenu suit la pastille de la barre à chaque instant —
 /// une fois pour choisir la transformation, puis de nouveau pour décider si le
 /// texte s'insère et où, avec l'aller-retour ChatGPT entre les deux. Rien ne
 /// les faisait diverger en pratique, la pastille n'étant plus cliquable

@@ -122,6 +122,9 @@ enum Migration {
         if let voie = VoieDeDictee.migrer(defaults) {
             Log.notice("migration : voie de dictée posée — \(voie.rawValue)")
         }
+        // Avant la première lecture du magasin du relais, qui ne connaît que
+        // les formes d'aujourd'hui.
+        for ligne in RelaisCatalogue.migrer(defaults) { Log.notice("migration : \(ligne)") }
     }
 
     /// Écrit les mots du lexique dans un fichier texte, puis met ce fichier à

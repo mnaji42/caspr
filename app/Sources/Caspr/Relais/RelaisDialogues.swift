@@ -165,7 +165,7 @@ enum RelaisDialogues {
     /// sélecteur devenu caduc d'un bouton qui refuse de répondre, et le seul
     /// recours est de tout recalibrer en espérant.
     static func diagnostic(_ page: RelaisPage) async {
-        let sel = RelaisSelecteurs.charger()
+        let sel = page.selecteurs
         let connexion = await page.connexion(secondes: 1)
         let ecoute = await page.auRepos()?.enregistrement == true
         func ligne(_ nom: String, _ valeur: String) -> String {

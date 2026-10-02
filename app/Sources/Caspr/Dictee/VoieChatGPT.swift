@@ -92,8 +92,8 @@ final class VoieChatGPT {
     /// lui, un seul module est possible, et la barre n'en montre pas : proposer
     /// un choix qui échouerait vaut moins que ne rien proposer.
     func statutDeLaBarre(peutChoisirLaNote: Bool) -> RecordingOverlay.Status {
-        let modules = RelaisCatalogue.proposes
-        let courant = RelaisCatalogue.courant
+        let modules = RelaisMagasin.partage.proposes
+        let courant = RelaisMagasin.partage.retenu
         return RecordingOverlay.Status(
             target: Preferences.shared.effectiveTarget,
             noteName: Preferences.shared.noteFile?.lastPathComponent,
@@ -111,9 +111,9 @@ final class VoieChatGPT {
 
     /// Le module choisi sur la barre, au moment de parler.
     func choisirModule(_ index: Int) {
-        let modules = RelaisCatalogue.proposes
+        let modules = RelaisMagasin.partage.proposes
         guard modules.indices.contains(index) else { return }
-        RelaisCatalogue.courant = modules[index]
+        RelaisMagasin.partage.choisir(modules[index])
         // L'affichage appartient au module : changer de module en pleine
         // dictée doit le faire suivre. C'était le seul réglage figé à l'appui
         // de la touche, et c'est le cas courant — on change d'avis parce qu'on
@@ -308,7 +308,7 @@ final class VoieChatGPT {
     /// Ce qui est dit maintenant : le module et la destination du moment. La
     /// voie et l'application visée restent celles de l'appui (29).
     private func figer() -> DicteeEnCours {
-        DicteeEnCours(voie: .chatgpt, module: RelaisCatalogue.courant,
+        DicteeEnCours(voie: .chatgpt, module: RelaisMagasin.partage.retenu,
                       destination: Preferences.shared.effectiveTarget,
                       applicationVisee: applicationVisee,
                       duree: phase == .ecoute ? Date.now.timeIntervalSince(depuis) : 0)
@@ -338,7 +338,7 @@ final class VoieChatGPT {
         }
         // Pendant l'écoute, rien n'est encore figé : c'est le module du
         // moment qui dit où la dictée devait aller.
-        let ecrit = (dictee?.module ?? RelaisCatalogue.courant).ecrit
+        let ecrit = (dictee?.module ?? RelaisMagasin.partage.retenu).ecrit
         couper()
         overlay.hide()
         if echec == nil { Feedback.cancelled() }
@@ -453,7 +453,7 @@ final class VoieChatGPT {
         do {
             // La barre s'ouvre avant l'écoute : on voit ChatGPT démarrer, et
             // la page, enfin à l'écran, cesse d'être différée par le système.
-            relais.afficherBarre(module: RelaisCatalogue.courant)
+            relais.afficherBarre(module: RelaisMagasin.partage.retenu)
             // La page n'est pas prête sur-le-champ — elle se prépare encore,
             // ne s'est pas dite connectée au premier relevé, ou ne s'est pas
             // mise à écouter : on le dit, plutôt que de laisser l'écran muet.
@@ -494,7 +494,7 @@ final class VoieChatGPT {
         // Ce qui est dit à l'arrêt : le module et la destination du moment.
         // La voie et l'application visée restent celles de l'appui (29).
         let dictee = figer()
-        let module = dictee.module ?? RelaisCatalogue.courant
+        let module = dictee.module ?? RelaisMagasin.partage.retenu
         self.dictee = dictee
         entrer(.transcription)
         guard let issue = await transcrire(dictee, module, scenario, g), g == generation else { return }

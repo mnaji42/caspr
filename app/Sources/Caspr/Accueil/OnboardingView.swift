@@ -16,6 +16,7 @@ struct OnboardingView: View {
     /// exige sous la voie ChatGPT — et rien d'autre ne redessinerait le
     /// bouton « Continuer ».
     @ObservedObject private var relais = Relais.partage
+    @ObservedObject private var magasin = RelaisMagasin.partage
     @State private var step: OnboardingStep
     /// Coché d'avance pendant l'accueil.
     ///

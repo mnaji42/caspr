@@ -56,24 +56,18 @@ final class RelaisCalibration {
 
     // MARK: - Le cycle de vie
 
-    /// Lance `parcours`, s'il est temps ; `termine` est appelé quand il est
-    /// fini, quelle qu'en soit l'issue.
+    /// Lance `parcours`, s'il est temps. Ce qu'il apprend passe par le
+    /// magasin, que les écrans observent : ils n'ont pas à être prévenus.
     ///
     /// L'automatique cède au manuel dans la même course, quand son rapport le
     /// propose : même numéro, même page, une seule sortie.
-    func lancer(_ parcours: Parcours, termine: (() -> Void)?) {
-        guard let page = relais.prendrePourCalibrer() else {
-            termine?()
-            return
-        }
+    func lancer(_ parcours: Parcours) {
+        guard let page = relais.prendrePourCalibrer() else { return }
         numero &+= 1
         let jeton = numero
         page.montrer()
         let tache = Task {
-            defer {
-                if numero == jeton { sortir() }
-                termine?()
-            }
+            defer { if numero == jeton { sortir() } }
             let relance = parcours == .automatique ? "« Calibrer automatiquement »" : "la calibration"
             guard await obtenirLaSession(page, relance: relance) else { return }
             if parcours == .automatique {
@@ -165,7 +159,7 @@ final class RelaisCalibration {
     /// un automate qui écrirait repère par repère et échouerait à mi-chemin
     /// détruirait en silence un calibrage qui marchait.
     private func automatique(_ page: RelaisPage) async -> Bool {
-        let ancien = RelaisSelecteurs.charger()
+        let ancien = RelaisMagasin.partage.selecteurs
         // Un abandon lève : il n'y a rien à rapporter, et la sortie remet la
         // page d'aplomb. Fermer la fenêtre arrête tout, comme l'annonce l'a
         // promis — y compris l'écriture d'un parcours qui venait d'aboutir.
@@ -183,8 +177,7 @@ final class RelaisCalibration {
                                            ["Montrer les boutons à la main…", "Fermer"]) == 0
         }
         // La seule écriture du parcours automatique.
-        page.selecteurs = nouveau
-        nouveau.enregistrer()
+        RelaisMagasin.partage.selecteurs = nouveau
         Log.info("relais : calibration automatique enregistrée — "
                  + RelaisPreuves.parcours.map { "\($0.rawValue) \(nouveau[$0])" }.joined(separator: ", "))
 
@@ -318,8 +311,7 @@ final class RelaisCalibration {
             case .lecture: (s.lectureParent, s.lectureMenu, s.lectureMenuParent) = (r.parent, r.menu, r.menuParent)
             default: break
             }
-            page.selecteurs = s
-            s.enregistrer()
+            RelaisMagasin.partage.selecteurs = s
             return
         }
     }

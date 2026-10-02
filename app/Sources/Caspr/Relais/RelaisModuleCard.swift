@@ -14,7 +14,6 @@ import CasprCore
 struct RelaisModuleCard: View {
     let module: RelaisModule
     let selecteurs: RelaisSelecteurs
-    let surChangement: () -> Void
 
     @State private var deplie = false
     @State private var avant = ""
@@ -39,8 +38,7 @@ struct RelaisModuleCard: View {
                                 set: { actif in
                                     var maj = module
                                     maj.ditLaReponse = actif
-                                    RelaisCatalogue.remplacer(maj)
-                                    surChangement()
+                                    RelaisMagasin.partage.remplacer(maj)
                                 }))
             }
             if module.affichageImpose != nil {
@@ -83,8 +81,7 @@ struct RelaisModuleCard: View {
                            set: { choisi in
                                var maj = module
                                maj.affichage = choisi
-                               RelaisCatalogue.remplacer(maj)
-                               surChangement()
+                               RelaisMagasin.partage.remplacer(maj)
                            }),
                        // Grisé quand le module impose son affichage : laisser
                        // choisir une valeur sans effet est pire que ne pas la
@@ -176,8 +173,7 @@ struct RelaisModuleCard: View {
                 var maj = module
                 maj.avant = avant
                 maj.apres = apres
-                RelaisCatalogue.remplacer(maj)
-                surChangement()
+                RelaisMagasin.partage.remplacer(maj)
             }
             .disabled(avant == module.avant && apres == module.apres)
             if module.integre {

@@ -36,6 +36,8 @@ struct CarteVoie: View {
 
     @State private var prefs = Preferences.shared
     @ObservedObject private var relais = Relais.partage
+    /// « à configurer » suit le calibrage, où qu'il se termine (86).
+    @ObservedObject private var magasin = RelaisMagasin.partage
 
     var body: some View {
         Card {

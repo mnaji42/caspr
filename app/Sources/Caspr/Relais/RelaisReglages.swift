@@ -9,9 +9,7 @@ import CasprCore
 /// voie est macOS, la page n'existe pas (cf. `Relais.pageActive`) — des
 /// boutons qui la pilotent n'auraient rien à piloter.
 struct RelaisReglages: View {
-    @State private var depart = Relais.partage.departPersonnalise
-    @State private var modules = RelaisCatalogue.tous
-    @State private var selecteurs = RelaisSelecteurs.charger()
+    @ObservedObject private var magasin = RelaisMagasin.partage
 
     var body: some View {
         // Une carte pour la session et ce que Caspr a appris, puis une carte
@@ -19,15 +17,15 @@ struct RelaisReglages: View {
         // escalier, alors que les capacités sont indépendantes — un module
         // peut exiger d'envoyer sans jamais récupérer, donc moins qu'un autre
         // qui venait pourtant avant lui.
-        RelaisSession(surChangement: relire)
+        RelaisSession()
 
         SectionLabel("Modules")
-        ForEach(modules) { module in
-            RelaisModuleCard(module: module, selecteurs: selecteurs,
-                             surChangement: relire)
+        ForEach(magasin.modules) { module in
+            RelaisModuleCard(module: module, selecteurs: magasin.selecteurs)
         }
 
-        if depart || modules.contains(where: { $0.envoi != .aucun }) {
+        let depart = magasin.depart != RelaisPage.accueil
+        if depart || magasin.modules.contains(where: { $0.envoi != .aucun }) {
             SectionLabel("Point de départ")
             Card {
                 Row(label: "Conversations créées par Caspr") {
@@ -40,31 +38,13 @@ struct RelaisReglages: View {
                      + "l'écart : créez un projet dans ChatGPT, ouvrez-le dans la "
                      + "fenêtre du relais, puis adoptez-le.")
                 ButtonRow {
-                    Button("Adopter la page ouverte…") {
-                        Relais.partage.adopterPageDeDepart()
-                        relire()
-                    }
+                    Button("Adopter la page ouverte…") { Relais.partage.adopterPageDeDepart() }
                     if depart {
-                        Button("Revenir à l'accueil") {
-                            Relais.partage.oublierPageDeDepart()
-                            relire()
-                        }
+                        Button("Revenir à l'accueil") { Relais.partage.oublierPageDeDepart() }
                     }
                 }
             }
         }
-    }
-
-    /// Relire l'état à chaque apparition de l'écran.
-    ///
-    /// `@State` ne s'initialise qu'à la création de la vue. Une calibration
-    /// menée depuis un autre chemin — ou avant que cet écran n'existe — la
-    /// laissait donc périmée : les réglages annonçaient « configuration
-    /// inachevée » à quelqu'un qui venait de la terminer.
-    private func relire() {
-        depart = Relais.partage.departPersonnalise
-        modules = RelaisCatalogue.tous
-        selecteurs = RelaisSelecteurs.charger()
     }
 }
 
@@ -75,13 +55,11 @@ struct RelaisReglages: View {
 /// même question, et une seconde version aurait fini par dire autre chose —
 /// l'accueil a déjà payé ce genre de divergence (cf. `OnboardingView`).
 struct RelaisSession: View, ValidatingComponent {
-    /// Prévient la vue qui l'entoure qu'une calibration a pu changer ce que la
-    /// page sait faire : les modules en dépendent.
-    var surChangement: () -> Void = {}
-
-    @State private var calibre = Relais.partage.estCalibre
-    @State private var selecteurs = RelaisSelecteurs.charger()
     @ObservedObject private var relais = Relais.partage
+    /// Une calibration se termine souvent ailleurs que dans cette vue —
+    /// lancée à la bascule de voie, finie depuis l'accueil, abandonnée en
+    /// fermant la fenêtre : la carte suit le magasin, sans relecture (162).
+    @ObservedObject private var magasin = RelaisMagasin.partage
 
     /// Ce qui manque pour dicter par ChatGPT, lu comme `Relais.saitDicter` :
     /// une session que la page n'a pas vue perdue, et un calibrage.
@@ -94,7 +72,7 @@ struct RelaisSession: View, ValidatingComponent {
         Card {
             connexion
             Divider().opacity(0.25)
-            if !calibre {
+            if !magasin.selecteurs.estCalibre {
                 Note("Configuration inachevée : la dictée ne partira pas tant que "
                      + "Caspr n'aura pas appris les boutons de la page — seul, ou "
                      + "en vous les faisant montrer.",
@@ -110,12 +88,8 @@ struct RelaisSession: View, ValidatingComponent {
             // sait pas lire, et ce jour-là il ne doit pas falloir le chercher.
             VStack(alignment: .leading, spacing: 8) {
                 ButtonRow {
-                    Button("Calibrer automatiquement…") {
-                        Relais.partage.calibrerAutomatiquement(relire)
-                    }
-                    Button("Montrer à la main…") {
-                        Relais.partage.calibrerALaMain(relire)
-                    }
+                    Button("Calibrer automatiquement…") { Relais.partage.calibrerAutomatiquement() }
+                    Button("Montrer à la main…") { Relais.partage.calibrerALaMain() }
                 }
                 ButtonRow {
                     Button("Ouvrir la fenêtre…") { Relais.partage.ouvrirFenetre() }
@@ -133,13 +107,6 @@ struct RelaisSession: View, ValidatingComponent {
                      warning: true)
             }
         }
-        .onAppear(perform: relire)
-        // Une calibration se termine sans passer par cette vue — lancée à la
-        // bascule de voie, ou abandonnée en fermant la fenêtre —, et `@State`
-        // ne se relit pas tout seul : la carte annonçait « configuration
-        // inachevée » à qui venait de la terminer. L'occupation, publiée, dit
-        // quand la page est rendue.
-        .onChange(of: relais.occupation) { _, _ in relire() }
     }
 
     // MARK: - La session
@@ -196,7 +163,7 @@ struct RelaisSession: View, ValidatingComponent {
     private var capacites: some View {
         FlowLayout(spacing: 6) {
             ForEach(RelaisCapacite.allCases, id: \.rawValue) { capacite in
-                let acquise = capacite.estAcquise(selecteurs)
+                let acquise = capacite.estAcquise(magasin.selecteurs)
                 HStack(spacing: 5) {
                     Image(systemName: acquise ? "checkmark" : "minus")
                         .font(.system(size: 9, weight: .bold))
@@ -209,13 +176,6 @@ struct RelaisSession: View, ValidatingComponent {
                 .help(acquise ? capacite.libelle : capacite.commentAcquerir)
             }
         }
-    }
-
-    /// Relire l'état à chaque apparition, et à chaque fin de calibration.
-    private func relire() {
-        calibre = Relais.partage.estCalibre
-        selecteurs = RelaisSelecteurs.charger()
-        surChangement()
     }
 
     /// Ce qui interdit de toucher à la page maintenant, s'il y a quelque

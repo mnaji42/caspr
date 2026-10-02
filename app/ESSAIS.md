@@ -221,10 +221,12 @@ coup : `log show --last 15m --info --predicate 'subsystem == "fr.lyriastudio.cas
     `~/Desktop/notes-caspr.md`, pour les essais Notes plus bas.
 
 22. Menu › Désinstaller Caspr…, puis ferme la fenêtre sans valider.
-    Attendu : aucune case « Dictées archivées » ni moteur. La ligne « Journaux et
-    fichiers temporaires » n'apparaît que si l'un de ses dossiers existe, et sa
-    taille compte `~/Library/Caches/fr.lyriastudio.caspr` (le cache de la page
-    ChatGPT). Rien n'est désinstallé.
+    Attendu : aucune case « Dictées archivées » ni moteur. La ligne « Fichiers
+    temporaires » n'apparaît que si l'un de ses dossiers existe, et sa taille
+    compte `~/Library/Caches/fr.lyriastudio.caspr` (le cache de la page
+    ChatGPT). « Restes de l'ancien moteur local » n'apparaît que si la
+    migration a laissé quelque chose (journal : « non retiré »). Les tailles
+    arrivent un instant après la fenêtre. Rien n'est désinstallé.
 
 ---
 
@@ -733,6 +735,37 @@ de le couper.
     Attendu : aucune fenêtre de calibration ne s'ouvre pendant la dictée. À
     l'arrêt, le texte s'insère, puis la fenêtre de calibration qui s'ouvre n'est
     pas cachée par l'insertion.
+
+### Le reste de l'application (contrôle du 2 octobre)
+
+91a. Voie macOS : dicte deux à trois minutes, arrête, et pendant
+     « Transcription… » appuie sur la touche de dictée (ou ouvre le menu :
+     « Interrompre la transcription » y est).
+     Attendu : la barre disparaît, rien ne s'écrit, l'icône passe en erreur
+     avec « Transcription interrompue — audio conservé ». Le menu propose
+     « Réessayer avec le moteur », qui écrit le texte. Refais-le avec la croix
+     de la barre, puis avec Échap : même chose, sans message d'erreur.
+
+91b. Voie macOS : pendant une dictée, connecte des AirPods (ou débranche un
+     casque), puis continue de parler et arrête.
+     Attendu : dans le journal, « micro changé (… → …), capture reprise », et
+     la fin de la phrase est dans le texte. Si la capture n'a pas pu reprendre :
+     le début s'écrit, et la barre dit « Micro changé : capture interrompue à
+     m:ss ».
+
+91c. Pendant l'attente d'une dictée ChatGPT (dès « ChatGPT transcrit… »),
+     branche ou débranche un écran.
+     Attendu : la barre revient telle qu'elle était, avec sa phase et sa
+     sortie, et non en « en écoute… ».
+
+91d. Réglages › Général, déclencheur « raccourci » : enregistre ⌃⌥⌘H.
+     Attendu : un avertissement dit qu'il ouvre déjà l'historique. ⌃⌥⌘H
+     déclenche la dictée, et le menu l'annonce. Remets ton raccourci.
+
+91e. Ouvre le menu de la barre une heure après une dictée, puis efface
+     l'historique depuis Réglages › Historique et rouvre le menu.
+     Attendu : l'infobulle de la dernière entrée dit l'âge à jour, puis les
+     entrées ont disparu du menu.
 
 ---
 

@@ -81,7 +81,13 @@ final class TextInjector {
 
         try postCommandV()
 
-        try? await Task.sleep(for: pasteSettleDelay)
+        // Le ⌘V est parti : l'app visée lira le presse-papiers quand elle le
+        // traitera, annulation ou non. Le sommeil d'une tâche annulée rend la
+        // main aussitôt — un appui pendant ces 180 ms restaurait l'ancien
+        // contenu avant la lecture, et c'est lui qui se collait dans le
+        // document. On dort donc dans une tâche que l'annulation n'atteint pas.
+        let delai = pasteSettleDelay
+        await Task { try? await Task.sleep(for: delai) }.value
         Self.restore(saved, to: pasteboard)
     }
 

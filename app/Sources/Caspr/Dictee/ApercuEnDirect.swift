@@ -53,13 +53,15 @@ final class ApercuEnDirect {
     }
 
     /// Démarre l'aperçu, si le système et l'utilisateur le permettent.
-    func demarrer(langue: String) {
+    ///
+    /// `version` : celle qui écrira cette dictée, choisie par la voie.
+    func demarrer(langue: String, version: EngineChoice) {
         guard Preferences.shared.livePreviewEnabled, !ecoute else { return }
         retenu &+= 1
         let jeton = retenu
-        // La version qui écrira, et nulle autre : cf. `SpeechPreview.engine`.
+        // La version qui écrira, et nulle autre : cf. `SpeechPreview.make`.
         guard let made = SpeechPreview.make(
-            for: langue,
+            version, for: langue,
             onText: { [weak self] text in
                 guard let self, retenu == jeton else { return }
                 if texte.isEmpty, !text.isEmpty {
@@ -124,8 +126,8 @@ final class ApercuEnDirect {
     }
 
     /// Repart sur une autre langue, en pleine écoute.
-    func relancer(langue: String) {
+    func relancer(langue: String, version: EngineChoice) {
         arreter()
-        demarrer(langue: langue)
+        demarrer(langue: langue, version: version)
     }
 }

@@ -300,23 +300,18 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
 /// Un seul endroit teste la version : le reste du code ne voit qu'un
 /// `SpeechPreviewing?`.
 enum SpeechPreview {
-    /// Quel moteur va montrer le texte pendant qu'on parle.
+    /// Choisit l'implémentation de la version donnée, si elle sait écouter
+    /// cette langue ici ; `nil` sinon.
     ///
-    /// **Celui qui écrit**, et ce n'est pas qu'une question de cohérence
-    /// d'affichage : chaque version de macOS a son autorisation — la
-    /// reconnaissance vocale, que macOS compte séparément du micro — et ses
-    /// actifs, un modèle par locale à télécharger. Faire tourner l'autre pour
-    /// le seul aperçu réclamerait donc un droit ou un téléchargement dont
-    /// l'utilisateur n'a aucun usage.
-    ///
-    /// - Returns: `nil` si cette machine ne sait produire aucun aperçu.
-    @MainActor
-    static func engine(for language: String) -> EngineChoice? {
-        let chosen = EngineSafetyManager.engine(for: language)
-        return chosen.isAvailable(for: language) ? chosen : nil
-    }
-
-    /// Choisit l'implémentation selon ce que la machine sait faire.
+    /// La version est **celle qui écrit**, choisie une fois par la dictée et
+    /// passée ici (cf. `DictationController.versionDuCycle`) : la rechoisir
+    /// relisait la disponibilité des deux versions une fois de plus par
+    /// dictée, et pouvait en retenir une autre que la transcription. Ce n'est
+    /// pas qu'une question de cohérence d'affichage : chaque version de macOS
+    /// a son autorisation — la reconnaissance vocale, que macOS compte
+    /// séparément du micro — et ses actifs, un modèle par locale à
+    /// télécharger. Faire tourner l'autre pour le seul aperçu réclamerait donc
+    /// un droit ou un téléchargement dont l'utilisateur n'a aucun usage.
     ///
     /// L'aperçu n'était branché que sur `SpeechTranscriber`, donc il
     /// s'annonçait indisponible là où la Dictée de macOS affiche pourtant
@@ -324,19 +319,18 @@ enum SpeechPreview {
     /// ça sans que le contrôleur de dictée en sache quoi que ce soit : il
     /// demande un aperçu, il en reçoit un.
     @MainActor
-    static func make(for language: String,
+    static func make(_ version: EngineChoice, for language: String,
                      onText: @escaping @MainActor @Sendable (String) -> Void,
                      onFailure: @escaping @MainActor @Sendable (String) -> Void,
                      onNotice: @escaping @MainActor @Sendable (String) -> Void)
     -> (any SpeechPreviewing)? {
-        switch engine(for: language) {
+        guard version.isAvailable(for: language) else { return nil }
+        switch version {
         case .apple:
             guard #available(macOS 26.0, *) else { return nil }
             return LivePreview(onText: onText, onFailure: onFailure, onNotice: onNotice)
         case .appleLegacy:
             return LegacyLivePreview(onText: onText, onFailure: onFailure, onNotice: onNotice)
-        case nil:
-            return nil
         }
     }
 }

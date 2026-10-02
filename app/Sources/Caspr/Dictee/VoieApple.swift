@@ -151,13 +151,18 @@ final class VoieApple {
     /// et peut encore s'allonger pendant la transcription. Lu à l'échec aussi
     /// quand il est donné : celui d'une page ChatGPT à laquelle on vient de
     /// renoncer s'allonge de même.
+    ///
+    /// `version` : celle que la dictée a choisie en démarrant, et que son
+    /// aperçu a suivie (cf. `DictationController.versionDuCycle`). `nil` pour
+    /// un « Réessayer » ou le son d'une page ChatGPT, qui la choisissent
+    /// ici : la machine a pu changer depuis.
     func transcrireEtLivrer(_ samples: [Float], _ dictee: DicteeEnCours,
-                            langue: String, apercuConserve: @autoclosure () -> String?) async -> String? {
+                            langue: String, version: EngineChoice? = nil,
+                            apercuConserve: @autoclosure () -> String?) async -> String? {
         let debut = ContinuousClock.now
-        // Choisie une fois, à l'instant et pour la langue de la
-        // transcription (cf. `EngineSafetyManager`) : chaque relecture
-        // recrée des reconnaisseurs. Un « Réessayer » la rechoisit.
-        let version = EngineSafetyManager.engine(for: langue)
+        // Choisie une fois par dictée (cf. `EngineSafetyManager`) : chaque
+        // relecture recrée des reconnaisseurs.
+        let version = version ?? EngineSafetyManager.engine(for: langue)
         do {
             let text = try await transcrire(samples, langue: langue, par: version)
             guard !Task.isCancelled else {

@@ -136,7 +136,15 @@ final class DictationController {
             guard let self, Preferences.shared.primaryLanguage != code else { return }
             Preferences.shared.primaryLanguage = code
             if state == .recording {
-                (voieDuCycle == .chatgpt ? chatgpt.apercu : macOS.apercu).relancer(langue: language)
+                // Une autre langue, une autre version peut-être : la seule
+                // fois où une dictée la rechoisit.
+                let version = EngineSafetyManager.engine(for: language)
+                if voieDuCycle == .chatgpt {
+                    chatgpt.apercu.relancer(langue: language, version: version)
+                } else {
+                    versionDuCycle = version
+                    macOS.apercu.relancer(langue: language, version: version)
+                }
             }
             refreshOverlay()
             onStateChange?(state)
@@ -168,6 +176,17 @@ final class DictationController {
     /// jusqu'à la fin d'une dictée ChatGPT, et n'en construit pas pendant une
     /// dictée macOS (cf. `Relais.suivreLaVoie`).
     private var voieDuCycle: VoieDeDictee?
+
+    /// La version de macOS qui écrit la dictée macOS en cours, choisie au
+    /// démarrage pour sa langue, et que suivent l'aperçu puis la
+    /// transcription.
+    ///
+    /// Chacun la choisissait de son côté : savoir si la Dictée est prête crée
+    /// des reconnaisseurs et relit les préférences du système, deux fois par
+    /// dictée — et une disponibilité qui change entre les deux faisait écrire
+    /// l'aperçu par une version, le texte par l'autre. Rechoisie quand la
+    /// langue change en pleine phrase.
+    private var versionDuCycle: EngineChoice?
 
     /// La transcription macOS en cours — fin d'une dictée, « Réessayer », ou
     /// repli d'une dictée ChatGPT —, gardée pour qu'on puisse l'interrompre.
@@ -339,7 +358,9 @@ final class DictationController {
             // Échap est pris au passage (cf. `ajusterEchap`).
             state = .recording
             overlay.showRecording(overlayStatus)
-            macOS.apercu.demarrer(langue: language)
+            let version = EngineSafetyManager.engine(for: language)
+            versionDuCycle = version
+            macOS.apercu.demarrer(langue: language, version: version)
             Feedback.recordingStarted()
         } catch {
             state = .failed(error.localizedDescription)
@@ -401,7 +422,7 @@ final class DictationController {
         let coupure = macOS.coupure.map {
             "Micro changé : capture interrompue à \(Int($0) / 60):\(String(format: "%02d", Int($0) % 60))"
         }
-        await transcrireParMacOS(samples, figer(duree: seconds), annonce: coupure)
+        await transcrireParMacOS(samples, figer(duree: seconds), version: versionDuCycle, annonce: coupure)
     }
 
     /// `apercuConserve` : cf. `VoieApple.transcrireEtLivrer`. `annonce` : ce
@@ -409,12 +430,12 @@ final class DictationController {
     /// de là où l'on croit (cf. `RelaisRepli.annonce`). `motif` : pourquoi
     /// ChatGPT n'a pas rendu ce texte, que le menu garde avant l'échec de
     /// macOS — la barre, elle, dit ce qui reste à faire (cf. `Livraison.conserver`).
-    private func transcrireParMacOS(_ samples: [Float], _ dictee: DicteeEnCours,
+    private func transcrireParMacOS(_ samples: [Float], _ dictee: DicteeEnCours, version: EngineChoice? = nil,
                                     apercuConserve: @autoclosure () -> String? = nil, annonce: String? = nil,
                                     motif: String? = nil) async {
         state = .processing
         // Le micro est déjà rendu, à l'arrêt du magnétophone.
-        let echec = await macOS.transcrireEtLivrer(samples, dictee, langue: language,
+        let echec = await macOS.transcrireEtLivrer(samples, dictee, langue: language, version: version,
                                                    apercuConserve: apercuConserve())
         // Interrompue : l'état est déjà posé, et peut-être celui d'un cycle
         // ouvert depuis.

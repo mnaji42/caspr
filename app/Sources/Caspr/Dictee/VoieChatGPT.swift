@@ -513,7 +513,8 @@ final class VoieChatGPT {
     private func ecouterLApercu(_ g: Int) {
         guard Preferences.shared.livePreviewEnabled else { return }
         sonRecu = false
-        apercu.demarrer(langue: Preferences.shared.primaryLanguage)
+        let langue = Preferences.shared.primaryLanguage
+        apercu.demarrer(langue: langue, version: EngineSafetyManager.engine(for: langue))
         relais.suivreLeSon { [weak self] morceau, taux in
             self?.sonRecu = true
             self?.apercu.nourrir(morceau, taux: taux)

@@ -206,21 +206,24 @@ final class LegacySpeechEngine: TranscripteurMacOS {
         }
         audio.endAudio()
 
-        let text: String = try await withCheckedThrowingContinuation { continuation in
-            // `resume` ne doit partir qu'une fois : le rappel est appelé à
-            // chaque résultat, et une erreur peut suivre un résultat final.
-            let done = Guard()
-            recognizer.recognitionTask(with: audio) { result, error in
-                if let error {
-                    if done.claim() { continuation.resume(throwing: error) }
-                    return
-                }
-                guard let result, result.isFinal else { return }
-                if done.claim() {
-                    continuation.resume(
-                        returning: result.bestTranscription.formattedString)
-                }
+        // Annulable : une Dictée mal éteinte accepte la tâche et ne rend
+        // jamais rien, et c'est alors l'utilisateur qui renonce (cf.
+        // `DictationController.interrompreLaTranscription`).
+        let reponse = Reponse()
+        let text: String = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                reponse.attendre(continuation)
+                reponse.tenir(recognizer.recognitionTask(with: audio) { result, error in
+                    if let error { return reponse.rendre(.failure(error)) }
+                    guard let result, result.isFinal else { return }
+                    reponse.rendre(.success(result.bestTranscription.formattedString))
+                })
+                // Annulée avant ce point, le gestionnaire n'avait encore rien
+                // à arrêter.
+                if Task.isCancelled { reponse.annuler() }
             }
+        } onCancel: {
+            reponse.annuler()
         }
 
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -256,15 +259,42 @@ final class LegacySpeechEngine: TranscripteurMacOS {
         return out
     }
 
-    /// Un verrou minuscule : le premier qui réclame gagne.
-    private final class Guard: @unchecked Sendable {
+    /// La réponse de la reconnaissance, rendue une seule fois : le rappel est
+    /// appelé à chaque résultat, une erreur peut suivre un résultat final, et
+    /// l'annulation, venue d'un autre fil, peut les devancer.
+    private final class Reponse: @unchecked Sendable {
         private let lock = NSLock()
-        private var taken = false
-        func claim() -> Bool {
-            lock.lock(); defer { lock.unlock() }
-            if taken { return false }
-            taken = true
-            return true
+        private var continuation: CheckedContinuation<String, Error>?
+        private var tache: SFSpeechRecognitionTask?
+        private var annulee = false
+
+        func attendre(_ continuation: CheckedContinuation<String, Error>) {
+            lock.withLock { self.continuation = continuation }
+        }
+
+        func tenir(_ tache: SFSpeechRecognitionTask) {
+            let annulee = lock.withLock {
+                self.tache = tache
+                return self.annulee
+            }
+            if annulee { tache.cancel() }
+        }
+
+        func rendre(_ resultat: Result<String, Error>) {
+            let continuation = lock.withLock {
+                defer { self.continuation = nil }
+                return self.continuation
+            }
+            continuation?.resume(with: resultat)
+        }
+
+        func annuler() {
+            let tache = lock.withLock {
+                annulee = true
+                return self.tache
+            }
+            tache?.cancel()
+            rendre(.failure(CancellationError()))
         }
     }
 }

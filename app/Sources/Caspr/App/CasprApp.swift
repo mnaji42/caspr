@@ -412,6 +412,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .failed(let message): message
         }
         menu.addItem(withTitle: status, action: nil, keyEquivalent: "")
+        // Une transcription macOS dure une seconde, sauf quand Apple
+        // Intelligence télécharge son modèle : le menu, que l'on ouvre pour
+        // comprendre ce qui se passe, offre aussi d'en sortir.
+        if controller.transcriptionMacOSEnCours {
+            let stop = NSMenuItem(title: "Interrompre la transcription",
+                                  action: #selector(interruptTranscription), keyEquivalent: "")
+            stop.target = self
+            stop.toolTip = "L'enregistrement reste au menu, « Réessayer »."
+            menu.addItem(stop)
+        }
 
         // En haut, avant tout le reste. L'icône de la barre ne porte pas de
         // pastille : un point permanent pour un évènement non urgent finit par
@@ -831,6 +841,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func retry() {
         controller.retryLast()
+    }
+
+    @objc private func interruptTranscription() {
+        controller.interrompreLaTranscription()
     }
 
     @objc private func endDiscussion() {

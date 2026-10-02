@@ -138,10 +138,11 @@ final class VoieApple {
     /// possible pour cette application. L'audio n'est donc libéré qu'après une
     /// insertion réussie, et « Réessayer » permet de relancer sans reparler.
     ///
-    /// Rien ne peut interrompre une transcription macOS — elle dure une
-    /// seconde : ce chemin n'a pas à vérifier que le cycle est encore le sien.
-    /// Pas même celle du son d'une page ChatGPT (cf. `VoieChatGPT.replier`) :
-    /// son cycle est déjà fini.
+    /// Elle dure une seconde d'ordinaire, des minutes quand Apple
+    /// Intelligence télécharge d'abord son modèle : la tâche qui l'appelle
+    /// peut être annulée (cf. `DictationController.interrompreLaTranscription`).
+    /// Annulée, rien n'est inséré ni affiché, et l'audio est gardé comme
+    /// après un échec — avec le texte, s'il était déjà là.
     ///
     /// `apercuConserve` : ce que l'aperçu en direct avait écrit du même audio,
     /// gardé avec lui comme second recours — celui d'un « Réessayer ». `nil`
@@ -155,6 +156,11 @@ final class VoieApple {
         let debut = ContinuousClock.now
         do {
             let text = try await transcrire(samples, langue: langue)
+            guard !Task.isCancelled else {
+                livraison.conserver(audio: samples, apercu: text.isEmpty ? apercuConserve() ?? apercu.texte : text,
+                                    apresLeRelais: dictee.voie == .chatgpt, echec: nil)
+                return nil
+            }
             guard !text.isEmpty else {
                 // Le dernier chemin réellement muet de l'application : le
                 // moteur répond, sans erreur, avec une chaîne vide. Rien n'est
@@ -186,6 +192,12 @@ final class VoieApple {
             Log.info("transcrit en \(Log.ms(depuis: debut)) ms, \(text.count) caractères")
             return nil
         } catch {
+            if error is CancellationError || Task.isCancelled {
+                Log.info("transcription interrompue — audio conservé")
+                livraison.conserver(audio: samples, apercu: apercuConserve() ?? apercu.texte,
+                                    apresLeRelais: dictee.voie == .chatgpt, echec: nil)
+                return nil
+            }
             // Transcrite mais pas insérée, la dictée est dans l'historique :
             // c'est là qu'on la reprend, et non par « Réessayer » ou l'aperçu,
             // qui échoueraient pareil tant que la cause demeure. L'audio n'est

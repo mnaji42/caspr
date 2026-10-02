@@ -105,7 +105,8 @@ final class DictationController {
             guard let self else { return }
             voieDuCycle = .apple
             state = .processing
-            Task {
+            montrerLaTranscription("\(motif) — transcription par macOS…")
+            fin = Task {
                 await self.transcrireParMacOS(son, dictee, apercuConserve: self.chatgpt.apercu.texte,
                                               annonce: annonce, motif: motif)
             }
@@ -168,6 +169,15 @@ final class DictationController {
     /// dictée macOS (cf. `Relais.suivreLaVoie`).
     private var voieDuCycle: VoieDeDictee?
 
+    /// La transcription macOS en cours — fin d'une dictée, « Réessayer », ou
+    /// repli d'une dictée ChatGPT —, gardée pour qu'on puisse l'interrompre.
+    ///
+    /// Elle dure une seconde d'ordinaire, mais pas toujours : sans son modèle,
+    /// Apple Intelligence commence par le télécharger, des minutes durant, et
+    /// une Dictée mal éteinte peut ne jamais répondre. Jetée, cette tâche ne
+    /// laissait que « Quitter Caspr » pour en sortir.
+    private var fin: Task<Void, Never>?
+
     /// L'application où l'on parlait, capturée à l'appui ; `nil` quand c'était
     /// Caspr lui-même — la zone d'essai de l'accueil.
     ///
@@ -205,12 +215,15 @@ final class DictationController {
         case .idle, .failed:
             commencer()
         case .recording:
-            Task { await finirParMacOS() }
+            fin = Task { await finirParMacOS() }
+        case .processing where voieDuCycle == .apple:
+            // La touche interrompt une transcription qui s'éternise ; l'audio
+            // reste au menu, et l'échec le dit.
+            interrompreLaTranscription(
+                echec: "Transcription interrompue — audio conservé, « Réessayer » dans le menu.")
         case .starting, .processing:
-            // Sous macOS, ignorer est juste : le traitement dure une seconde,
-            // et réappuyer n'est qu'un geste nerveux. Seul le dialogue
-            // d'autorisation du micro peut retenir le démarrage, et il se
-            // ferme par ses propres boutons.
+            // Seul le dialogue d'autorisation du micro peut retenir le
+            // démarrage macOS, et il se ferme par ses propres boutons.
             break
         }
     }
@@ -263,9 +276,33 @@ final class DictationController {
             Feedback.cancelled()
             voieDuCycle = nil
             state = .idle
+        case .processing where voieDuCycle == .apple:
+            interrompreLaTranscription(echec: nil)
         case .starting, .processing:
             break
         }
+    }
+
+    /// Une transcription macOS est en cours, et peut être interrompue.
+    var transcriptionMacOSEnCours: Bool { state == .processing && voieDuCycle == .apple }
+
+    /// Interrompt la transcription macOS en cours, sans rien insérer.
+    ///
+    /// L'audio reste au menu (cf. `VoieApple.transcrireEtLivrer`) : renoncer
+    /// à attendre n'est pas renoncer à la dictée. La tâche annulée ne touche
+    /// plus à l'état — un cycle a pu s'ouvrir depuis.
+    ///
+    /// `echec` : ce que le menu dira ; `nil` pour la croix et Échap, qui
+    /// annulent sans commentaire.
+    func interrompreLaTranscription(echec: String? = nil) {
+        guard transcriptionMacOSEnCours else { return }
+        Log.info("transcription macOS interrompue")
+        fin?.cancel()
+        fin = nil
+        overlay.hide()
+        Feedback.cancelled()
+        voieDuCycle = nil
+        state = echec.map { .failed($0) } ?? .idle
     }
 
     // MARK: - Écouter
@@ -350,7 +387,7 @@ final class DictationController {
         guard state == .recording, voieDuCycle == .apple else { return }
         let samples = macOS.arreter()
         Feedback.recordingStopped()
-        overlay.showProcessing()
+        montrerLaTranscription("Transcription…")
         // Un appui-relâché trop bref ne contient rien d'exploitable ; inutile
         // de réveiller le moteur. Un vrai VAD reste à faire (cf. README).
         guard samples.count > Int(AudioRecorder.targetSampleRate * 0.3) else {
@@ -376,11 +413,25 @@ final class DictationController {
         // Le micro est déjà rendu, à l'arrêt du magnétophone.
         let echec = await macOS.transcrireEtLivrer(samples, dictee, langue: language,
                                                    apercuConserve: apercuConserve())
+        // Interrompue : l'état est déjà posé, et peut-être celui d'un cycle
+        // ouvert depuis.
+        guard !Task.isCancelled else { return }
+        fin = nil
         if echec == nil, let annonce { overlay.showFailure(annonce) }
         state = echec.map { echec in
             .failed(motif.map { "\($0). Repli par macOS : \(echec)" } ?? echec)
         } ?? .idle
         voieDuCycle = nil
+    }
+
+    /// « Transcription… », avec sa sortie : la croix, et passé dix secondes,
+    /// le chrono et la touche.
+    private func montrerLaTranscription(_ libelle: String) {
+        let debut = Date.now
+        overlay.showProcessing(libelle) {
+            RecordingOverlay.ProcessingProgress(label: libelle, elapsed: Date.now.timeIntervalSince(debut),
+                                                exitHint: "touche de dictée pour interrompre")
+        }
     }
 
     // MARK: - Destination
@@ -421,10 +472,11 @@ final class DictationController {
         guard let pendingAudio = livraison.pendingAudio, isAtRest else { return }
         // Posé tout de suite, et non par la tâche : entre les deux, un appui
         // aurait trouvé l'état au repos et ouvert un cycle par-dessus.
-        state = .processing
         // C'est la voie macOS qui le rejoue, quelle que soit la voie retenue
-        // depuis — et même quand c'est le son d'une page ChatGPT.
+        // depuis — et même quand c'est le son d'une page ChatGPT. Notée avant
+        // l'état, qui décide d'Échap d'après elle.
         voieDuCycle = .apple
+        state = .processing
         // Le menu de Caspr ne prend pas le premier plan : l'application devant
         // est celle où l'on veut le texte, comme à l'appui. Et la destination
         // du moment : réessayer est une nouvelle livraison.
@@ -434,7 +486,8 @@ final class DictationController {
         // L'aperçu gardé avec cet audio, et non celui d'une dictée faite
         // depuis.
         let apercu = livraison.pendingPreviewText ?? ""
-        Task { await transcrireParMacOS(pendingAudio, figee, apercuConserve: apercu) }
+        montrerLaTranscription("Transcription…")
+        fin = Task { await transcrireParMacOS(pendingAudio, figee, apercuConserve: apercu) }
     }
 
     /// Insère ce que l'aperçu en direct avait écrit (cf.
@@ -487,14 +540,16 @@ final class DictationController {
     ///
     /// Il était pris et rendu au fil des chemins du cycle, une ligne par
     /// chemin, et l'un d'eux l'oubliait toujours. Pris pendant l'écoute ; rendu
-    /// pendant la transcription, qui peut durer des minutes pendant qu'on
-    /// travaille ailleurs ; au repos, pris seulement devant une discussion
+    /// pendant l'attente de ChatGPT, qui peut durer des minutes pendant qu'on
+    /// travaille ailleurs ; pris pendant celle de macOS, qu'on attend des
+    /// yeux et qu'il interrompt ; au repos, pris seulement devant une discussion
     /// affichée (cf. `Relais.discussionAffichee`) — Caspr est alors au repos,
     /// mais une fenêtre attend qu'on en sorte.
     private func ajusterEchap() {
         let voulu = switch state {
         case .recording: true
-        case .starting, .processing: false
+        case .processing: voieDuCycle == .apple
+        case .starting: false
         case .idle, .failed: Relais.partage.discussionAffichee
         }
         echap.tenir(voulu)

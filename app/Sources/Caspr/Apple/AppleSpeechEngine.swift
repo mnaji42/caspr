@@ -66,8 +66,14 @@ final class AppleSpeechEngine: TranscripteurMacOS {
                                             attributeOptions: [])
         // Réservation avant installation : l'inventaire ne répond pas sur une
         // langue non réservée. Cf. SpeechAssets.
+        //
+        // Le téléchargement peut durer des minutes, pendant « Transcription… » :
+        // l'annulation est vérifiée de part et d'autre (cf.
+        // `DictationController.interrompreLaTranscription`).
+        try Task.checkCancellation()
         try await LivePreview.reserve(locale)
         try await Self.installAssets(for: transcriber)
+        try Task.checkCancellation()
 
         guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(
             compatibleWith: [transcriber]) else {
@@ -91,7 +97,6 @@ final class AppleSpeechEngine: TranscripteurMacOS {
             continuation.yield(AnalyzerInput(buffer: buffer))
         }
         continuation.finish()
-        try await analyzer.finalizeAndFinishThroughEndOfInput()
 
         // ## Ce `try?` valait un bug muet, et il l'a produit
         //
@@ -107,7 +112,13 @@ final class AppleSpeechEngine: TranscripteurMacOS {
         // Un moteur qui ne peut pas travailler doit le dire. Le silence est
         // réservé au vrai silence : un flux qui se termine sans résultat rend
         // une chaîne vide sans lever, et ce cas-là reste traité comme avant.
-        return try await gathered.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return try await withTaskCancellationHandler {
+            try await analyzer.finalizeAndFinishThroughEndOfInput()
+            return try await gathered.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        } onCancel: {
+            gathered.cancel()
+            Task { await analyzer.cancelAndFinishNow() }
+        }
     }
 
     /// Découpe les échantillons en tampons au format de l'analyseur.

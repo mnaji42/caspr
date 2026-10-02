@@ -264,16 +264,14 @@ final class VoieChatGPT {
             // renonce, et non une fois macOS fini. C'est l'arrêt qui range sa
             // barre : rangée avant, la page serait suspendue, et l'arrêt
             // n'aboutirait pas. Puis la voie macOS prend la suite, comme un
-            // « Réessayer » — sa transcription dure quelques secondes, et ne
-            // s'interrompt pas plus que celle d'une dictée macOS.
-            // La raison se lit dès maintenant : si macOS échoue à son tour, la
-            // barre dira son échec à lui, et un quota atteint ne se lirait
-            // plus qu'au menu.
+            // « Réessayer » — interruptible comme lui. La barre dit la raison
+            // dès maintenant (cf. `DictationController`) : si macOS échoue à
+            // son tour, elle dira son échec à lui, et un quota atteint ne se
+            // lirait plus qu'au menu.
             let motif = RelaisRepli.motif(apres: cause)
             let echantillons = relais.prendreLeSon()
             couper()
             terminer(fin)
-            overlay.showProcessing("\(motif) — transcription par macOS…")
             surRepliParMacOS(echantillons, dictee, annonce, motif)
         case .inserer(let texte), .insererLApercu(let texte):
             // L'aperçu, lui, n'est au menu que si on l'y met : une insertion

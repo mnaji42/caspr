@@ -70,9 +70,10 @@ public final class RelaisDictee {
     private var marquee = false
     /// Le message est parti : une alerte inconnue peut alors être un refus.
     private var envoye = false
-    /// Ce qui, dans la zone, signe la consigne envoyée (cf.
+    /// Ce qui, dans la zone, signe chaque bout non vide de la consigne
+    /// envoyée — avant, puis après la transcription (cf.
     /// `RelaisVeille.empreinte`).
-    private var empreinte = ""
+    private var empreintes: [String] = []
     private var lecture: Task<RelaisErreur?, Never>?
 
     /// La page que cette dictée a prise est-elle morte depuis ?
@@ -218,9 +219,14 @@ public final class RelaisDictee {
     /// fil neuf est ouvert **après**, par la préparation de la dictée suivante.
     ///
     /// `brut` signe le message quand il n'y a pas de consigne.
+    ///
+    /// Chaque bout se relit, et pas seulement le premier : un module dont
+    /// seul « Après » est rempli — « Traduis ce qui précède » — n'avait
+    /// aucune empreinte, et son envoi partait au premier relevé, avant que
+    /// l'éditeur ait validé la consigne.
     public func envoyer(avant: String, apres: String, brut: String) async throws {
         try Task.checkCancellation()
-        empreinte = RelaisVeille.empreinte(avant)
+        empreintes = [avant, apres].map(RelaisVeille.empreinte).filter { !$0.isEmpty }
         if !avant.isEmpty || !apres.isEmpty {
             guard try await AppelAnnulable.appeler({ try await self.page.encadrer(avant: avant, apres: apres) })
             else { throw RelaisErreur.introuvable(.composeur) }
@@ -228,15 +234,15 @@ public final class RelaisDictee {
             // d'avance : l'envoi partait avant que l'éditeur ait validé le
             // texte ajouté, et seule la transcription brute était expédiée. Un
             // délai fixe marcherait jusqu'au jour où la machine rame.
-            if !empreinte.isEmpty {
-                let signe = empreinte
-                // Délai de geste : la consigne écrite se relit aussitôt.
-                try await observer(.texte, delai: .consigne) { $0.texte?.contains(signe) == true ? () : nil }
+            let signes = empreintes
+            // Délai de geste : la consigne écrite se relit aussitôt.
+            try await observer(.texte, delai: .consigne) { vu in
+                signes.allSatisfy { vu.texte?.contains($0) == true } ? () : nil
             }
         }
         // Seule une alerte ou une réponse apparue depuis la marque compte.
         try await marquer()
-        let signe = empreinte.isEmpty ? brut : empreinte
+        let signe = empreintes.first ?? brut
         // Délai de geste : le bouton d'envoi existe dès que la zone est remplie.
         try await observer([], delai: .envoi) { _ in try await self.cliquer(.envoi) }
         envoye = true
@@ -343,11 +349,12 @@ public final class RelaisDictee {
         restaurer()
         try Task.checkCancellation()
         guard !texte.isEmpty else { throw RelaisErreur.pasDeReponse }
-        // Garde-fou : le délimiteur de la consigne ne figure jamais dans une
-        // réponse, et sa présence signe un bouton « copier » pris sous le
-        // mauvais message — c'est le prompt lui-même qui s'écrivait dans
-        // l'éditeur, sans que rien ne trahisse la méprise.
-        if !empreinte.isEmpty, texte.contains(empreinte) {
+        // Garde-fou : la dernière ligne d'un bout de consigne ne figure
+        // jamais dans une réponse, et sa présence signe un bouton « copier »
+        // pris sous le mauvais message — c'est le prompt lui-même qui
+        // s'écrivait dans l'éditeur, sans que rien ne trahisse la méprise.
+        // Les deux bouts : un module qui n'a que « Après » n'en a pas d'autre.
+        if empreintes.contains(where: texte.contains) {
             journal("relais : copie de la demande au lieu de la réponse", true)
             throw RelaisErreur.pasDeReponse
         }

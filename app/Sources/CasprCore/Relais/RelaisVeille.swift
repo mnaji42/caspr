@@ -48,13 +48,17 @@ public struct RelaisVeille {
     }
 
     /// La dernière ligne non vide de la consigne — ce qui, dans la zone, signe
-    /// le message envoyé, et ce qu'une copie ne doit pas contenir.
+    /// le message envoyé, et ce qu'une copie ne doit pas contenir ; vide
+    /// quand elle n'a que des blancs.
     ///
     /// Meilleure empreinte que le début du texte : elle est courte, très
     /// distinctive, et elle ne souffre pas de la façon dont la page replie les
-    /// espaces d'un long paragraphe.
+    /// espaces d'un long paragraphe. Une consigne de blancs rendait ces
+    /// blancs, que la zone ne relit jamais tels quels : l'envoi attendait sa
+    /// relecture, et échouait.
     public static func empreinte(_ consigne: String) -> String {
-        consigne.split(separator: "\n").last.map(String.init) ?? consigne
+        consigne.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+            .last { !$0.isEmpty } ?? ""
     }
 
     /// La transcription qui revient dans la zone de saisie, rendue quand elle

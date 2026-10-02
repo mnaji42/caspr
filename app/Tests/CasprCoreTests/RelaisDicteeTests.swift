@@ -360,6 +360,22 @@ struct RelaisDicteeTests {
         #expect(!page.clics.contains(.envoi))
     }
 
+    /// « Traduis ce qui précède » : seul « Après » est rempli, et c'est lui
+    /// qui se relit avant l'envoi. Sans empreinte, l'envoi partait au
+    /// premier relevé, avant la consigne.
+    @Test("Une consigne « Après » seule se relit avant l'envoi")
+    func apresSeulRelu() async throws {
+        let page = PageFactice()
+        page.consignePrend = false
+        let dictee = Self.dictee(page)
+        try await dictee.ouvrirLEcoute()
+        let brut = try await dictee.arreterEtLire()
+        await #expect(throws: RelaisErreur.consigneNonPosee) {
+            try await dictee.envoyer(avant: "", apres: "\nTraduis ce qui précède en anglais.", brut: brut)
+        }
+        #expect(!page.clics.contains(.envoi))
+    }
+
     // MARK: - La réponse
 
     @Test("« copier » n'est cliqué que sous une réponse nouvelle, jamais celle d'avant")
@@ -383,6 +399,17 @@ struct RelaisDicteeTests {
         try await dictee.envoyer(avant: "Réorganise.\n---\n", apres: "", brut: brut)
         await #expect(throws: RelaisErreur.pasDeReponse) { try await dictee.recuperer() }
         #expect(page.presse.contenu == "le presse-papiers de l'utilisateur")
+    }
+
+    @Test("Une copie qui contient la consigne « Après » seule est rejetée aussi")
+    func copieDeLaDemandeApresSeul() async throws {
+        let page = PageFactice()
+        page.reponse = "Bonjour\nTraduis ce qui précède en anglais."
+        let dictee = Self.dictee(page)
+        try await dictee.ouvrirLEcoute()
+        let brut = try await dictee.arreterEtLire()
+        try await dictee.envoyer(avant: "", apres: "\nTraduis ce qui précède en anglais.", brut: brut)
+        await #expect(throws: RelaisErreur.pasDeReponse) { try await dictee.recuperer() }
     }
 
     @Test("Abandonnée pendant la copie, la dictée rend le presse-papiers et n'insère rien")

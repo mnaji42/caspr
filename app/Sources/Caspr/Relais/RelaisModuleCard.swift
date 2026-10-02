@@ -162,7 +162,7 @@ struct RelaisModuleCard: View {
                 Text(deplie ? "Masquer \(quoi)" : "Modifier \(quoi)…")
                     .font(.system(size: 12, weight: .medium))
                 Spacer(minLength: 0)
-                Text(module.avant.isEmpty ? "aucune" : "personnalisée")
+                Text(module.avant.isEmpty && module.apres.isEmpty ? "aucune" : "personnalisée")
                     .font(.system(size: 11))
                     .foregroundStyle(Style.textSecondary)
                 Image(systemName: "chevron.right")

@@ -69,6 +69,9 @@ struct RelaisVeilleTests {
         #expect(RelaisVeille.empreinte("Remets en ordre :\n\n---\n") == "---")
         #expect(RelaisVeille.empreinte("une ligne") == "une ligne")
         #expect(RelaisVeille.empreinte("") == "")
+        // Des blancs ne se relisent pas tels quels dans la zone : rien à attendre.
+        #expect(RelaisVeille.empreinte("\n  \n") == "")
+        #expect(RelaisVeille.empreinte("\n=== FIN ===  ") == "=== FIN ===")
     }
 
     private static func stabilisation(_ zones: [String?]) -> [RelaisVeille.Stabilisation.Issue?] {

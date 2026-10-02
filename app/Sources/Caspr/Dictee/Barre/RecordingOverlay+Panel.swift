@@ -386,7 +386,7 @@ extension RecordingOverlay {
         card = nil
         cardSheen = nil
         tabsLayout = nil
-        NSLog("caspr: écrans modifiés — panneau reconstruit")
+        Log.info("écrans modifiés — panneau reconstruit")
 
         guard wasRecording else { return }
         showRecording(status)

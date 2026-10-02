@@ -213,11 +213,11 @@ final class ModifierKeyMonitor {
             // Sans le droit, `start()` échouerait à nouveau : on n'insiste pas
             // toutes les dix secondes pour rien.
             guard hasPermission else { return }
-            if start() { NSLog("caspr: tap clavier créé après coup") }
+            if start() { Log.info("tap clavier créé après coup") }
             return
         }
         guard !CGEvent.tapIsEnabled(tap: tap) else { return }
         CGEvent.tapEnable(tap: tap, enable: true)
-        NSLog("caspr: tap clavier réarmé")
+        Log.info("tap clavier réarmé")
     }
 }

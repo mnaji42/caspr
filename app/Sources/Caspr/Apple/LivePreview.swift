@@ -102,7 +102,7 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
             _ = await AssetInventory.release(reservedLocale: previous)
         }
         let granted = try await AssetInventory.reserve(locale: locale)
-        NSLog("caspr: locale %@ réservée : %@", locale.identifier, granted ? "oui" : "non")
+        Log.info("aperçu : locale \(locale.identifier) réservée : \(granted ? "oui" : "non")")
     }
 
     /// Branche l'analyseur, sauf si l'aperçu a été arrêté entre-temps.
@@ -159,7 +159,7 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
             let installed = await SpeechTranscriber.installedLocales
             if !installed.contains(where: { $0.identifier == locale.identifier }) {
                 await report("aperçu : téléchargement du modèle \(locale.identifier)…")
-                NSLog("caspr: téléchargement du modèle d'aperçu (%@)…", locale.identifier)
+                Log.info("aperçu : téléchargement du modèle (\(locale.identifier))…")
                 try await AppleSpeechEngine.installAssets(for: transcriber)
             }
 
@@ -185,7 +185,7 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
             try await analyzer.start(inputSequence: stream)
         } catch {
             await report("aperçu indisponible — \(error.localizedDescription)")
-            NSLog("caspr: aperçu en direct impossible — %@", String(describing: error))
+            Log.error("aperçu en direct impossible — \(String(describing: error))")
             stop()
         }
     }
@@ -210,7 +210,7 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
                 }
             }
         } catch {
-            NSLog("caspr: flux d'aperçu interrompu — %@", String(describing: error))
+            Log.error("aperçu : flux interrompu — \(String(describing: error))")
         }
     }
 

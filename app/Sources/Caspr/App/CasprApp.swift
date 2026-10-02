@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onTrigger: { [weak self] in self?.controller.toggle() },
             onHold: { [weak self] in self?.openSettingsFromHold() })
         if prefs.triggerKind == .option, !modifierKey.start() {
-            NSLog("caspr: tap clavier indisponible — accessibilité accordée ?")
+            Log.error("tap clavier indisponible — accessibilité accordée ?")
         }
 
         // L'autre déclencheur possible, exclusif du précédent. Il passe par
@@ -80,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkey = HotkeyMonitor { [weak self] in self?.controller.toggle() }
         let shortcut = prefs.dictateShortcut
         if prefs.triggerKind == .shortcut, !hotkey.register(shortcut) {
-            NSLog("caspr: impossible d'enregistrer \(shortcut.label) — raccourci déjà pris ?")
+            Log.error("impossible d'enregistrer \(shortcut.label) — raccourci déjà pris ?")
         }
 
         // Ouvrir le menu au clavier : sans ça, retrouver une transcription
@@ -386,7 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if case .failed(let message) = state {
             button.toolTip = message
-            NSLog("caspr: %@", message)
+            Log.error("échec : \(message)")
         }
         Task { await refreshMenu() }
     }

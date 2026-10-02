@@ -43,9 +43,9 @@ final class AppleSpeechEngine: TranscripteurMacOS {
     static func installAssets(for transcriber: SpeechTranscriber) async throws {
         guard let request = try await AssetInventory
             .assetInstallationRequest(supporting: [transcriber]) else { return }
-        NSLog("caspr: téléchargement du modèle de reconnaissance de macOS")
+        Log.info("téléchargement du modèle de reconnaissance de macOS")
         try await request.downloadAndInstall()
-        NSLog("caspr: modèle de reconnaissance de macOS installé")
+        Log.info("modèle de reconnaissance de macOS installé")
     }
 
     func transcribe(_ samples: [Float], language: String) async throws -> String {

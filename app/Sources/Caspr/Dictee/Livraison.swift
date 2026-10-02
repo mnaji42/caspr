@@ -123,7 +123,7 @@ final class Livraison {
             try await injector.inject(text)
         case .file(let url):
             try TargetWriter.append(text, to: url)
-            NSLog("caspr: ajouté à %@", url.lastPathComponent)
+            Log.info("notes : ajouté à \(url.lastPathComponent)")
         }
     }
 
@@ -227,7 +227,7 @@ final class Livraison {
             return
         }
         guard selecteurPossible else {
-            NSLog("caspr: aucun fichier de notes mémorisé — en choisir un depuis le menu")
+            Log.info("notes : aucun fichier mémorisé — en choisir un depuis le menu")
             return
         }
         choisirLeFichierDeNotes()
@@ -242,13 +242,13 @@ final class Livraison {
         if chosen == nil {
             // Détection impossible : plutôt qu'un sélecteur surgissant sans
             // raison apparente, on dit pourquoi avant de le proposer.
-            NSLog("caspr: fichier non identifié — sélecteur")
+            Log.info("notes : fichier non identifié — sélecteur")
             chosen = TargetWriter.chooseFile()
         }
         guard let chosen else { return }
         Preferences.shared.noteFile = chosen
         Preferences.shared.destination = .notes
-        NSLog("caspr: notes dans %@", chosen.path)
+        Log.info("notes : dans \(chosen.path)")
     }
 
     // MARK: - Échec et recours

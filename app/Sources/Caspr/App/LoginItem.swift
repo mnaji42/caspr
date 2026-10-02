@@ -43,7 +43,7 @@ enum LoginItem {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            NSLog("caspr: ouverture de session — %@", error.localizedDescription)
+            Log.error("ouverture de session — \(error.localizedDescription)")
         }
         return isEnabled
     }

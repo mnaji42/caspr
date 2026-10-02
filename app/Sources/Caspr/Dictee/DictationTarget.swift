@@ -87,15 +87,15 @@ enum TargetWriter {
         let axWindow = focused as! AXUIElement
 
         if let url = documentAttribute(of: axWindow) {
-            NSLog("caspr: document via AXDocument — %@", url.path)
+            Log.info("notes : document via AXDocument — \(url.path)")
             return url
         }
         if let url = documentFromTitle(of: axWindow) {
-            NSLog("caspr: document via titre de fenêtre — %@", url.path)
+            Log.info("notes : document via titre de fenêtre — \(url.path)")
             return url
         }
-        NSLog("caspr: aucun document identifié pour %@",
-              app.localizedName ?? "l'app active")
+        Log.info("notes : aucun document identifié pour "
+                 + (app.localizedName ?? "l'app active"))
         return nil
     }
 

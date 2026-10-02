@@ -58,30 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             preferences.show(history: controller.history)
         }
 
-        let prefs = Preferences.shared
         Relais.partage.prechauffer()
 
-        // Déclencheur principal : Option pressée seule.
-        modifierKey = ModifierKeyMonitor(
-            side: prefs.triggerSide,
-            onTrigger: { [weak self] in self?.controller.toggle() },
-            onHold: { [weak self] in self?.openSettingsFromHold() })
-        if prefs.triggerKind == .option, !modifierKey.start() {
-            Log.error("tap clavier indisponible — accessibilité accordée ?")
-        }
-
-        // L'autre déclencheur possible, exclusif du précédent. Il passe par
-        // Carbon, qui n'exige aucune autorisation, là où le tap réclame
-        // l'accessibilité — c'est la porte de sortie quand Option est déjà
-        // prise, ou quand on refuse ce droit.
-        //
-        // Sous « touche Option » il n'est même pas enregistré : le laisser
-        // actif ferait fonctionner un déclencheur que l'utilisateur a écarté.
+        // Option seule ou le raccourci, selon les réglages. Le raccourci
+        // existe avant d'être branché : changer de déclencheur le reprend.
         hotkey = HotkeyMonitor { [weak self] in self?.controller.toggle() }
-        let shortcut = prefs.dictateShortcut
-        if prefs.triggerKind == .shortcut, !hotkey.register(shortcut) {
-            Log.error("impossible d'enregistrer \(shortcut.label) — raccourci déjà pris ?")
-        }
+        brancherLaDictee()
 
         // Ouvrir le menu au clavier : sans ça, retrouver une transcription
         // suppose de viser une icône de barre de menus à la souris.
@@ -782,29 +764,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Reporte les réglages sur les composants déjà en place.
     private func applyPreferences() {
-        let prefs = Preferences.shared
-
         // La langue et la destination ne sont plus recopiées : le contrôleur
-        // les lit dans les préférences au moment de s'en servir. Reste le déclencheur,
-        // dont le côté est fixé à la création du tap : il faut le reconstruire.
-        modifierKey.stop()
-        modifierKey = ModifierKeyMonitor(
-            side: prefs.triggerSide,
-            onTrigger: { [weak self] in self?.controller.toggle() },
-            onHold: { [weak self] in self?.openSettingsFromHold() })
-        if prefs.triggerKind == .option { modifierKey.start() }
-
+        // les lit dans les préférences au moment de s'en servir. Reste le
+        // déclencheur, que le système tient (cf. `brancherLaDictee`).
+        //
         // Le raccourci Carbon est enregistré auprès du système : en changer
         // suppose de rendre l'ancien avant de prendre le nouveau. Les deux
         // sont rendus avant d'être repris, la dictée d'abord : si l'on vient
         // de lui donner la combinaison de la bascule, c'est elle qui la garde.
         hotkey.unregister()
         voieHotkey.unregister()
+        brancherLaDictee()
+        registerVoieShortcut()
+        Task { await refreshMenu() }
+    }
+
+    /// Branche le déclencheur de la dictée que les réglages désignent.
+    ///
+    /// Une seule fois écrit, pour le lancement comme pour un réglage changé :
+    /// le guetteur d'Option se construisait aux deux endroits, et seul le
+    /// lancement disait au journal qu'il n'avait pas pu naître.
+    ///
+    /// Option pressée seule, par un tap clavier dont le côté est fixé à la
+    /// création : il est reconstruit à chaque fois. Ou le raccourci, par
+    /// Carbon, qui n'exige aucune autorisation là où le tap réclame
+    /// l'accessibilité — c'est la porte de sortie quand Option est déjà
+    /// prise, ou quand on refuse ce droit. L'un exclut l'autre : sous
+    /// « touche Option », le raccourci n'est même pas enregistré, et le
+    /// laisser actif ferait fonctionner un déclencheur qu'on a écarté.
+    private func brancherLaDictee() {
+        let prefs = Preferences.shared
+        modifierKey?.stop()
+        modifierKey = ModifierKeyMonitor(
+            side: prefs.triggerSide,
+            onTrigger: { [weak self] in self?.controller.toggle() },
+            onHold: { [weak self] in self?.openSettingsFromHold() })
+        if prefs.triggerKind == .option, !modifierKey.start() {
+            Log.error("tap clavier indisponible — accessibilité accordée ?")
+        }
         if prefs.triggerKind == .shortcut, !hotkey.register(prefs.dictateShortcut) {
             Log.error("raccourci \(prefs.dictateShortcut.label) refusé — déjà pris ?")
         }
-        registerVoieShortcut()
-        Task { await refreshMenu() }
     }
 
     /// Le raccourci « Changer de voie », s'il y en a un.

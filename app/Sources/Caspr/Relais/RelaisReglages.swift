@@ -27,7 +27,7 @@ struct RelaisReglages: View {
                              surChangement: relire)
         }
 
-        if depart || modules.contains(where: \.demandeUnAllerRetour) {
+        if depart || modules.contains(where: { $0.envoi != .aucun }) {
             SectionLabel("Point de départ")
             Card {
                 Row(label: "Conversations créées par Caspr") {

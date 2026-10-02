@@ -20,8 +20,8 @@ réapprend les boutons en les essayant, et un repère qui ne trouve rien dit
 ## Les composants
 
 Tout tient dans `app/Sources/Caspr/Relais/`, un fichier par responsabilité —
-sauf les types sans dépendance système (modules, capacités, sorties, affichage,
-structure des sélecteurs, modules livrés), rangés dans
+sauf les types sans dépendance système (modules, capacités, affichage,
+structure des sélecteurs, catalogue des modules), rangés dans
 `app/Sources/CasprCore/Relais/` pour être sous tests :
 
 | Fichier | Responsabilité |
@@ -42,7 +42,7 @@ structure des sélecteurs, modules livrés), rangés dans
 | `RelaisSelecteurs+Persistance.swift` | La persistance des sélecteurs CSS appris ; leur structure et leur décodage vivent dans `CasprCore`. |
 | `RelaisCycle.swift` (dans `CasprCore`) | La machine d'une dictée, en table : ses phases (`RelaisPhase`), leur libellé et la sortie que la barre dit avec le chrono, et ce que valent la touche de dictée et la croix à chacune (`RelaisCycle.decider`), et quel échec de la page mène au repli (`RelaisCycle.replie`). Aucune ligne ne vient de l'horloge. |
 | `RelaisReglages.swift` | Les réglages de la voie ChatGPT, sous sa ligne dans Réglages › Voie : la session, ce que le relais a appris, les modules, le point de départ. La carte de session (`RelaisSession`) est aussi celle de l'accueil, et c'est elle qui dit ce que la voie exige pour dicter. |
-| `RelaisModuleCard.swift` | Le réglage d'un module : ses actions, sa sortie, son affichage. |
+| `RelaisModuleCard.swift` | Le réglage d'un module : ce qu'il fait, lu de son envoi, sa consigne, son affichage. |
 | `RelaisCatalogue.swift` | Les modules connus, fusionnés avec les réglages de l'utilisateur, et celui qui est retenu. |
 
 ### Ce qu'on montre pendant la dictée
@@ -76,10 +76,14 @@ suspendant une fenêtre qu'il croit cachée.
 
 ### Les modules
 
-Ce que Caspr fait d'une dictée est un **module** : des actions (envoyer,
-récupérer la réponse, la faire lire à haute voix), une sortie (le curseur, les
-notes, ou nulle part) et un affichage. Ceux que l'application livre ne sont
-que des modules pré-remplis :
+Ce que Caspr fait d'une dictée est un **module** : un envoi (`RelaisEnvoi` —
+rien, écrire la dictée ; remplacer, écrire la réponse de ChatGPT ; discuter,
+la réponse reste à l'écran), une consigne autour de ce qui est dit, un
+affichage, et la lecture à haute voix. Un seul choix plutôt que des actions et
+des sorties à combiner : une combinaison invalide ne s'écrit pas, et `ecrit`
+est le seul prédicat de destination, que la barre, la fenêtre, la fin d'une
+dictée et la carte lisent tous. Ceux que l'application livre ne sont que des
+modules pré-remplis :
 
 | Module | Ta voix est… | Sortie |
 |---|---|---|
@@ -89,7 +93,14 @@ que des modules pré-remplis :
 
 Un module déclare les **capacités** dont il a besoin, et une capacité ne se
 choisit pas : elle s'acquiert, par calibration ou par autorisation système. La
-barre ne propose que les modules dont les capacités sont acquises.
+barre ne propose que les modules dont les capacités sont acquises, et la
+barre comme la dictée lisent le même module retenu : le choisi s'il est
+utilisable, sinon « Brut » (`RelaisCatalogue.retenu`).
+
+Le format rangé se relit dans les deux sens : un module écrit avant l'envoi le
+retrouve dans ses anciennes actions et sa sortie, et chaque module réécrit ces
+anciennes clés à côté de `envoi`, pour qu'une version antérieure réinstallée
+relise « Discuter » comme tel.
 
 La consigne se **dit**, elle ne se configure pas : « traduis ça en anglais » ne
 tient pas dans un réglage. Caspr n'ajoute qu'un emballage, dont le seul rôle

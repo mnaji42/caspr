@@ -18,7 +18,7 @@ struct RelaisSelecteursTests {
     }
 
     /// Un enregistrement vide ne doit pas lever : lever, c'est ce que
-    /// `charger()` traduit en « rien n'a été calibré ».
+    /// `RelaisCatalogue.selecteurs(dans:)` traduit en « rien n'a été calibré ».
     @Test("Un objet vide rend les valeurs par défaut")
     func emptyObjectGivesDefaults() throws {
         #expect(try relire("{}") == RelaisSelecteurs())
@@ -33,7 +33,7 @@ struct RelaisSelecteursTests {
         #expect(s.composeur == ".c")
         #expect(s.envoi.isEmpty && s.reponse.isEmpty && s.copier.isEmpty)
         #expect(s.estCalibre)
-        #expect(!s.saitDialoguer)
+        #expect(!RelaisCatalogue.reorganiser.estUtilisable(s))
     }
 
     /// v0.13 : l'envoi et le repère de la réponse, avant le bouton copier.
@@ -46,8 +46,8 @@ struct RelaisSelecteursTests {
             """#)
         #expect(s.envoi == ".e")
         #expect(s.reponse == ".r")
-        #expect(s.saitDialoguer)
-        #expect(!s.saitCopier)
+        #expect(RelaisCatalogue.reorganiser.estUtilisable(s))
+        #expect(s.copier.isEmpty)
         #expect(RelaisCapacite.recuperer.estAcquise(s))
     }
 
@@ -60,7 +60,6 @@ struct RelaisSelecteursTests {
             """#)
         #expect(v142.copier == ".k")
         #expect(v142.copierParent.isEmpty)
-        #expect(v142.saitCopier)
 
         let v145 = try relire(#"""
             {"micro":".m","stop":".s","composeur":".c","envoi":".e","reponse":".r",

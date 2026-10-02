@@ -1,6 +1,6 @@
 import Foundation
 
-/// Les trois éléments de la page ChatGPT dont le relais a besoin.
+/// Les éléments de la page ChatGPT que le relais apprend à désigner.
 public enum RelaisCible: String, CaseIterable, Codable, Sendable {
     case micro, stop, composeur, envoi, reponse, copier, lecture
 
@@ -25,11 +25,11 @@ public enum RelaisCible: String, CaseIterable, Codable, Sendable {
 /// codé en dur marcherait jusqu'au mardi où il ne marcherait plus, sans
 /// message, et il faudrait recompiler pour réparer.
 ///
-/// En les apprenant, la panne devient réparable par l'utilisateur en dix
-/// secondes : « Calibrer » dans le menu, trois clics, c'est reparti.
+/// En les apprenant, la panne devient réparable par l'utilisateur sans
+/// attendre une version : « Calibrer automatiquement », et c'est reparti.
 ///
 /// Un sélecteur vide signifie « pas encore appris » : le pont JavaScript
-/// retombe alors sur ses heuristiques (cf. `pont.js` dans `RelaisPage`).
+/// retombe alors sur ses heuristiques (cf. `RelaisScripts`).
 public struct RelaisSelecteurs: Codable, Equatable {
     public var micro = ""
     public var stop = ""
@@ -101,17 +101,6 @@ public struct RelaisSelecteurs: Codable, Equatable {
     /// Vrai quand l'utilisateur a calibré au moins le micro et l'arrêt — les
     /// deux que les heuristiques ont le plus de mal à deviner.
     public var estCalibre: Bool { !micro.isEmpty && !stop.isEmpty }
-
-    /// Vrai quand l'aller-retour avec ChatGPT est possible.
-    /// L'un ou l'autre suffit : le bouton « copier » est le chemin d'aujourd'hui,
-    /// le repère de la réponse celui des configurations d'avant. Exiger le
-    /// premier ferait disparaître le mode chez qui l'a calibré hier.
-    public var saitDialoguer: Bool {
-        estCalibre && !envoi.isEmpty && (!copier.isEmpty || !reponse.isEmpty)
-    }
-
-    /// Sait-on récupérer la réponse par le bouton de ChatGPT ?
-    public var saitCopier: Bool { !copier.isEmpty }
 
     /// Sait-on faire lire la réponse à haute voix ?
     public var saitLire: Bool { !lecture.isEmpty }

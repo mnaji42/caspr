@@ -101,8 +101,7 @@ final class VoieChatGPT {
             previewEnabled: Preferences.shared.livePreviewEnabled,
             moduleLabels: modules.map(\.nom),
             moduleIndex: modules.firstIndex(of: courant) ?? 0,
-            destinationImposee: courant.sorties == [.aucune]
-                ? "Réponse à l'écran" : nil,
+            destinationImposee: courant.ecrit ? nil : "Réponse à l'écran",
             languageBadge: "ChatGPT",
             switchableLanguages: Preferences.shared.livePreviewEnabled
                 ? Preferences.shared.activeLanguages.map { ($0.code, $0.shortBadge) } : [],
@@ -235,7 +234,7 @@ final class VoieChatGPT {
     @discardableResult
     private func replier(apres cause: RelaisErreur? = nil) -> Bool {
         let dictee = self.dictee ?? figer()
-        let ecrit = !dictee.nEcritNullePart
+        let ecrit = dictee.module?.ecrit != false
         let son = relais.secondesEntendues
         let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: son, ecrit: ecrit, apercu: apercu.texte)
         let annonce = RelaisRepli.annonce(repli, apres: cause, son: son, parle: dictee.duree)
@@ -339,7 +338,7 @@ final class VoieChatGPT {
         }
         // Pendant l'écoute, rien n'est encore figé : c'est le module du
         // moment qui dit où la dictée devait aller.
-        let ecrit = !(dictee?.nEcritNullePart ?? (RelaisCatalogue.courant.sortieParDefaut == .aucune))
+        let ecrit = (dictee?.module ?? RelaisCatalogue.courant).ecrit
         couper()
         overlay.hide()
         if echec == nil { Feedback.cancelled() }
@@ -585,7 +584,7 @@ final class VoieChatGPT {
             livraison.garderLeBrut(brut)
             self.brut = brut
             // Une dictée qui n'écrit nulle part s'arrête sur la page.
-            if dictee.nEcritNullePart { return await discuter(brut, module, scenario, g) }
+            if dictee.module?.ecrit == false { return await discuter(brut, module, scenario, g) }
 
             // La seconde passe, quand le module la demande. Elle rend le brut
             // si elle échoue : rien de ce qui a été dit ne se perd.
@@ -694,10 +693,9 @@ final class VoieChatGPT {
     /// brut ici insérerait un texte dont on vient de demander l'abandon.
     private func transformer(_ brut: String, _ module: RelaisModule,
                              _ scenario: RelaisDictee, _ g: Int) async throws -> (String, String?) {
-        // Ce que le module exige, et non un drapeau global : c'est lui qui
-        // sait de quoi il a besoin, et lui seul.
-        guard module.demandeUnAllerRetour, module.estUtilisable(RelaisSelecteurs.charger())
-        else { return (brut, nil) }
+        // Le module retenu est utilisable (cf. `RelaisCatalogue.retenu`) :
+        // seul son envoi dit s'il y a une seconde passe.
+        guard module.envoi == .remplacer else { return (brut, nil) }
         _ = avancer(g, .envoi)
         do {
             try await scenario.envoyer(avant: module.avant, apres: module.apres, brut: brut)
@@ -750,20 +748,20 @@ final class VoieChatGPT {
                           _ scenario: RelaisDictee, _ g: Int) async -> Issue? {
         var avertissement: String?
         var parti = false
-        if module.demandeUnAllerRetour, module.estUtilisable(RelaisSelecteurs.charger()) {
-            _ = avancer(g, .envoi)
-            do {
-                try await scenario.envoyer(avant: module.avant, apres: module.apres, brut: brut)
-                parti = true
-            } catch {
-                // Abandonné avant l'envoi : rien n'est parti, et c'est un
-                // abandon, pas un échec à afficher.
-                guard g == generation, !(error is CancellationError) else { return nil }
-                Log.error("relais : \(module.identifiant) n'a pas pu envoyer "
-                          + "(\(error.localizedDescription))")
-                avertissement = (error as? RelaisErreur)?.raisonCourte
-                    ?? "\(module.nom) n'a pas pu envoyer"
-            }
+        // Le module retenu sait envoyer (cf. `RelaisCatalogue.retenu`) : un
+        // « Discuter » sans envoi appris ne serait pas arrivé jusqu'ici.
+        _ = avancer(g, .envoi)
+        do {
+            try await scenario.envoyer(avant: module.avant, apres: module.apres, brut: brut)
+            parti = true
+        } catch {
+            // Abandonné avant l'envoi : rien n'est parti, et c'est un
+            // abandon, pas un échec à afficher.
+            guard g == generation, !(error is CancellationError) else { return nil }
+            Log.error("relais : \(module.identifiant) n'a pas pu envoyer "
+                      + "(\(error.localizedDescription))")
+            avertissement = (error as? RelaisErreur)?.raisonCourte
+                ?? "\(module.nom) n'a pas pu envoyer"
         }
         if parti {
             Log.info("relais : \(module.identifiant) — envoyé, réponse à l'écran")

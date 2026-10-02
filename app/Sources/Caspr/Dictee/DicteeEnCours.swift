@@ -31,7 +31,4 @@ struct DicteeEnCours {
     /// Il ne dimensionne aucune attente de ChatGPT, qui n'a pas de fin (cf.
     /// RELAIS.md, sixième règle).
     let duree: TimeInterval
-
-    /// La réponse reste à l'écran, et rien ne s'écrit nulle part.
-    var nEcritNullePart: Bool { module?.sortieParDefaut == .aucune }
 }

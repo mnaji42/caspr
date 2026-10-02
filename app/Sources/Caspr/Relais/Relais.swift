@@ -750,7 +750,7 @@ final class Relais: ObservableObject {
             // Délivrer ailleurs, c'est quitter la discussion. Basculer de
             // « Discuter » vers un module qui écrit referme la fenêtre, et
             // Caspr poursuivait sinon un fil que plus personne ne voyait.
-            if module.sortieParDefaut != .aucune { terminerDiscussion() }
+            if module.ecrit { terminerDiscussion() }
             // La barre se range quelle que soit l'issue : un texte vide la
             // laissait flotter au-dessus du travail. Sauf ce que la dictée
             // laisse délibérément à l'écran — la discussion qui continue, la

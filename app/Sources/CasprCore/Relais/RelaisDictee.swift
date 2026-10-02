@@ -265,7 +265,7 @@ public final class RelaisDictee {
     /// sait où il est, par la lecture de la page sinon — pour ne pas casser
     /// une configuration antérieure.
     public func recuperer() async throws -> String {
-        guard page.selecteurs.saitCopier else {
+        guard !page.selecteurs.copier.isEmpty else {
             // Deux secondes et demie sans changement, et non une : ChatGPT
             // écrit par flux, et rien ne signale un texte coupé. Le calme se
             // juge sur la longueur, et la réponse n'est lue qu'une fois finie

@@ -387,7 +387,7 @@ public enum RelaisScripts {
       // c'était la seule raison de s'en méfier.
       //
       // Le chemin structurel n'est qu'un dernier recours — il casse au moindre
-      // remaniement, mais recalibrer coûte trois clics.
+      // remaniement, mais une calibration automatique le réapprend.
       function selecteurStable(el, genre) {
         const repere = premierRepere(el, leRetrouve(el, genre));
         if (repere) return repere;

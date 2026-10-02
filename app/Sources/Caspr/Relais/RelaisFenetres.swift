@@ -186,7 +186,7 @@ extension RelaisPage {
         // fenêtre, alors que ne rien afficher est justement ce qu'on choisit
         // quand la réponse est lue à haute voix — on parle, on écoute, et il
         // n'y a rien à regarder.
-        if module.sortieParDefaut == .aucune, affichage == .page {
+        if !module.ecrit, affichage == .page {
             montrer()
             return
         }

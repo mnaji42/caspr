@@ -93,25 +93,22 @@ struct RelaisModuleCard: View {
         }
     }
 
-    /// Ce qui se passe, dans l'ordre, jusqu'à la destination.
+    /// Ce qui se passe, dans l'ordre du chemin, jusqu'à la destination — lu
+    /// de l'envoi, la seule chose qui distingue un module d'un autre.
     ///
-    /// Les étapes déduites y figurent aussi — « Récupérer la réponse »
-    /// n'est cochée nulle part, elle découle de la destination. La cacher
-    /// laisserait croire que le module fait moins qu'il ne fait.
+    /// « Récupérer la réponse » n'est cochée nulle part, elle découle de
+    /// l'envoi. La cacher laisserait croire que le module fait moins qu'il ne
+    /// fait.
     private var recette: some View {
         FlowLayout(spacing: 6) {
             jeton("Dicter", ton: .socle)
-            ForEach(module.etapes, id: \.rawValue) { etape in
-                jeton(etape == .demanderUneReponse && !module.avant.isEmpty
-                      ? etape.libelle + " (avec consigne)"
-                      : etape.libelle,
-                      ton: .etape)
+            if module.envoi != .aucun {
+                jeton(module.avant.isEmpty && module.apres.isEmpty
+                      ? "Envoyer à ChatGPT" : "Envoyer à ChatGPT (avec consigne)", ton: .etape)
             }
-            if module.sorties.contains(where: \.demandeLaReponse) {
-                jeton("Récupérer la réponse", ton: .deduite)
-            }
-            jeton("→ " + module.sorties.map(\.libelle).joined(separator: " ou "),
-                  ton: .sortie)
+            if module.envoi == .remplacer { jeton("Récupérer la réponse", ton: .deduite) }
+            if module.ditLaReponse { jeton("Faire lire la réponse", ton: .etape) }
+            jeton(module.ecrit ? "→ Curseur ou Notes…" : "→ Réponse à l'écran", ton: .sortie)
         }
     }
 

@@ -10,31 +10,34 @@ public enum RelaisPlaceDeLaConsigne: String, Codable {
     case essentielle
 }
 
-/// Où atterrit ce qui a été dicté.
+/// Ce qu'un module fait de la transcription, une fois l'écoute finie.
 ///
-/// Une seule décision, et non trois. Elle emporte la fenêtre et le clavier
-/// avec elle : `aucune` veut dire que la page reste ouverte et prend le
-/// clavier, les deux autres qu'elle se referme. Les traiter séparément
-/// permettrait d'écrire « insertion au curseur **et** fenêtre qui prend le
-/// clavier » — c'est-à-dire le texte qui part dans ChatGPT au lieu de
-/// l'éditeur, un défaut déjà payé une fois.
-public enum RelaisSortie: String, CaseIterable, Codable {
-    case curseur, note, aucune
+/// Un seul choix, et non des actions et des sorties à combiner. Les deux
+/// listes d'avant permettaient d'écrire « rapatrier la réponse » sans rien
+/// envoyer, ou « écrire au curseur » un texte resté à l'écran : des
+/// combinaisons qu'il fallait valider, et que chaque lecteur interprétait à
+/// sa façon — la barre et la dictée ne retenaient pas le même module. Ici,
+/// une combinaison invalide ne s'écrit pas.
+///
+/// La fenêtre et le clavier suivent : `discuter` est le seul qui laisse la
+/// page ouverte et lui donne le clavier. Les deux autres écrivent au curseur
+/// ou dans les notes, et la page ne doit jamais le prendre — le texte
+/// partirait dans ChatGPT au lieu de l'éditeur, un défaut déjà payé une fois.
+public enum RelaisEnvoi: String, CaseIterable, Codable {
+    /// Rien ne part : on écrit la transcription elle-même.
+    case aucun
+    /// On envoie, on récupère la réponse, et c'est elle qu'on écrit.
+    case remplacer
+    /// On envoie, et la réponse reste à l'écran : rien ne s'écrit.
+    case discuter
 
     public var libelle: String {
         switch self {
-        case .curseur: "Curseur"
-        case .note: "Notes…"
-        case .aucune: "Discuter"
+        case .aucun: "Écrire la dictée"
+        case .remplacer: "Écrire la réponse"
+        case .discuter: "Discuter"
         }
     }
-
-    /// Faut-il rapatrier la réponse de ChatGPT ?
-    ///
-    /// Conséquence, jamais choix. Une case « copier le résultat » à cocher à
-    /// côté d'une sortie qui l'implique déjà, c'est deux réglages qui peuvent
-    /// se contredire.
-    public var demandeLaReponse: Bool { self != .aucune }
 }
 
 /// Ce que Caspr fait d'une dictée, du micro jusqu'à la sortie.
@@ -45,16 +48,12 @@ public enum RelaisSortie: String, CaseIterable, Codable {
 /// lancement. C'est ce qui permet à quelqu'un de recréer « Réorganiser » à sa
 /// façon, ou d'en tirer une variante, sans qu'on ait rien prévu pour lui.
 ///
-/// ## L'ordre des étapes n'appartient pas au module
-///
 /// Le chemin est toujours le même — écouter, encadrer, envoyer, attendre,
-/// récupérer, dire à haute voix, livrer, refermer — et un module ne fait que
-/// dire lesquelles de ces étapes le concernent. Le laisser réordonner
-/// permettrait d'écrire « récupérer la réponse » avant « envoyer », c'est-à-dire
-/// une configuration qu'il faudrait valider au lieu de la rendre impossible.
-///
-/// Le module reste malgré tout lisible comme une recette : on affiche les
-/// étapes actives dans l'ordre du chemin, et l'on voit ce qu'il fait.
+/// récupérer, dire à haute voix, livrer — et un module ne dit que ce qu'il
+/// fait de la transcription (`envoi`), ce qu'il ajoute autour, ce qu'il
+/// montre et s'il fait lire la réponse. Le tuyau de dictée ne lit rien
+/// d'autre : un module écrit demain par l'utilisateur tourne sans qu'une
+/// ligne n'y change.
 public struct RelaisModule: Codable, Equatable, Identifiable {
     /// Stable, et jamais traduit : c'est lui qu'on enregistre.
     public var identifiant: String
@@ -84,49 +83,35 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
 
     /// Ce module propose-t-il de faire lire la réponse ?
     ///
-    /// Pas une règle déduite de la sortie : la lecture à haute voix est
-    /// utilisable partout, y compris avec un texte qui part au curseur — rien
-    /// n'interdit d'écrire *et* d'entendre. C'est un choix de conception, module
-    /// par module.
-    ///
-    /// Les trois modules livrés restent simples : seul « Discuter » l'offre,
-    /// parce que sa réponse ne vit qu'à l'écran. Les modules écrits par
-    /// l'utilisateur l'offrent tous — ce qu'il en fait le regarde.
+    /// Un choix de conception, module par module : la lecture à haute voix
+    /// marche partout, y compris avec un texte qui part au curseur. Les
+    /// modules livrés restent simples — seul « Discuter » l'offre, parce que
+    /// sa réponse ne vit qu'à l'écran. Ceux de l'utilisateur l'offrent tous.
     public var lectureProposee: Bool
 
     /// Faire lire la réponse à haute voix — un réglage, pas une nature.
     ///
-    /// Il vit à part des `actions` parce qu'il appartient à l'utilisateur,
-    /// tandis que les actions décrivent ce que le module *est* et suivent les
-    /// versions de l'application. Rangé parmi les actions, il était réenregistré
-    /// puis aussitôt écrasé par la définition d'usine à la lecture suivante : la
-    /// case se décochait toute seule sans que rien ne le dise.
+    /// À part de l'`envoi` parce qu'il appartient à l'utilisateur, tandis que
+    /// l'envoi d'un module livré suit les versions de l'application. Rangé
+    /// parmi les actions d'autrefois, il était réenregistré puis aussitôt
+    /// écrasé par la définition d'usine à la lecture suivante : la case se
+    /// décochait toute seule sans que rien ne le dise.
     public var ditLaReponse: Bool
 
-    /// Les étapes que ce module demande, entre l'écoute et la sortie.
-    ///
-    /// Une liste et non des drapeaux : ajouter une étape au produit ne doit
-    /// obliger à retoucher ni le module, ni le calcul des capacités, ni le
-    /// tuyau qui les exécute. L'ordre d'exécution vient de `RelaisAction`, pas
-    /// d'ici — celui qui écrit un module choisit ce qu'il veut, jamais quand.
-    public var actions: [RelaisAction]
-
-    /// Les sorties que ce module autorise, et celle qu'il propose d'abord.
-    ///
-    /// Plusieurs, parce que le choix se fait au dernier moment sur la barre —
-    /// comme aujourd'hui pour Curseur et Notes. Un module qui n'en autorise
-    /// qu'une l'impose.
-    public var sorties: [RelaisSortie]
-    public var sortieParDefaut: RelaisSortie
+    public var envoi: RelaisEnvoi
 
     /// Ce qu'on montre de la page pendant l'écoute.
     public var affichage: RelaisAffichage
 
     public var id: String { identifiant }
 
-    /// Les noms qu'un enregistrement plus ancien pouvait porter.
-    private enum AnciennesCles: String, CodingKey {
-        case consigneEssentielle
+    /// Les clés rangées, et après elles celles qu'un enregistrement plus
+    /// ancien portait, ou que les versions antérieures lisent encore (cf.
+    /// `encode(to:)`).
+    private enum CodingKeys: String, CodingKey {
+        case identifiant, nom, integre, avant, apres, consigne, lectureProposee,
+             ditLaReponse, envoi, affichage
+        case consigneEssentielle, actions, sorties, sortieParDefaut
     }
 
     // MARK: - Décodage tolérant
@@ -146,28 +131,61 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
         // de forme ne doit pas effacer ce qui était enregistré.
         if let place = try c.decodeIfPresent(RelaisPlaceDeLaConsigne.self, forKey: .consigne) {
             consigne = place
-        } else if let vieux = try? decoder.container(keyedBy: AnciennesCles.self),
-                  try vieux.decodeIfPresent(Bool.self, forKey: .consigneEssentielle) == true {
-            consigne = .essentielle
         } else {
-            consigne = .facultative
+            consigne = try c.decodeIfPresent(Bool.self, forKey: .consigneEssentielle) == true
+                ? .essentielle : .facultative
         }
         lectureProposee = try c.decodeIfPresent(Bool.self, forKey: .lectureProposee) ?? true
         ditLaReponse = try c.decodeIfPresent(Bool.self, forKey: .ditLaReponse) ?? false
-        actions = try c.decodeIfPresent([RelaisAction].self, forKey: .actions) ?? []
-        sorties = try c.decodeIfPresent([RelaisSortie].self, forKey: .sorties) ?? [.curseur, .note]
-        sortieParDefaut = try c.decodeIfPresent(RelaisSortie.self, forKey: .sortieParDefaut) ?? .curseur
+        // Traduit des actions et de la sortie d'avant, pour un module écrit
+        // avant que l'envoi n'existe — ou réécrit depuis par une version
+        // antérieure, qui l'aura laissé tomber. Lues en chaînes : `main`
+        // rangeait aussi `joindreEcran`, qu'aucune énumération d'ici ne
+        // connaît, et une valeur inconnue faisait perdre tout le module.
+        if let envoi = try c.decodeIfPresent(RelaisEnvoi.self, forKey: .envoi) {
+            self.envoi = envoi
+        } else if try c.decodeIfPresent([String].self, forKey: .actions)?
+                    .contains("demanderUneReponse") == true {
+            envoi = try c.decodeIfPresent(String.self, forKey: .sortieParDefaut) == "aucune"
+                ? .discuter : .remplacer
+        } else {
+            envoi = .aucun
+        }
         affichage = try c.decodeIfPresent(RelaisAffichage.self, forKey: .affichage) ?? .barre
+    }
+
+    /// Écrit l'envoi, **et** les actions et sorties qui le disaient avant lui.
+    ///
+    /// Le propriétaire peut réinstaller une version antérieure. Elle ne connaît
+    /// pas `envoi`, et relirait sans les anciennes clés un « Discuter » comme
+    /// un module qui écrit au curseur, et ses modules à consigne comme
+    /// « Brut » — le souci déjà payé avec l'historique d'une 0.14 (323b6e5).
+    /// Seulement des valeurs que toutes ces versions connaissent : elles
+    /// décodent la liste d'un bloc, et une seule inconnue la leur ferait
+    /// perdre entière.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(identifiant, forKey: .identifiant)
+        try c.encode(nom, forKey: .nom)
+        try c.encode(integre, forKey: .integre)
+        try c.encode(avant, forKey: .avant)
+        try c.encode(apres, forKey: .apres)
+        try c.encode(consigne, forKey: .consigne)
+        try c.encode(lectureProposee, forKey: .lectureProposee)
+        try c.encode(ditLaReponse, forKey: .ditLaReponse)
+        try c.encode(envoi, forKey: .envoi)
+        try c.encode(affichage, forKey: .affichage)
+        let sorties = envoi == .discuter ? ["aucune"] : ["curseur", "note"]
+        try c.encode(envoi == .aucun ? [] : ["demanderUneReponse"], forKey: .actions)
+        try c.encode(sorties, forKey: .sorties)
+        try c.encode(sorties[0], forKey: .sortieParDefaut)
     }
 
     public init(identifiant: String, nom: String, integre: Bool = false,
          avant: String = "", apres: String = "",
          consigne: RelaisPlaceDeLaConsigne = .facultative,
          lectureProposee: Bool = true, ditLaReponse: Bool = false,
-         actions: [RelaisAction] = [],
-         sorties: [RelaisSortie] = [.curseur, .note],
-         sortieParDefaut: RelaisSortie = .curseur,
-         affichage: RelaisAffichage = .barre) {
+         envoi: RelaisEnvoi = .aucun, affichage: RelaisAffichage = .barre) {
         self.identifiant = identifiant
         self.nom = nom
         self.integre = integre
@@ -176,47 +194,45 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
         self.consigne = consigne
         self.lectureProposee = lectureProposee
         self.ditLaReponse = ditLaReponse
-        self.actions = actions
-        self.sorties = sorties
-        self.sortieParDefaut = sortieParDefaut
+        self.envoi = envoi
         self.affichage = affichage
     }
 
     /// Reprend les choix de l'utilisateur, sans reprendre la définition.
     ///
-    /// Un module livré a deux moitiés. Sa **nature** — son nom, ses actions, ses
-    /// sorties, le fait que sa consigne lui soit essentielle — appartient à
-    /// l'application et doit suivre ses versions. Ses **réglages** — la consigne
-    /// elle-même, ce qu'il affiche — appartiennent à celui qui s'en sert.
+    /// Un module livré a deux moitiés. Sa **nature** — son nom, son envoi, la
+    /// place de sa consigne — appartient à l'application et doit suivre ses
+    /// versions. Ses **réglages** — la consigne elle-même, ce qu'il affiche,
+    /// la lecture — appartiennent à celui qui s'en sert.
     ///
     /// Tout reprendre de l'enregistré gelait la définition au jour où elle avait
     /// été rangée : un attribut ajouté ensuite n'atteignait jamais les
     /// installations existantes, et l'on croyait le code sans effet. Tout
     /// reprendre du livré effacerait au contraire le travail de l'utilisateur à
-    /// chaque mise à jour. On prend donc la nature d'un côté, les réglages de
-    /// l'autre.
+    /// chaque mise à jour.
     public func avecLesReglagesDe(_ enregistre: RelaisModule) -> RelaisModule {
         var fusion = self
         fusion.avant = enregistre.avant
         fusion.apres = enregistre.apres
         fusion.affichage = enregistre.affichage
-        fusion.sortieParDefaut = enregistre.sortieParDefaut
         fusion.ditLaReponse = enregistre.ditLaReponse
         return fusion
     }
 
+    /// Le seul prédicat de destination : la barre, la fenêtre, la fin d'une
+    /// dictée et la carte le lisent tous ici. Quatre façons de le dire
+    /// (sortie par défaut, liste des sorties, drapeau de la dictée…) finissaient
+    /// par ne plus dire la même chose.
+    public var ecrit: Bool { envoi != .discuter }
+
     /// L'affichage que ce module ne laisse pas choisir, s'il en impose un.
     ///
-    /// Une sortie qui n'écrit nulle part met la réponse **à l'écran** : c'est
+    /// Un module qui n'écrit nulle part met la réponse **à l'écran** : c'est
     /// le seul endroit où elle existe. Choisir « Rien » reviendrait alors à
-    /// demander une réponse qu'on ne verra jamais.
-    ///
-    /// Sauf si le module la fait lire à haute voix — on peut écouter sans
-    /// regarder. La contrainte n'est donc pas attachée au module « Discuter »
-    /// mais à ce qui la justifie, et elle vaudra d'elle-même pour les modules
-    /// que l'utilisateur écrira.
+    /// demander une réponse qu'on ne verra jamais — sauf s'il la fait lire à
+    /// haute voix : on peut écouter sans regarder.
     public var affichageImpose: RelaisAffichage? {
-        sortieParDefaut == .aucune && !ditLaReponse ? .page : nil
+        !ecrit && !ditLaReponse ? .page : nil
     }
 
     /// Ce qu'on montre réellement, contrainte comprise.
@@ -224,37 +240,18 @@ public struct RelaisModule: Codable, Equatable, Identifiable {
 
     // MARK: - Ce qu'il exige de la page
 
-    /// Les étapes actives, dans l'ordre du chemin.
-    ///
-    /// L'ordre vient de `RelaisAction.allCases` et non de la liste
-    /// enregistrée : un module ne choisit pas quand, seulement quoi.
-    public var etapes: [RelaisAction] {
-        var demandees = Set(actions)
-        if ditLaReponse { demandees.insert(.direLaReponse) }
-        return RelaisAction.allCases.filter { demandees.contains($0) }
-    }
-
-    public var demandeUnAllerRetour: Bool { actions.contains(.demanderUneReponse) }
-
     /// Tout ce qu'il faut avoir appris pour que ce module tourne.
     ///
-    /// Le socle, plus ce que réclament ses étapes, plus ce que réclament les
-    /// sorties qu'il autorise. Rien n'est écrit à la main : une action nouvelle
-    /// déclare ses exigences et cette liste s'allonge d'elle-même.
-    ///
-    /// Les sorties ne comptent que pour un module qui envoie quelque chose.
-    /// Ce qu'elles exigent — rapatrier la réponse — n'a de sens que s'il y a
-    /// une réponse : « Brut » n'envoie rien, et écrit au curseur la
-    /// transcription elle-même. Il exigeait pourtant « Récupérer la réponse »,
-    /// si bien qu'une installation qui n'avait jamais montré le bouton copier
-    /// voyait ses trois modules passer « indisponibles », et leur pastille
-    /// disparaître de la barre — la seule qui permette d'en changer.
+    /// « Brut » n'envoie rien et n'exige que le socle. Il exigeait autrefois
+    /// « Récupérer la réponse », si bien qu'une installation qui n'avait
+    /// jamais montré le bouton copier voyait ses modules passer
+    /// « indisponibles », et leur pastille disparaître de la barre — la seule
+    /// qui permette d'en changer.
     public var capacitesRequises: [RelaisCapacite] {
         var requises: Set<RelaisCapacite> = [.dicter]
-        for etape in etapes { requises.formUnion(etape.capacitesRequises) }
-        if demandeUnAllerRetour {
-            for sortie in sorties { requises.formUnion(sortie.capacitesRequises) }
-        }
+        if envoi != .aucun { requises.insert(.envoyer) }
+        if envoi == .remplacer { requises.insert(.recuperer) }
+        if ditLaReponse { requises.insert(.direAHauteVoix) }
         return RelaisCapacite.allCases.filter { requises.contains($0) }
     }
 

@@ -69,15 +69,15 @@ struct RelaisPreuvesTests {
         #expect(nouveau.lectureParent == ".lp")
         #expect(nouveau.lectureMenu == ".lm")
         #expect(nouveau.lectureMenuParent == ".lmp")
-        #expect(nouveau.saitDialoguer)
+        #expect(RelaisCatalogue.reorganiser.estUtilisable(nouveau))
     }
 
     @Test("Un premier calibrage sort du parcours prêt à dicter et à dialoguer")
     func firstCalibration() throws {
         let nouveau = try #require(toutProuve().calibrage(remplacant: RelaisSelecteurs()))
         #expect(nouveau.estCalibre)
-        #expect(nouveau.saitDialoguer)
-        #expect(nouveau.saitCopier)
+        #expect(RelaisCatalogue.reorganiser.estUtilisable(nouveau))
+        #expect(!nouveau.copier.isEmpty)
         #expect(!nouveau.saitLire)
     }
 

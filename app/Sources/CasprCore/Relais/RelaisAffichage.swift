@@ -16,8 +16,7 @@ public enum RelaisAffichage: String, CaseIterable, Codable {
     case rien, barre, page
 
     /// Un mot par pastille : le composant tient sur une ligne de réglages, à
-    /// côté de son libellé, et trois phrases n'y entreraient pas. Ce que chaque
-    /// choix implique se lit en dessous, pour celui qui est retenu.
+    /// côté de son libellé, et trois phrases n'y entreraient pas.
     public var libelleCourt: String {
         switch self {
         case .rien: "Rien"
@@ -25,18 +24,4 @@ public enum RelaisAffichage: String, CaseIterable, Codable {
         case .page: "Page"
         }
     }
-
-    public var explication: String {
-        switch self {
-        case .rien:
-            "ChatGPT travaille hors champ : seule la barre de Caspr est visible."
-        case .barre:
-            "Une bande fine au-dessus de la barre de Caspr, où l'on voit ChatGPT "
-            + "écouter puis transcrire."
-        case .page:
-            "La page en grand, le temps de la dictée — pour voir le texte envoyé, "
-            + "la réponse, ou une erreur."
-        }
-    }
-
 }

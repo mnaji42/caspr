@@ -679,11 +679,14 @@ final class Relais: ObservableObject {
         // encore Caspr : on observe qu'il l'a rendu. Délai de geste : le
         // système rend le premier plan dans l'instant, et une seconde sans
         // effet dit qu'il ne le rendra pas — l'insertion part alors quand même.
+        // Un abandon y met fin : le sommeil d'une tâche annulée rend la main
+        // sans dormir, et la boucle aurait tourné à vide une seconde durant
+        // sur le fil principal, qui seul peut voir le premier plan changer.
         let echeance = ContinuousClock.now + .seconds(1)
         let nous = NSRunningApplication.current.processIdentifier
         while ContinuousClock.now < echeance,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == nous {
-            try? await Task.sleep(for: .milliseconds(20))
+            do { try await Task.sleep(for: .milliseconds(20)) } catch { return }
         }
     }
 

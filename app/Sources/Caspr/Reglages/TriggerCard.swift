@@ -147,6 +147,12 @@ struct TriggerCard: View, ValidatingComponent {
                 .frame(width: 150, height: 26)
                 .help("Cliquez pour changer le raccourci")
         }
+        if same(prefs.dictateShortcut, .history) {
+            // macOS ne donne une combinaison qu'au premier arrivé : l'une des
+            // deux fonctions cesserait de répondre, sans rien pour le dire.
+            Note("\(prefs.dictateShortcut.label) ouvre déjà l'historique : "
+                 + "choisissez-en un autre.", warning: true)
+        }
         Note("Cliquez puis tapez la combinaison voulue. macOS refuse les "
              + "raccourcis sans Contrôle ni Commande. La touche Option ne "
              + "déclenche plus rien. Vous déclenchez l'écoute avec votre "
@@ -194,16 +200,17 @@ struct TriggerCard: View, ValidatingComponent {
     /// bascule ne répondrait jamais, sans rien pour le dire.
     private var voieShortcutConflict: String? {
         guard let voie = prefs.voieShortcut else { return nil }
-        func same(_ other: HotkeyMonitor.Shortcut) -> Bool {
-            other.keyCode == voie.keyCode && other.modifiers == voie.modifiers
-        }
-        if prefs.triggerKind == .shortcut, same(prefs.dictateShortcut) {
+        if prefs.triggerKind == .shortcut, same(voie, prefs.dictateShortcut) {
             return "\(voie.label) déclenche déjà la dictée : choisissez-en un autre."
         }
-        if same(.history) {
+        if same(voie, .history) {
             return "\(voie.label) ouvre déjà l'historique : choisissez-en un autre."
         }
         return nil
+    }
+
+    private func same(_ a: HotkeyMonitor.Shortcut, _ b: HotkeyMonitor.Shortcut) -> Bool {
+        a.keyCode == b.keyCode && a.modifiers == b.modifiers
     }
 
     // MARK: - Autorisations

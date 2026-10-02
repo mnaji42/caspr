@@ -11,6 +11,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Le raccourci « Changer de voie » a-t-il été accepté par le système ?
     /// Le menu ne l'affiche qu'à cette condition (cf. `registerVoieShortcut`).
     private var voieShortcutActif = false
+    /// Le raccourci de la dictée a-t-il été accepté par le système ? Refusé
+    /// — pris par l'historique ou une autre application —, plus rien ne
+    /// déclenche la dictée, et le menu doit le dire au lieu de l'annoncer.
+    private var dictateShortcutActif = false
     private var modifierKey: ModifierKeyMonitor!
     private var reArmTimer: Timer?
     private var controller: DictationController!
@@ -447,9 +451,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // N'annoncer que le déclencheur réellement actif : afficher les deux
         // laisserait croire qu'ils marchent tous les deux.
         let prefs = Preferences.shared
-        let trigger = prefs.triggerKind == .option
-            ? prefs.triggerSide.label
-            : prefs.dictateShortcut.label
+        let trigger = switch prefs.triggerKind {
+        case .option: prefs.triggerSide.label
+        case .shortcut: dictateShortcutActif ? prefs.dictateShortcut.label : "(raccourci refusé)"
+        }
         let dictate = NSMenuItem(
             title: "Dicter  \(trigger)",
             action: #selector(triggerDictation), keyEquivalent: "")
@@ -782,12 +787,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // déclencheur, que le système tient (cf. `brancherLaDictee`).
         //
         // Le raccourci Carbon est enregistré auprès du système : en changer
-        // suppose de rendre l'ancien avant de prendre le nouveau. Les deux
-        // sont rendus avant d'être repris, la dictée d'abord : si l'on vient
-        // de lui donner la combinaison de la bascule, c'est elle qui la garde.
+        // suppose de rendre l'ancien avant de prendre le nouveau. Les trois
+        // sont rendus puis repris dans l'ordre du lancement : la dictée,
+        // l'historique, la bascule. Si l'on vient de donner à la dictée la
+        // combinaison d'un autre, c'est elle qui la garde — et non l'un ici,
+        // l'autre au lancement suivant.
         hotkey.unregister()
+        historyHotkey.unregister()
         voieHotkey.unregister()
         brancherLaDictee()
+        _ = historyHotkey.register(.history)
         registerVoieShortcut()
     }
 
@@ -814,7 +823,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if prefs.triggerKind == .option, !modifierKey.start() {
             Log.error("tap clavier indisponible — accessibilité accordée ?")
         }
-        if prefs.triggerKind == .shortcut, !hotkey.register(prefs.dictateShortcut) {
+        dictateShortcutActif = prefs.triggerKind == .shortcut && hotkey.register(prefs.dictateShortcut)
+        if prefs.triggerKind == .shortcut, !dictateShortcutActif {
             Log.error("raccourci \(prefs.dictateShortcut.label) refusé — déjà pris ?")
         }
     }

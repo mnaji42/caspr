@@ -483,10 +483,11 @@ de le couper.
       gardé dans le menu de Caspr » ;
     - la page ne dit rien : « ChatGPT transcrit… m:ss — touche de dictée pour
       abandonner… ». Appuie sur la touche : « Gardé dans le menu de Caspr » ;
-    - la zone revient vide, sans message : « Rien n'a été entendu », et rien
-      n'est gardé (c'est la règle d'une zone vide ; note-le, puisque tu avais
-      parlé).
-    Dans les deux premiers cas, le menu propose « Réessayer avec le moteur (N s
+    - la zone revient vide, sans message : la page t'entendait, ce n'est donc
+      pas un silence, et la barre dit « ChatGPT n'a rien transcrit — gardé
+      dans le menu de Caspr » (« Rien n'a été entendu » ici est un défaut :
+      note la crête de la ligne « relais : écho » du journal).
+    Dans les trois cas, le menu propose « Réessayer avec le moteur (N s
     conservées) ». Rallume le Wi-Fi, mets le curseur dans TextEdit et choisis
     « Réessayer… » : ta question, transcrite par macOS, s'y insère. Termine la
     discussion par le menu.
@@ -544,9 +545,9 @@ de le couper.
 
 64. Quitte Caspr, relance-le sur la voie ChatGPT et appuie tout de suite sur la
     touche de dictée (dans la seconde, Brut).
-    Attendu : la barre dit « ChatGPT se prépare… » (avec le chrono et « touche
-    de dictée pour abandonner, × pour tout annuler » si ça dure plus de dix
-    secondes), puis l'écoute démarre dès que la page est prête. Pas d'alerte
+    Attendu : la barre dit « ChatGPT se prépare… », d'emblée avec le chrono et
+    « touche de dictée pour abandonner, × pour tout annuler », puis l'écoute
+    démarre dès que la page est prête. Pas d'alerte
     « D'abord, se connecter à ChatGPT » ni « La page ChatGPT ne répond pas »,
     et pas besoin d'un second appui.
 
@@ -600,6 +601,13 @@ de le couper.
     dans la liste et sur la pastille de la barre. Dicte une phrase en français
     avec lui : sa traduction s'insère. Puis « Supprimer… » et confirme : il
     quitte la liste et la pastille (choisi, il cède la place à Brut).
+
+71 bis. Même chose avec un module « Anglais après », dont seul le champ
+    « Après » est rempli : « Traduis ce qui précède en anglais. » (« Avant »
+    vide). La carte dit « personnalisée », et non « aucune ».
+    Attendu : sa traduction s'insère — et non ta phrase en français, ni ta
+    phrase suivie de la consigne. Dans le journal, aucune ligne « copie de la
+    demande au lieu de la réponse ».
 
 ---
 

@@ -30,11 +30,11 @@ voie macOS.
 | Fichier | Contenu |
 |---|---|
 | `RelaisCycle.swift` | La machine d'une dictée, en table : ses phases (`RelaisPhase`), leur libellé et la sortie que la barre dit avec le chrono, ce que valent la touche de dictée et la croix à chacune (`RelaisCycle.decider`), et quel échec de la page mène au repli (`RelaisCycle.replie`). Aucune ligne ne vient de l'horloge. |
-| `RelaisDictee.swift` | Le scénario d'une dictée — ouvrir l'écoute, arrêter et lire, encadrer et envoyer, copier la réponse, la faire lire, arrêter la page après un abandon — écrit sur ce qu'il demande à la page (`RelaisPageDictee`) et au presse-papiers (`RelaisPressePapiers`). Il se rejoue en test contre une page factice et une horloge qu'on avance à la main : cinq minutes de ChatGPT y passent en un instant. Toutes ses attentes passent par **une** primitive, `observer`. `RelaisPreparation` y décide ce que la fin d'une dictée fait de la page. |
-| `RelaisObservation.swift` | Le temps du scénario : l'horloge, `RelaisDelai` — la liste, et la seule, des délais de geste —, et `AppelAnnulable`, l'appel dont on cesse d'attendre la réponse à l'instant où l'on renonce. |
-| `RelaisInstantane.swift` | Ce que la page dit en un seul aller-retour (`RelaisInstantane`), ce qu'on lui demande (`RelaisDemande`), et la marque relevée avant une demande (`RelaisMarque`). |
+| `RelaisDictee.swift` | Le scénario d'une dictée — ouvrir l'écoute, arrêter et lire, encadrer et envoyer, copier la réponse, la faire lire, arrêter la page après un abandon — écrit sur ce qu'il demande à la page (`RelaisPageDictee`) et au presse-papiers (`RelaisPressePapiers`). Il se rejoue en test contre une page factice et une horloge qu'on avance à la main : cinq minutes de ChatGPT y passent en un instant. Toutes ses attentes de la page passent par `observer`, posée sur la primitive du relais. `RelaisPreparation` y décide ce que la fin d'une dictée fait de la page. |
+| `RelaisObservation.swift` | Le temps du relais : l'horloge et **la** boucle d'attente, `guetter`, par où passent toutes les attentes ; `RelaisDelai` — la liste, et la seule, des délais de geste —, et `AppelAnnulable`, l'appel dont on cesse d'attendre la réponse à l'instant où l'on renonce. |
+| `RelaisInstantane.swift` | Ce que la page dit en un seul aller-retour (`RelaisInstantane`), ce qu'on lui demande (`RelaisDemande`), et la marque relevée avant une demande (`RelaisMarque`). Chaque champ du relevé absent ou nul prend sa valeur par défaut, par son type (`ParDefaut`). |
 | `RelaisVeille.swift` | Les jugements portés sur un instantané : la session, la transcription qui se stabilise, la réponse finie, le refus, l'empreinte de la consigne. |
-| `RelaisRepli.swift` | Ce qu'on livre quand on renonce à ChatGPT ou qu'il échoue — le brut, le son transcrit par macOS, l'aperçu, rien — et ce que la barre en dit. |
+| `RelaisRepli.swift` | Ce qu'on livre quand on renonce à ChatGPT ou qu'il échoue — le brut, le son transcrit par macOS, l'aperçu, rien — et ce que la barre en dit ; si une zone revenue vide portait pourtant une voix (`parole`). |
 | `RelaisErreur.swift` | Ce qui peut échouer, et comment la barre et le menu le disent. |
 | `RelaisScripts.swift` | Tout le JavaScript injecté : le pont (calibration comprise) et l'écho. En chaînes Swift pour que les tests l'atteignent : une faute de syntaxe casse `swift test` au lieu de laisser une page sans pont, qu'aucune échéance ne viendrait plus dénoncer. |
 | `RelaisSelecteurs.swift` | Les repères appris, et leur relecture (`decodeIfPresent` sur chaque champ). |
@@ -114,12 +114,26 @@ n'est pas lu, le libellé et la sortie de chaque attente).
 ## L'attente unique
 
 ```swift
-// RelaisDictee, privée
+// RelaisObservation : la seule boucle d'attente du relais
+func guetter<T>(toutes pas: Duration = .milliseconds(250), auPlus borne: Duration? = nil,
+                _ juger: () async throws -> T?) async throws -> T?
+// RelaisDictee, privée : la même, avec les preuves d'une page qu'on attend
 func observer<T>(_ demande: RelaisDemande, delai: RelaisDelai? = nil,
                  _ juger: (RelaisInstantane) async throws -> T?) async throws -> T
 ```
 
-Un instantané par quart de seconde, jusqu'à ce que `juger` rende une valeur.
+Toutes les attentes du relais passent par `RelaisHorloge.guetter` : juger,
+rendre la valeur s'il y en a une, rendre `nil` passé la borne s'il y en a une,
+dormir un pas — annulable à chaque pas et pendant le sommeil. Sans borne,
+seule une valeur ou une erreur en sort. La dictée l'appelle par `observer`,
+la page au repos et la calibration par `RelaisPage.observer(auPlus:)`,
+l'appui qui attend la préparation et le premier plan rendu avant l'insertion
+directement. Une seule attente reste à part, et pour une raison : celle de la
+copie dans le presse-papiers, qui ne regarde pas la page et doit survivre une
+seconde à l'annulation pour défaire une copie déjà partie.
+
+Sur le chemin d'une dictée, `observer` : un instantané par quart de seconde,
+jusqu'à ce que `juger` rende une valeur.
 **Aucune échéance.** Avant de juger, les échecs que la page prouve : sa mort
 depuis l'ouverture de l'écoute (l'époque a changé), l'écran
 d'authentification, et — un tour sur quatre, parce que les chercher coûte à
@@ -183,8 +197,9 @@ suspens rendus, son micro rendu en une seconde au plus.
 Au repos, et là seulement, un silence se constate : chaque étape de la
 préparation est bornée (`sonder`, cinq secondes ; un chargement, trente),
 parce que l'appui l'attend avant même d'ouvrir l'écoute. Cet appui, lui,
-n'attend pas sans issue : la barre dit « ChatGPT se prépare… » et comment en
-sortir, la touche interrompt l'attente sur-le-champ, et la préparation
+n'attend pas sans issue : la barre dit « ChatGPT se prépare… » et, d'emblée,
+le chrono et comment en sortir — les autres phases attendent dix secondes
+pour le dire —, la touche interrompt l'attente sur-le-champ, et la préparation
 continue pour l'appui suivant. Une zone qui refuse de se vider sur une page
 qui répond n'est pas une page à jeter : c'est souvent une transcription
 encore en cours, et l'ouverture de l'écoute vide la zone de toute façon.
@@ -282,6 +297,7 @@ c'était possible de récupérer quand même le texte via Apple Intelligence ».
 | Touche ou échec prouvé, brut pas lu, son reçu (0,3 s au moins) | la transcription du son par macOS | « Transcrit par macOS — ChatGPT abandonné », ou la raison ; « (N s de son sur M s) » quand le son ne couvre pas toute la dictée |
 | Ni brut ni son utilisable, mais un aperçu écrit | l'aperçu | « Aperçu de macOS inséré — … » |
 | Module qui n'écrit nulle part (Discuter) | rien ; ce qu'on a va au menu | « Gardé dans le menu de Caspr » |
+| La zone revient vide alors que la page entendait une voix (crête de l'écho de 0,03 au moins, ou un aperçu écrit) | comme un échec prouvé : le son transcrit par macOS, sinon l'aperçu, sinon le menu | « ChatGPT n'a rien transcrit — transcrit par macOS » |
 | Rien du tout | le chemin d'échec, ou d'abandon, d'avant l'écho | inchangé |
 
 L'ordre est celui de `RelaisRepli.choisir` : le brut, puis le son entier,
@@ -290,6 +306,15 @@ puis l'aperçu — la transcription de macOS relit toute la phrase, l'aperçu l'
 lesquels ChatGPT ne rendra plus rien : un refus, la session fermée, la page
 morte, le pont absent (`RelaisCycle.replie`). Un arrêt introuvable, non : la
 page a peut-être encore le texte, elle s'ouvre pour qu'on l'y prenne.
+
+Une zone revenue vide se juge sur l'écho (`RelaisRepli.parole`). Sans voix
+entendue, la dictée finit sur « Rien n'a été entendu », rien au menu :
+appuyer sans parler est un geste ordinaire. Avec une voix, ce n'est pas un
+silence mais une dictée que ChatGPT a perdue — un toast d'erreur déjà
+effacé, une panne qu'il n'affiche pas —, et elle replie. Le seuil est bas,
+délibérément : un bruit pris pour une voix ne coûte qu'un passage de macOS
+sur ce bruit, une voix prise pour un bruit coûtait la dictée. La ligne de
+l'écho donne la crête de chaque dictée, de quoi l'éprouver.
 
 Si macOS échoue à son tour, la raison de ChatGPT reste lisible : le menu garde
 les deux (« <raison>. Repli par macOS : <échec> »), et « Réessayer » reste
@@ -434,8 +459,10 @@ chaque lecture.
 La réponse se récupère par le bouton « copier » de son tour — la paire bloc et
 bouton, ou le repère seul autour de la dernière réponse —, jamais par un
 libellé, et seulement pour une réponse **nouvelle**, postérieure à l'envoi, et
-finie. Une copie qui contient l'empreinte de la consigne est rejetée : c'est
-la demande. Le presse-papiers est sauvegardé tout entier juste avant le clic
+finie. Une copie qui contient l'empreinte de la consigne — la dernière
+ligne de l'un ou l'autre de ses bouts, « Avant » et « Après » — est rejetée :
+c'est la demande. Ces empreintes sont aussi ce qui se relit dans la zone avant
+le clic d'envoi : un module qui n'a que « Après » en a une, comme les autres. Le presse-papiers est sauvegardé tout entier juste avant le clic
 et rendu tel quel, abandon compris : une copie faite par l'utilisateur pendant
 l'attente n'est ni insérée ni écrasée.
 
@@ -642,13 +669,14 @@ le système suspendrait s'il la croyait cachée. Tenue par `RelaisFenetres`
 relève l'état de la page et le juge. La transcription n'est rendue qu'après
 environ une seconde sans changement — un texte encore en mouvement n'est
 jamais rendu coupé — ; une zone revenue et restée vide quatre secondes dit
-« rien n'a été entendu », jugement sur un état prouvé et non échéance ; une
+« rien n'a été entendu », jugement sur un état prouvé et non échéance — sauf
+si la page entendait une voix : ChatGPT l'a perdue, et elle replie ; une
 réponse est finie quand elle est nouvelle, plus en cours, et de même longueur
 d'un relevé à l'autre. Une alerte déjà là à la marque n'interrompt jamais ;
 une alerte inconnue n'interrompt pas tant que ChatGPT répond, et compte au
 troisième relevé sans réponse ; « réessayer » ou « try again » dans une
-réponse ou dans la dictée ne sont pas un refus. Tenue par `RelaisVeille` et
-`RelaisVeilleTests`.
+réponse ou dans la dictée ne sont pas un refus. Tenue par `RelaisVeille`,
+`RelaisRepli.parole` et leurs tests.
 
 **9. Le repli rend le brut.** Une seconde passe qui échoue — refus, réponse
 vide, consigne non posée, page morte après l'envoi — insère la transcription
@@ -739,12 +767,15 @@ find app/Sources/Caspr/Relais app/Sources/CasprCore/Relais -name '*.swift' \
 Le chiffre de chaque étape, et ce qui l'explique fichier par fichier, sont
 dans les messages de commit.
 
-À la fin de la refonte : **3 464**, autant qu'avant elle (2e95724), pour un
-plafond visé de 2 900 ; le chemin ChatGPT avec `VoieChatGPT` : 3 898 pour
-3 250. Le relais a gagné l'écho, le repli, la machine, les preuves et les
-modules qu'on crée, et perdu ses copies ; ce qui reste ne se retire plus
-qu'en retirant une fonction — une décision, pas un nettoyage. Les ordres de
-grandeur, en lignes mesurées :
+À la fin de la refonte : **3 445**, pour 3 464 avant elle (2e95724) et un
+plafond visé de 2 900 ; le chemin ChatGPT avec `VoieChatGPT` (441, contre
+187) : 3 886 pour 3 651 avant elle et 3 250 visés. Le relais est sous son
+point de départ, pas « nettement » : **sur la taille, E3 n'est pas tenu.**
+Il a gagné l'écho, le repli, la machine, les preuves et les modules qu'on
+crée, et perdu ses copies — la dernière passe a mis toutes les attentes sur
+une seule boucle et le relevé de la page sur son type. Ce qui reste ne se
+retire plus qu'en retirant une fonction : une décision du propriétaire, pas
+un nettoyage. Les ordres de grandeur, en lignes mesurées :
 
 | Retirer… | ≈ lignes | Ce qu'on perd |
 |---|---|---|

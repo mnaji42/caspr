@@ -97,6 +97,9 @@ final class RecordingOverlay {
         var label: String
         var elapsed: TimeInterval
         var exitHint: String?
+        /// La sortie dès le premier instant, chrono compris : une attente
+        /// qui n'apparaît que parce que quelque chose tarde déjà.
+        var exitHintAtOnce = false
     }
 
     /// Ce que la barre montre, retenu par chaque `show…` et oublié par
@@ -358,7 +361,8 @@ final class RecordingOverlay {
     }
 
     /// Réécrit la ligne d'attente : la phase, puis le temps écoulé et la
-    /// sortie dès dix secondes.
+    /// sortie dès dix secondes — d'emblée quand l'attente le demande
+    /// (`exitHintAtOnce`).
     ///
     /// Pas avant : la plupart des dictées aboutissent en quelques secondes,
     /// et un chrono qui s'affiche pour disparaître aussitôt n'est que du
@@ -371,7 +375,7 @@ final class RecordingOverlay {
     private func refreshProcessingProgress() {
         guard let progress = processingProgress?() else { return }
         let seconds = Int(progress.elapsed)
-        guard seconds >= 10 else {
+        guard seconds >= 10 || progress.exitHintAtOnce else {
             statusLabel.stringValue = progress.label
             return
         }

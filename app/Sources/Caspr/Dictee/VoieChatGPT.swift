@@ -175,10 +175,15 @@ final class VoieChatGPT {
 
     /// L'attente, sur la barre : la phase, le chrono et la sortie, relus deux
     /// fois par seconde — rien quand la phase n'en montre pas.
+    ///
+    /// « ChatGPT se prépare… » dit sa sortie d'emblée (12, 104) : il ne
+    /// paraît que devant une page déjà en retard, et sans elle, la barre
+    /// laissait croire dix secondes durant qu'il n'y avait qu'à attendre.
     private func montrerLAttente() {
         overlay.showProcessing(phase?.libelle ?? "") { [weak self] in
             guard let self, let libelle = phase?.libelle else { return nil }
-            return .init(label: libelle, elapsed: Date.now.timeIntervalSince(chrono), exitHint: phase?.sortie)
+            return .init(label: libelle, elapsed: Date.now.timeIntervalSince(chrono), exitHint: phase?.sortie,
+                         exitHintAtOnce: phase == .demarrage)
         }
     }
 

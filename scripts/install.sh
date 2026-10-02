@@ -133,9 +133,15 @@ echo "▸ signature (certificat $CERT_HASH)"
 # --options runtime sera exigé par la notarisation ; il impose en retour de
 # déclarer explicitement l'accès micro, faute de quoi le runtime le refuse
 # sans qu'aucun dialogue n'apparaisse.
-codesign --force --sign "$CERT_HASH" --identifier "$BUNDLE_ID" \
+# La sortie d'erreur n'est plus masquée : sous `set -e`, un échec de
+# signature (identité absente, trousseau verrouillé, entitlements invalides)
+# arrêtait le script sur « ▸ signature », sans un mot de plus.
+if ! codesign --force --sign "$CERT_HASH" --identifier "$BUNDLE_ID" \
          --options runtime --timestamp=none \
-         --entitlements "$APP_DIR/Caspr.entitlements" "$STAGE" 2>/dev/null
+         --entitlements "$APP_DIR/Caspr.entitlements" "$STAGE"; then
+    echo "  ✗ signature échouée" >&2
+    exit 1
+fi
 
 if ! codesign -d --entitlements - "$STAGE" 2>/dev/null | grep -q "audio-input"; then
     echo "  ✗ entitlement micro absent — le micro serait muet" >&2
@@ -153,6 +159,20 @@ if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
         pgrep -x "$APP_NAME" >/dev/null 2>&1 || break
         sleep 0.25
     done
+    # Avoir accepté de quitter n'est pas avoir quitté : fermer WebKit et le
+    # relais peut prendre plus de cinq secondes. Le bundle était alors
+    # remplacé sous un processus vivant.
+    if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+        pkill -x "$APP_NAME" || true
+        for _ in $(seq 1 20); do
+            pgrep -x "$APP_NAME" >/dev/null 2>&1 || break
+            sleep 0.25
+        done
+    fi
+    if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+        echo "  ✗ $APP_NAME tourne encore — installation interrompue" >&2
+        exit 1
+    fi
 fi
 
 echo "▸ installation dans $INSTALL_PATH"

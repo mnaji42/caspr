@@ -274,15 +274,13 @@ extension RelaisPage {
         webView.pageZoom = compact ? Self.zoomBarre : 1
         Task { _ = await sonder { try await self.compacter(compact, sel: self.selecteurs.composeur) } }
 
-        guard let ecran = NSScreen.main else { return }
-        let cadre = ecran.visibleFrame
-        let taille = compact || affichage == .rien ? Self.tailleBarre : Self.enVue.size
-        barre.poser(NSRect(x: cadre.midX - taille.width / 2,
-                           y: compact || affichage == .rien
-                              ? cadre.minY + Self.hauteurBarre
-                              : cadre.midY - taille.height / 2,
-                           width: taille.width,
-                           height: taille.height))
+        guard let cadre = NSScreen.main?.visibleFrame else { return }
+        // « Barre » et « Rien » à la place de la barre ; « Page » d'un module
+        // qui écrit, en grand au milieu — dans la barre tout de même.
+        let petite = affichage != .page
+        let taille = petite ? Self.tailleBarre : Self.enVue.size
+        let y = petite ? cadre.minY + Self.hauteurBarre : cadre.midY - taille.height / 2
+        barre.poser(NSRect(origin: NSPoint(x: cadre.midX - taille.width / 2, y: y), size: taille))
         barre.alphaValue = affichage == .rien ? 0 : 1
         barre.ignoresMouseEvents = affichage == .rien
         barre.orderFrontRegardless()

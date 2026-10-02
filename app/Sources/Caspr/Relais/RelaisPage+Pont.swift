@@ -193,24 +193,46 @@ extension RelaisPage {
     }
 
     /// Vide la zone de saisie, et s'assure qu'elle l'est restée — au repos.
-    ///
-    /// ChatGPT réinstalle le brouillon non envoyé après un rechargement, et
-    /// parfois après qu'on l'a effacé : vider une fois ne suffit pas. On relit
-    /// donc, et on recommence.
     @discardableResult
     func viderComposeur(selecteur: String? = nil) async -> Bool {
-        let sel = selecteur ?? selecteurs.composeur
         // Le brouillon vit aussi dans le stockage de la page : l'effacer de la
         // zone ne suffit pas, ChatGPT le réinstalle depuis là.
         _ = await sonder { try await self.oublierBrouillon() }
-        let vide = try? await observer(auPlus: .seconds(6), toutes: .zero) {
-            // Vider, c'est écrire vide : une seule règle pour les deux.
-            _ = await sonder { try await self.ecrire("", sel: sel) }
+        // Vider, c'est écrire vide : une seule règle pour les deux.
+        let vide = await ecrire("", sel: selecteur ?? selecteurs.composeur, pendant: 6, jusqua: \.isEmpty)
+        if !vide, !Task.isCancelled { Log.error("relais : la zone de saisie n'a pas voulu se vider") }
+        return vide
+    }
+
+    /// Écrit `texte` dans la zone `sel` (vide : le filet) jusqu'à l'y relire
+    /// comme `tenu` le veut — au repos, `secondes` au plus ; faux sinon.
+    ///
+    /// Relu, et réécrit tant qu'il ne tient pas. La zone existe dans le DOM
+    /// avant que ChatGPT n'en ait repris le contrôle : le texte y était bien
+    /// déposé, puis effacé par le rendu qui suivait. Et ChatGPT réinstalle le
+    /// brouillon non envoyé après un rechargement, parfois après qu'on l'a
+    /// effacé : vider une fois ne suffit pas.
+    func ecrire(_ texte: String, sel: String, pendant secondes: Double,
+                jusqua tenu: @escaping (String) -> Bool) async -> Bool {
+        (try? await observer(auPlus: .seconds(secondes), toutes: .zero) {
+            _ = await sonder { try await self.ecrire(texte, sel: sel) }
             try? await Task.sleep(for: .milliseconds(500))
-            return await sonder({ try await self.lire(sel: sel) })?.isEmpty == true
-        }
-        if vide == false { Log.error("relais : la zone de saisie n'a pas voulu se vider") }
-        return vide == true
+            return await sonder({ try await self.lire(sel: sel) }).map(tenu) == true
+        }) == true
+    }
+
+    /// Recharge la page de départ, attend sa zone de saisie et la vide, par le
+    /// filet — au repos ; faux quand la zone n'est pas venue.
+    ///
+    /// Le départ des deux parcours de calibration, et de l'essai qui suit un
+    /// candidat raté : une conversation neuve, sans le brouillon que ChatGPT
+    /// réinstalle, et sans se fier au calibrage qu'on remplace peut-être
+    /// parce qu'il est faux.
+    func repartirAuFilet() async -> Bool {
+        charger()
+        guard await attendreComposeurPret(secondes: 30) else { return false }
+        await viderComposeur(selecteur: "")
+        return true
     }
 
     // MARK: - Les fonctions de la page

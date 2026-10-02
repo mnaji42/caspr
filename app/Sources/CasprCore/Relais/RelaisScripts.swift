@@ -78,11 +78,9 @@ public enum RelaisScripts {
           'button[aria-label*="copi" i]',
           'button[aria-label*="copy" i]',
         ],
-        lecture: [
-          '[data-testid="voice-play-turn-action-button"]',
-          'button[aria-label*="haute voix" i]',
-          'button[aria-label*="read aloud" i]',
-        ],
+        // Pas de filet pour « Lire à haute voix » : aucun chemin ne le
+        // cherche sans repère — la dictée ne le clique que calibré (cf.
+        // `RelaisSelecteurs.saitLire`), et l'automate ne l'essaie jamais.
       };
 
       // Dessiné à l'écran. Une page jamais affichée n'a rien de dessiné :

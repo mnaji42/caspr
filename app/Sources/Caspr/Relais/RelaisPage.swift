@@ -253,9 +253,11 @@ final class RelaisPage: NSObject {
         _ = try? await observer(auPlus: .seconds(secondes), toutes: .milliseconds(400)) {
             // Une zone de texte vue pendant la navigation est celle de la page
             // qu'on quitte. Un silence ne conclut rien : la borne s'en charge.
+            // Ce qu'elle a montré est dit à `surConnexion`.
             guard !chargementEnCours, let vu = await sonder({ try await self.instantane(reperes: reperes) }),
-                  let connexion = session(vu) else { return false }
-            vue = connexion
+                  let connectee = RelaisVeille.session(vu) else { return false }
+            vue = connectee ? .connecte : .deconnecte
+            surConnexion?(vue)
             return true
         }
         return vue
@@ -263,25 +265,14 @@ final class RelaisPage: NSObject {
 
     func rafraichirEtiquette() async {
         etiquette?.stringValue = "vérification…"
-        switch await connexion() {
-        case .connecte:
-            etiquette?.stringValue = selecteurs.estCalibre
-                ? "Connecté et calibré — la touche de dictée écrit par ChatGPT."
-                : "Connecté. Reste à calibrer les boutons."
-        case .deconnecte:
-            etiquette?.stringValue = "Pas encore connecté."
-        case .inconnu:
-            etiquette?.stringValue = "La page ne dit pas si vous êtes connecté — rechargez-la."
+        let connexion = await connexion()
+        etiquette?.stringValue = switch connexion {
+        case .connecte: selecteurs.estCalibre
+            ? "Connecté et calibré — la touche de dictée écrit par ChatGPT."
+            : "Connecté. Reste à calibrer les boutons."
+        case .deconnecte: "Pas encore connecté."
+        case .inconnu: "La page ne dit pas si vous êtes connecté — rechargez-la."
         }
-    }
-
-    /// La session que montre ce relevé (cf. `RelaisVeille.session`), dite à
-    /// `surConnexion` ; `nil` quand la page n'a rien dit.
-    func session(_ vu: RelaisInstantane) -> Connexion? {
-        guard let connectee = RelaisVeille.session(vu) else { return nil }
-        let connexion: Connexion = connectee ? .connecte : .deconnecte
-        surConnexion?(connexion)
-        return connexion
     }
 
     /// Rend sur-le-champ chaque appel au pont resté en suspens : l'attente

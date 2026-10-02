@@ -344,22 +344,12 @@ final class Relais: ObservableObject {
     /// transcription encore en cours, qu'un rechargement détruirait ;
     /// l'ouverture de l'écoute vide de toute façon la zone avant d'écouter.
     ///
-    /// `apresEchec` remet la préparation à plus tard (cf.
-    /// `Repos.recuperation`).
-    ///
     /// Chaque étape est bornée — c'est le repos, où un silence se constate
     /// (cf. `RelaisPage.sonder`) —, parce que l'appui attend cette tâche avant
     /// même d'ouvrir l'écoute : une seule attente sans fin ici, et la barre
     /// « chargeait » indéfiniment, avant que rien n'ait été enregistré.
-    func preparerLaProchaine(apresEchec: Bool = false) {
-        guard !apresEchec else {
-            annulerLaPreparation()
-            repos = .recuperation
-            return
-        }
-        lancerPreparation { [weak self] page in
-            await self?.preparer(page)
-        }
+    func preparerLaProchaine() {
+        lancerPreparation { [weak self] in await self?.preparer($0) }
     }
 
     /// Le travail de `preparerLaProchaine`, à part pour que l'arrêt d'une
@@ -742,10 +732,13 @@ final class Relais: ObservableObject {
         // s'est passée de lui. Des minutes de parole en mémoire vive ne
         // doivent pas attendre la dictée suivante pour partir.
         page?.echo.liberer()
-        // Le report d'abord : c'est lui qui dit de garder la page quand on a
-        // choisi macOS pendant la dictée, et à la sortie de la discussion de
-        // laisser la fenêtre ouverte sur le texte.
-        if case .livree(_, texteLaisse: true) = fin { preparerLaProchaine(apresEchec: true) }
+        // Le report d'abord (cf. `Repos.recuperation`) : c'est lui qui dit de
+        // garder la page quand on a choisi macOS pendant la dictée, et à la
+        // sortie de la discussion de laisser la fenêtre ouverte sur le texte.
+        if case .livree(_, texteLaisse: true) = fin {
+            annulerLaPreparation()
+            repos = .recuperation
+        }
         // Choisir macOS pendant la dictée condamnait la page à sa fin (cf.
         // `suivreLaVoie`). Sauf si la dictée vient d'y laisser son texte : la
         // détruire effaçait sous les yeux ce que le message d'échec disait

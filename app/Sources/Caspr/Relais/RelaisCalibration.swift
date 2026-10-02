@@ -203,12 +203,10 @@ final class RelaisCalibration {
         // le micro devant un texte que la dictée serait venue rallonger. Par
         // le filet : le calibrage en place est peut-être celui qu'on
         // remplace parce qu'il est faux.
-        page.charger()
-        guard await page.attendreComposeurPret(secondes: 30) else {
+        guard await page.repartirAuFilet() else {
             if !Task.isCancelled { RelaisDialogues.alerter("Relais", "La page ChatGPT n'a pas fini de se charger.") }
             return
         }
-        await page.viderComposeur(selecteur: "")
 
         let etapes = RelaisEtape.parcoursManuel
         for (rang, etape) in etapes.enumerated() {
@@ -319,19 +317,10 @@ final class RelaisCalibration {
     /// Écrit le message d'essai dans `composeur` (vide : le filet), et
     /// s'assure qu'il y est ; faux s'il n'y a pas tenu en `secondes`.
     ///
-    /// L'écriture est **vérifiée**, et réessayée. La zone de saisie existe
-    /// dans le DOM avant que ChatGPT n'en ait repris le contrôle : le texte y
-    /// était bien déposé, puis effacé par le rendu qui suivait, et
-    /// l'utilisateur se retrouvait devant une zone vide, sans bouton d'envoi
-    /// à désigner. Relu par la même règle que la dictée, `instantane`.
+    /// L'écriture est **vérifiée**, et réessayée (cf. `RelaisPage.ecrire`) :
+    /// non relue, elle laissait l'utilisateur devant une zone vide, sans
+    /// bouton d'envoi à désigner.
     static func ecrireLEssai(_ page: RelaisPage, dans composeur: String, pendant secondes: Double = 6) async -> Bool {
-        var reperes = RelaisSelecteurs()
-        reperes.composeur = composeur
-        return (try? await page.observer(auPlus: .seconds(secondes), toutes: .zero) {
-            _ = await page.sonder { try await page.ecrire(essai, sel: composeur) }
-            try? await Task.sleep(for: .milliseconds(500))
-            let vu = await page.sonder { try await page.instantane(.texte, reperes: reperes) }
-            return vu?.texte?.contains(empreinte) == true
-        }) == true
+        await page.ecrire(essai, sel: composeur, pendant: secondes) { $0.contains(empreinte) }
     }
 }

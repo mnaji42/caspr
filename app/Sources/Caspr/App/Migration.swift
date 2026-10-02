@@ -18,7 +18,7 @@ import CasprCore
 /// jamais retentée, et un agent réinstallé après coup — par une ancienne
 /// version relancée depuis une sauvegarde — ne serait jamais retiré. Le prix
 /// est une poignée de `fileExists` par lancement, et deux appels courts à
-/// `launchctl`.
+/// `launchctl`, hors du fil principal.
 ///
 /// ## Corbeille, jamais suppression
 ///
@@ -48,27 +48,35 @@ enum Migration {
         guard Bundle.main.bundleIdentifier == bundleIdentifier else { return }
         let home = FileManager.default.homeDirectoryForCurrentUser
 
-        disarmAgents(home: home)
         migrateSettings(home: home)
 
-        // Des gigaoctets à déplacer, sur un disque qui peut être lent : rien de
-        // tout ça ne mérite de retarder l'apparition de l'icône.
+        // Deux processus à attendre, des gigaoctets à déplacer sur un disque
+        // qui peut être lent : rien de tout ça ne mérite de retarder
+        // l'apparition de l'icône. Seuls les réglages devaient passer avant.
         Task.detached(priority: .utility) {
-            sweep(home: home)
+            retirerLesRestes(home: home)
         }
+    }
+
+    /// Ce que l'ancien moteur local a laissé : le démon, puis ses fichiers.
+    ///
+    /// Dans cet ordre, et c'est la seule contrainte : le démon doit être sorti
+    /// avant qu'on touche aux fichiers qu'il tient ouverts.
+    ///
+    /// - Returns: vrai quand il ne reste rien de ses fichiers.
+    @discardableResult
+    nonisolated static func retirerLesRestes(home: URL) -> Bool {
+        disarmAgents(home: home)
+        return sweep(home: home)
     }
 
     // MARK: - Le démon
 
-    /// Synchrone, parce que c'est la priorité et que c'est court : le démon
-    /// doit être sorti avant que quoi que ce soit touche aux fichiers qu'il
-    /// tient ouverts.
-    ///
     /// Le `bootout` est tenté à chaque lancement, que le plist soit là ou
     /// non : un plist jeté à la main, ou un premier `bootout` raté, laissaient
     /// sinon un démon chargé que plus rien ne regardait, jusqu'à la fin de la
     /// session — et relancé en boucle vers un moteur déjà à la corbeille.
-    private static func disarmAgents(home: URL) {
+    nonisolated private static func disarmAgents(home: URL) {
         for label in LegacyCleanup.agentLabels {
             let status = launchctl(["bootout", "gui/\(getuid())/\(label)"])
             switch status {
@@ -88,7 +96,7 @@ enum Migration {
         }
     }
 
-    private static func launchctl(_ arguments: [String]) -> Int32 {
+    nonisolated private static func launchctl(_ arguments: [String]) -> Int32 {
         Commande.executer("/bin/launchctl", arguments).statut
     }
 
@@ -134,7 +142,8 @@ enum Migration {
 
     // MARK: - Les fichiers
 
-    nonisolated private static func sweep(home: URL) {
+    @discardableResult
+    nonisolated private static func sweep(home: URL) -> Bool {
         let descriptor = LegacyCleanup.engineDescriptor(home: home)
         let project = (try? Data(contentsOf: descriptor))
             .flatMap(LegacyCleanup.engineProject(descriptor:))
@@ -163,9 +172,10 @@ enum Migration {
             trash(LegacyCleanup.Location(descriptor, "déclaration du moteur"), home: home)
         }
 
+        var resteGone = true
         for location in LegacyCleanup.modelLocations(home: home)
-            + LegacyCleanup.otherLocations(home: home) {
-            trash(location, home: home)
+            + LegacyCleanup.otherLocations(home: home) where !trash(location, home: home) {
+            resteGone = false
         }
 
         // Le dossier de support, une fois ses occupants partis. Sans lui, une
@@ -175,6 +185,7 @@ enum Migration {
         if LegacyCleanup.isEffectivelyEmpty(support) {
             trash(LegacyCleanup.Location(support, "dossier de Caspr"), home: home)
         }
+        return engineGone && resteGone
     }
 
     /// Rend vrai quand il ne reste rien à cet endroit.

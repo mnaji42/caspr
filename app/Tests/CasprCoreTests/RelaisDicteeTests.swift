@@ -218,6 +218,19 @@ struct RelaisDicteeTests {
         page.liberer()
     }
 
+    /// La primitive de toutes les attentes du relais : sans borne, seule une
+    /// valeur en sort ; bornée — un geste, le repos —, elle rend `nil`.
+    @Test("La primitive d'attente : une heure sans borne s'attend, une borne rend nil")
+    func guetter() async throws {
+        let horloge = HorlogeManuelle()
+        let debut = horloge.maintenant
+        let valeur = try await horloge.guetter { horloge.maintenant - debut >= .seconds(3600) ? 42 : nil }
+        #expect(valeur == 42)
+        let borne = try await horloge.guetter(auPlus: .seconds(5)) { () -> Int? in nil }
+        #expect(borne == nil)
+        #expect(horloge.maintenant - debut < .seconds(3606))
+    }
+
     @Test("La réponse la plus longue s'attend sans fin, et Réorganiser rend la réponse")
     func reorganiser() async throws {
         let page = PageFactice()

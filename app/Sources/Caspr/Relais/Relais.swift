@@ -451,8 +451,8 @@ final class Relais: ObservableObject {
     /// dire qu'on en a fini avec le texte laissé dans la page.
     private func attendreLaPreparation() async throws {
         if enRecuperation { preparerLaProchaine() }
-        while case .preparation = repos {
-            try await Task.sleep(for: .milliseconds(100))
+        _ = try await RelaisHorlogeReelle.systeme.guetter(toutes: .milliseconds(100)) { () -> Void? in
+            if case .preparation = repos { nil } else { () }
         }
     }
 
@@ -679,14 +679,12 @@ final class Relais: ObservableObject {
         // encore Caspr : on observe qu'il l'a rendu. Délai de geste : le
         // système rend le premier plan dans l'instant, et une seconde sans
         // effet dit qu'il ne le rendra pas — l'insertion part alors quand même.
-        // Un abandon y met fin : le sommeil d'une tâche annulée rend la main
-        // sans dormir, et la boucle aurait tourné à vide une seconde durant
-        // sur le fil principal, qui seul peut voir le premier plan changer.
-        let echeance = ContinuousClock.now + .seconds(1)
+        // Un abandon y met fin sur-le-champ, au lieu de tourner à vide une
+        // seconde durant sur le fil principal, qui seul peut voir le premier
+        // plan changer.
         let nous = NSRunningApplication.current.processIdentifier
-        while ContinuousClock.now < echeance,
-              NSWorkspace.shared.frontmostApplication?.processIdentifier == nous {
-            do { try await Task.sleep(for: .milliseconds(20)) } catch { return }
+        _ = try? await RelaisHorlogeReelle.systeme.guetter(toutes: .milliseconds(20), auPlus: .seconds(1)) {
+            NSWorkspace.shared.frontmostApplication?.processIdentifier == nous ? nil : ()
         }
     }
 

@@ -20,9 +20,35 @@ public protocol RelaisHorloge: AnyObject {
 
 @MainActor
 public final class RelaisHorlogeReelle: RelaisHorloge {
+    /// Celle du relais au repos, où rien ne se rejoue.
+    public static let systeme = RelaisHorlogeReelle()
     nonisolated public init() {}
     public var maintenant: ContinuousClock.Instant { .now }
     public func dormir(_ duree: Duration) async throws { try await Task.sleep(for: duree) }
+}
+
+extension RelaisHorloge {
+    /// LA façon d'attendre dans le relais : `juger` tous les `pas`, jusqu'à
+    /// ce qu'il rende une valeur. Toutes les attentes passent par elle — la
+    /// dictée (cf. `RelaisDictee.observer`), la page au repos, la
+    /// préparation que l'appui attend, le premier plan rendu, la
+    /// calibration — et chacune recopiait sa boucle, avec sa manière de
+    /// compter et de céder.
+    ///
+    /// Annulée, elle lève au pas suivant, ou dans l'instant si elle dort.
+    /// `borne` : la durée au-delà de laquelle elle rend `nil` — un délai de
+    /// geste, ou le repos, où un silence se constate. **Jamais sur une
+    /// attente de ChatGPT**, qui n'en a pas (cf. la règle plus haut).
+    public func guetter<T>(toutes pas: Duration = .milliseconds(250), auPlus borne: Duration? = nil,
+                           _ juger: () async throws -> T?) async throws -> T? {
+        let debut = maintenant
+        while true {
+            try Task.checkCancellation()
+            if let valeur = try await juger() { return valeur }
+            if let borne, maintenant - debut >= borne { return nil }
+            try await dormir(pas)
+        }
+    }
 }
 
 /// LA liste des délais qui restent sur le chemin d'une dictée. Il n'en existe

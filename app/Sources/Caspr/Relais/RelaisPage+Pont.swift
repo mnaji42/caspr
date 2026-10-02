@@ -144,17 +144,11 @@ extension RelaisPage {
     /// **Au repos et en calibration seulement**, comme `sonder` : une page
     /// qui se charge, une main qui se connecte, un geste dont on guette
     /// l'effet. Jamais sur le chemin d'une dictée, dont les attentes n'ont
-    /// pas d'échéance (cf. `RelaisDictee.observer`). Chacune de ces attentes
-    /// recopiait sa boucle, avec sa manière de compter et de céder.
+    /// pas d'échéance (cf. `RelaisDictee.observer`). La primitive du relais
+    /// (`RelaisHorloge.guetter`), bornée.
     func observer(auPlus duree: Duration, toutes pas: Duration = .milliseconds(250),
                   _ condition: () async -> Bool) async throws -> Bool {
-        let limite = ContinuousClock.now + duree
-        repeat {
-            try Task.checkCancellation()
-            if await condition() { return true }
-            try await Task.sleep(for: pas)
-        } while ContinuousClock.now < limite
-        return false
+        try await RelaisHorlogeReelle.systeme.guetter(toutes: pas, auPlus: duree) { await condition() ? () : nil } != nil
     }
 
     // MARK: - Au repos

@@ -50,8 +50,9 @@ public protocol RelaisPressePapiers: AnyObject {
 /// ne l'y installera, et l'attendre serait attendre toujours. Jamais par le
 /// temps. Restent les délais de geste, tous dans `RelaisDelai`.
 ///
-/// Toutes les attentes passent par `observer` : une seule façon d'attendre,
-/// et une seule place pour chaque preuve.
+/// Toutes les attentes de la page passent par `observer` : une seule façon
+/// d'attendre, et une seule place pour chaque preuve. La copie seule attend
+/// aussi le presse-papiers, à sa façon (cf. `copier`).
 @MainActor
 public final class RelaisDictee {
     private let page: RelaisPageDictee
@@ -481,10 +482,12 @@ public final class RelaisDictee {
         vu.enregistrement || (!microDejaTenu && page.microOuvert)
     }
 
-    // MARK: - La primitive d'attente
+    // MARK: - L'attente d'une dictée
 
-    /// LA façon d'attendre : un relevé de la page (`demande`) par quart de
-    /// seconde, jusqu'à ce que `juger` rende une valeur. **Aucune échéance.**
+    /// LA façon d'attendre sur le chemin d'une dictée : un relevé de la page
+    /// (`demande`) par quart de seconde, jusqu'à ce que `juger` rende une
+    /// valeur — la primitive du relais (`RelaisHorloge.guetter`), avec les
+    /// preuves d'une page qu'on attend. **Aucune échéance.**
     ///
     /// Avant de juger, les échecs que la page prouve : sa mort depuis
     /// l'ouverture de l'écoute, l'écran d'authentification, et — un tour sur
@@ -505,42 +508,40 @@ public final class RelaisDictee {
     private func observer<T>(_ demande: RelaisDemande, delai: RelaisDelai? = nil,
                              _ juger: (RelaisInstantane) async throws -> T?) async throws -> T {
         var veille = RelaisVeille(apresEnvoi: envoye)
-        let debut = horloge.maintenant
         var tour = 0
-        while true {
-            try Task.checkCancellation()
+        let valeur = try await horloge.guetter(auPlus: delai?.duree) { () async throws -> T? in
             if pageMorte { throw RelaisErreur.pageInterrompue }
             tour += 1
             let alertes = marquee && tour % 4 == 0
-            if !page.chargementEnCours,
-               let vu = try await essayer({ try await self.page.instantane(alertes ? demande.union(.alertes) : demande) }) {
-                if pageMorte { throw RelaisErreur.pageInterrompue }
-                // L'échec prouvé qu'une échéance rattrapait jadis : une session
-                // perdue en pleine attente ne rendra jamais rien.
-                if vu.authentification {
-                    journal("relais : la page montre l'écran de connexion", true)
-                    surSession(false)
-                    throw RelaisErreur.pasConnecte
-                }
-                if alertes, let message = veille.refus(vu) {
-                    journal("relais : ChatGPT a refusé (« \(message) »)", true)
-                    throw RelaisErreur.refusParChatGPT(message)
-                }
-                if let valeur = try await juger(vu) {
-                    // Un geste qui a demandé plusieurs essais : le prochain
-                    // défaut se lira dans le journal plutôt que dans une capture.
-                    if let delai, tour > 1 { journal("relais : \(delai.nom) au \(tour)e relevé", false) }
-                    return valeur
-                }
+            guard !page.chargementEnCours,
+                  let vu = try await essayer({ try await self.page.instantane(alertes ? demande.union(.alertes) : demande) })
+            else { return nil }
+            if pageMorte { throw RelaisErreur.pageInterrompue }
+            // L'échec prouvé qu'une échéance rattrapait jadis : une session
+            // perdue en pleine attente ne rendra jamais rien.
+            if vu.authentification {
+                journal("relais : la page montre l'écran de connexion", true)
+                surSession(false)
+                throw RelaisErreur.pasConnecte
             }
-            if let delai, horloge.maintenant - debut >= delai.duree {
-                // Le geste n'a pas pris : la ligne dit lequel, pour que le
-                // prochain défaut se lise dans le journal.
-                journal("relais : \(delai.nom) sans effet en \(delai.duree) (\(tour) relevés)", true)
-                throw delai.erreur
+            if alertes, let message = veille.refus(vu) {
+                journal("relais : ChatGPT a refusé (« \(message) »)", true)
+                throw RelaisErreur.refusParChatGPT(message)
             }
-            try await horloge.dormir(.milliseconds(250))
+            return try await juger(vu)
         }
+        if let valeur {
+            // Un geste qui a demandé plusieurs essais : le prochain défaut se
+            // lira dans le journal plutôt que dans une capture.
+            if let delai, tour > 1 { journal("relais : \(delai.nom) au \(tour)e relevé", false) }
+            return valeur
+        }
+        // Sans délai, l'attente ne finit que sur une valeur ou une erreur :
+        // c'est donc lui qui l'a bornée. Le geste n'a pas pris, et la ligne
+        // dit lequel, pour que le prochain défaut se lise dans le journal.
+        guard let delai else { throw CancellationError() }
+        journal("relais : \(delai.nom) sans effet en \(delai.duree) (\(tour) relevés)", true)
+        throw delai.erreur
     }
 
     /// Un appel à la page dont l'échec ne dit rien — sauf l'annulation, qui

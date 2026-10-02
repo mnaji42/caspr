@@ -17,6 +17,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var dictateShortcutActif = false
     private var modifierKey: ModifierKeyMonitor!
     private var reArmTimer: Timer?
+    /// Le tic horaire de la vérification de mise à jour (cf.
+    /// `verifierMiseAJourSiDue`).
+    private var updateTimer: Timer?
     private var controller: DictationController!
     /// La discussion ChatGPT s'ouvre et se ferme sans que l'état de la
     /// dictée change : l'icône, qui la signale, doit suivre quand même.
@@ -154,14 +157,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Après le reste : rien ici ne conditionne l'usage de l'application,
         // et le résultat n'arrive qu'une fois le réseau revenu.
-        Task {
-            await UpdateChecker.shared.checkIfDue()
-            // La vérification trouvait une version plus récente et n'en disait
-            // rien : il fallait ouvrir les Réglages pour l'apprendre. Une
-            // fonction qu'on active pour être prévenu ne prévenait personne.
-            updateNotice.showIfNeeded()
-            if UpdateChecker.shared.newer != nil { render(controller.state) }
+        //
+        // Puis toutes les heures. Caspr tourne des semaines sans être relancé :
+        // vérifiée au seul lancement, une release n'était signalée qu'au
+        // redémarrage du Mac, et un réseau absent ce matin-là repoussait la
+        // question d'autant. `checkIfDue` garde son seuil d'un jour : le tic
+        // n'interroge GitHub qu'une fois par jour, et rattrape un échec.
+        Task { await verifierMiseAJourSiDue() }
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.verifierMiseAJourSiDue() }
         }
+    }
+
+    /// Vérifie s'il est temps, et prévient d'une version nouvellement trouvée.
+    ///
+    /// La vérification trouvait une version plus récente et n'en disait rien :
+    /// il fallait ouvrir les Réglages pour l'apprendre. Une fonction qu'on
+    /// active pour être prévenu ne prévenait personne. Une fois par version
+    /// et par session : « Plus tard » ne revient pas toutes les heures.
+    private func verifierMiseAJourSiDue() async {
+        let connue = UpdateChecker.shared.newer?.version
+        await UpdateChecker.shared.checkIfDue()
+        guard let trouvee = UpdateChecker.shared.newer?.version, trouvee != connue else { return }
+        updateNotice.showIfNeeded()
+        render(controller.state)
     }
 
     /// Caspr tourne depuis l'image disque : on ne l'explique pas, on le règle.
@@ -274,6 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         reArmTimer?.invalidate()
+        updateTimer?.invalidate()
         modifierKey?.stop()
         hotkey?.unregister()
         historyHotkey?.unregister()

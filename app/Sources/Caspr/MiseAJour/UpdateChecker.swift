@@ -23,7 +23,7 @@ import CasprCore
 /// Aucune erreur n'est présentée à l'utilisateur. Un réseau coupé, une API
 /// injoignable ou un quota GitHub épuisé ne sont pas des évènements qui
 /// justifient d'interrompre quelqu'un dans son travail — la vérification
-/// réessaiera demain.
+/// réessaiera dans l'heure.
 @MainActor
 @Observable
 final class UpdateChecker {
@@ -99,7 +99,8 @@ final class UpdateChecker {
 
     // MARK: - Déclenchement
 
-    /// Appelé au lancement. Ne fait rien la plupart du temps.
+    /// Appelé au lancement, puis toutes les heures (cf.
+    /// `AppDelegate.verifierMiseAJourSiDue`). Ne fait rien la plupart du temps.
     func checkIfDue() async {
         guard Preferences.shared.checksForUpdates else { return }
         guard Self.isReleaseBuild else { return }

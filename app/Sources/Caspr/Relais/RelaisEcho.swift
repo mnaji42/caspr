@@ -36,7 +36,10 @@ final class RelaisEcho {
     /// son a pu être pris avant le désarmement — une annulation pendant
     /// l'écoute —, et la ligne dirait « rien reçu ».
     private var recus = 0
-    private var crete: Float = 0
+    /// Lue aussi quand ChatGPT rend une zone vide : y avait-il une voix à
+    /// transcrire (cf. `RelaisRepli.parole`) ? Gardée jusqu'à l'armement
+    /// suivant, le son pris ou libéré.
+    private(set) var crete: Float = 0
     private var statut: [String: Any] = [:]
 
     /// Chaque morceau reçu, et la fréquence du contexte de la page, pour

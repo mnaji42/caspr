@@ -74,12 +74,13 @@ public struct RelaisVeille {
     /// phrase. Un texte qui bouge encore n'est jamais rendu : coupé au milieu,
     /// il s'insérerait sans que rien signale la coupure.
     ///
-    /// **Une zone revenue qui reste vide** dit qu'il n'y avait rien à
-    /// transcrire — appuyer sans parler est un geste ordinaire. Quatre
+    /// **Une zone revenue qui reste vide** dit que ChatGPT n'a rien
+    /// transcrit — appuyer sans parler est un geste ordinaire. Quatre
     /// secondes, et non une : la zone revient d'ordinaire déjà remplie, mais
     /// rien ne garantit que les deux arrivent au même instant. C'est un
     /// jugement sur une zone revenue, pas une échéance : ChatGPT a déjà rendu
-    /// la main.
+    /// la main. Et il ne perd plus rien : si la page entendait une voix,
+    /// c'est macOS qui la transcrit (cf. `RelaisRepli.parole`).
     public struct Stabilisation {
         public enum Issue: Equatable { case texte(String), vide }
         private var revenue = false, precedent = "", stable = 0, vides = 0

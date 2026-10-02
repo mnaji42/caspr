@@ -31,6 +31,20 @@ public enum RelaisRepli: Equatable, Sendable {
     /// d'exploitable — et le moteur réveillé pour rien.
     public static let secondesMinimales = 0.3
 
+    /// La crête au-delà de laquelle le son de la page passe pour une voix.
+    /// Basse, délibérément : un bruit pris pour une voix ne coûte qu'un
+    /// passage de macOS sur ce bruit, une voix prise pour un bruit coûtait
+    /// la dictée. À éprouver sur la ligne de l'écho, qui donne la crête de
+    /// chaque dictée (cf. `RelaisEcho.desarmer`).
+    public static let creteDeParole: Float = 0.03
+
+    /// ChatGPT a rendu une zone vide : l'entendait-on pourtant parler ? Le
+    /// son l'a montré, ou l'aperçu en a écrit. Vrai, ce n'est pas un silence
+    /// mais une dictée que ChatGPT a perdue, et le repli la reprend (34).
+    public static func parole(crete: Float, apercu: String) -> Bool {
+        crete >= creteDeParole || !apercu.allSatisfy(\.isWhitespace)
+    }
+
     /// Le brut d'abord, puis le son entier, puis l'aperçu : la transcription
     /// de macOS relit toute la phrase, l'aperçu l'a écrite en l'entendant.
     ///

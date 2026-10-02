@@ -574,12 +574,19 @@ final class VoieChatGPT {
         do {
             let brut = try await scenario.arreterEtLire()
             guard g == generation else { return nil }
-            // Rien n'a été dit : on s'arrête là, quel que soit le module.
-            // Testé après les modules qui n'écrivent nulle part, ce cas ouvrait
-            // en silence une discussion où aucun message n'était parti. Rien à
-            // conserver, donc rien à promettre sous le message.
             guard !brut.isEmpty else {
                 Log.error("ChatGPT a rendu un texte vide (\(Log.ms(depuis: debut)) ms)")
+                // Le son de la page portait une voix, ou l'aperçu l'a écrite :
+                // ChatGPT a perdu la dictée — un toast d'erreur déjà effacé,
+                // une panne qu'il n'affiche pas. Finir sur « rien n'a été
+                // entendu » jetait avec le cycle des minutes de parole, et
+                // l'aperçu : macOS la reprend, comme après un échec prouvé.
+                if RelaisRepli.parole(crete: relais.creteEntendue, apercu: apercu.texte),
+                   replier(apres: .rienTranscrit) { return nil }
+                // Rien n'a été dit : on s'arrête là, quel que soit le module.
+                // Testé après les modules qui n'écrivent nulle part, ce cas
+                // ouvrait en silence une discussion où aucun message n'était
+                // parti. Le son, sans voix, n'a rien à rendre : rien au menu.
                 overlay.showFailure("Rien n'a été entendu")
                 return ("ChatGPT n'a rien transcrit — avez-vous parlé ?", false)
             }

@@ -504,8 +504,10 @@ final class Relais: ObservableObject {
     var surPageInterrompue: (() -> Void)?
 
     /// La durée du son que la page a capté pour la dictée en cours (cf.
-    /// `RelaisEcho`) — il survit à sa mort —, et ce son, pris pour le repli.
+    /// `RelaisEcho`) — il survit à sa mort —, son niveau crête, et ce son,
+    /// pris pour le repli.
     var secondesEntendues: Double { page?.echo.secondes ?? 0 }
+    var creteEntendue: Float { page?.echo.crete ?? 0 }
     func prendreLeSon() -> [Float] { page?.echo.prendre() ?? [] }
     /// Chaque morceau de ce son, pour l'aperçu en direct ; `nil` le coupe.
     func suivreLeSon(_ morceau: ((ArraySlice<Float>, Double) -> Void)?) { page?.echo.surMorceau = morceau }

@@ -26,6 +26,8 @@ public enum RelaisErreur: LocalizedError, Equatable {
     /// faute que `swift test` aurait dû arrêter, ou une installation
     /// abîmée. Rien ne l'y installera, et l'attendre serait sans fin.
     case pontAbsent
+    /// La zone est revenue vide, alors que la page entendait parler.
+    case rienTranscrit
 
     /// Ce que la barre affiche, quand la raison générique mentirait.
     ///
@@ -46,6 +48,7 @@ public enum RelaisErreur: LocalizedError, Equatable {
         case .pageInterrompue: return "La page ChatGPT s'est fermée — dictée perdue"
         case .relaisEteint: return "ChatGPT n'est plus la voie de dictée"
         case .pontAbsent: return "Caspr est incomplet : réinstallez-le"
+        case .rienTranscrit: return "ChatGPT n'a rien transcrit"
         default: return nil
         }
     }
@@ -97,6 +100,8 @@ public enum RelaisErreur: LocalizedError, Equatable {
         case .pontAbsent:
             "Caspr est incomplet : son script n'a pas pu s'installer dans la "
             + "page ChatGPT. Réinstallez-le."
+        case .rienTranscrit:
+            "ChatGPT a rendu une transcription vide, alors que la page vous entendait."
         }
     }
 }

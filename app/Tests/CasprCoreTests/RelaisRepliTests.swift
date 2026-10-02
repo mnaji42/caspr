@@ -146,4 +146,18 @@ struct RelaisRepliTests {
         // Après, la seconde passe rend le brut elle-même (48).
         #expect(!RelaisCycle.replie(apres: .refusParChatGPT("Limite atteinte"), en: .reponse))
     }
+
+    /// Dix minutes dictées, et ChatGPT rend la zone vide : la page
+    /// entendait une voix, la dictée n'est pas un silence (34, E2).
+    @Test("Une zone revenue vide sur une voix entendue est une dictée perdue, que macOS reprend")
+    func zoneVideSurUneVoix() {
+        #expect(RelaisRepli.parole(crete: 0.25, apercu: ""))
+        #expect(RelaisRepli.parole(crete: 0, apercu: "bonjour"))
+        #expect(!RelaisRepli.parole(crete: 0.005, apercu: " \n"))
+        // Le tee n'a rien reçu : rien ne prouve une voix, la dictée finit comme avant (100).
+        #expect(!RelaisRepli.parole(crete: 0, apercu: ""))
+        #expect(RelaisRepli.choisir(brutLu: nil, secondesAudio: 600, ecrit: true) == .transcrireParMacOS)
+        #expect(RelaisRepli.annonce(.transcrireParMacOS, apres: .rienTranscrit, son: 600, parle: 600)
+                == "ChatGPT n'a rien transcrit — transcrit par macOS")
+    }
 }

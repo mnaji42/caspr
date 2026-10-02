@@ -398,7 +398,12 @@ final class DictationController {
             return
         }
         let seconds = Double(samples.count) / AudioRecorder.targetSampleRate
-        await transcrireParMacOS(samples, figer(duree: seconds))
+        // Le début est livré, mais la barre dit que ce n'est que le début :
+        // présenté comme une dictée entière, la fin perdue passait inaperçue.
+        let coupure = macOS.coupure.map {
+            "Micro changé : capture interrompue à \(Int($0) / 60):\(String(format: "%02d", Int($0) % 60))"
+        }
+        await transcrireParMacOS(samples, figer(duree: seconds), annonce: coupure)
     }
 
     /// `apercuConserve` : cf. `VoieApple.transcrireEtLivrer`. `annonce` : ce

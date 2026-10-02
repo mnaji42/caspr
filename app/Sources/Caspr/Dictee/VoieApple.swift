@@ -1,4 +1,5 @@
 import CasprCore
+import Foundation
 
 /// Ce que les deux versions de macOS ont en commun, et rien de plus : un
 /// enregistrement entier et une langue en entrée, un texte en sortie.
@@ -121,6 +122,10 @@ final class VoieApple {
                  + "moteur \(version.rawValue)")
         return samples
     }
+
+    /// Où la capture s'est arrêtée quand un changement de micro n'a pas pu
+    /// être suivi (cf. `AudioRecorder.coupure`) ; lu après `arreter`.
+    var coupure: TimeInterval? { recorder.coupure }
 
     func annuler() {
         recorder.cancel()

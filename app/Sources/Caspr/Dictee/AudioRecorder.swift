@@ -123,7 +123,28 @@ final class AudioRecorder: @unchecked Sendable {
         samples.removeAll(keepingCapacity: true)
         lock.unlock()
         guard !isRunning else { return }
+        coupure = nil
+        level = 0
+        formatEntree = try brancher()
+        isRunning = true
+        observateur = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in self?.suivreLeChangementDeMicro() }
+    }
 
+    /// Où la capture s'est arrêtée, en secondes, quand un changement de micro
+    /// n'a pas pu être suivi ; `nil` quand elle a tout reçu.
+    ///
+    /// Gardé jusqu'au démarrage suivant, pour que la barre le dise une fois
+    /// l'audio rendu : ce qui précède la coupure est livré, mais présenté
+    /// comme une dictée entière, la fin perdue passait inaperçue.
+    private(set) var coupure: TimeInterval?
+    private var formatEntree: AVAudioFormat?
+    private var observateur: NSObjectProtocol?
+
+    /// Pose le tap au format actuel de l'entrée, et démarre le moteur ; rend
+    /// ce format.
+    private func brancher() throws -> AVAudioFormat {
         let input = engine.inputNode
         let inputFormat = input.inputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
@@ -143,7 +164,6 @@ final class AudioRecorder: @unchecked Sendable {
             throw RecorderError.converterUnavailable
         }
         self.converter = converter
-        level = 0
 
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             guard let self else { return }
@@ -152,14 +172,63 @@ final class AudioRecorder: @unchecked Sendable {
         }
 
         engine.prepare()
-        try engine.start()
-        isRunning = true
+        do {
+            try engine.start()
+        } catch {
+            // Le tap survivrait à l'échec : `stop()` ne le retire que si l'on
+            // a démarré, et le `installTap` suivant sur le même bus ferait
+            // planter l'app — une exception d'AVFoundation, que Swift ne
+            // rattrape pas. Le même magnétophone sert toute la vie de l'app.
+            input.removeTap(onBus: 0)
+            engine.reset()
+            self.converter = nil
+            throw error
+        }
+        return inputFormat
+    }
+
+    /// Reprend la capture sur le nouveau micro.
+    ///
+    /// Des AirPods qui se connectent, un casque débranché, une bascule
+    /// Bluetooth : macOS arrête alors le moteur et publie
+    /// `AVAudioEngineConfigurationChange`. Le tap ne recevait plus rien, la
+    /// jauge restait figée, et l'arrêt rendait le début de la dictée comme si
+    /// c'était toute la dictée. La suite s'ajoute à l'audio déjà acquis,
+    /// convertie au même 16 kHz ; l'aperçu, qui reçoit les tampons bruts, les
+    /// reçoit désormais à la fréquence du nouveau micro.
+    private func suivreLeChangementDeMicro() {
+        guard isRunning else { return }
+        let ancien = formatEntree.map(Self.decrire) ?? "?"
+        let niveau = level
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        do {
+            let nouveau = try brancher()
+            formatEntree = nouveau
+            Log.info("micro changé (\(ancien) → \(Self.decrire(nouveau))), capture reprise ; "
+                     + "niveau \(String(format: "%.3f", niveau))")
+        } catch {
+            lock.lock()
+            let secondes = Double(samples.count) / Self.targetSampleRate
+            lock.unlock()
+            coupure = secondes
+            level = 0
+            Log.error("micro changé (\(ancien) → \(Self.decrire(engine.inputNode.inputFormat(forBus: 0)))), "
+                      + "capture interrompue à \(String(format: "%.1f", secondes)) s : "
+                      + "\(error.localizedDescription) ; niveau \(String(format: "%.3f", niveau))")
+        }
+    }
+
+    private static func decrire(_ format: AVAudioFormat) -> String {
+        "\(Int(format.sampleRate)) Hz, \(format.channelCount) can."
     }
 
     /// Arrête la capture et rend les échantillons accumulés.
     @discardableResult
     func stop() -> [Float] {
         guard isRunning else { return [] }
+        if let observateur { NotificationCenter.default.removeObserver(observateur) }
+        observateur = nil
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isRunning = false

@@ -33,7 +33,10 @@ struct AppelAnnulableTests {
         // Une seconde reprise de la continuation ferait planter : elle doit
         // être ignorée, sans bruit.
         appel.rendre(.success(42))
-        #expect(appel.estRendu)
+        // L'issue gardée reste l'annulation : la réponse n'a rien remplacé.
+        await #expect(throws: CancellationError.self) {
+            try await withCheckedThrowingContinuation { appel.attacher($0) }
+        }
     }
 
     @Test("Une annulation arrivée avant l'attache est rendue à l'attache")

@@ -93,9 +93,6 @@ public final class AppelAnnulable<Valeur> {
 
     public init() {}
 
-    /// L'issue est-elle déjà connue ?
-    public var estRendu: Bool { issue != nil }
-
     public func attacher(_ suite: CheckedContinuation<Valeur, Error>) {
         if let issue { suite.resume(with: issue) } else { self.suite = suite }
     }

@@ -76,7 +76,10 @@ final class ApercuEnDirect {
             onFailure: { [weak self] reason in
                 Log.error("aperçu indisponible : \(reason)")
                 self?.overlay.setPreviewNotice(reason)
-            })
+            },
+            // « en écoute… », « téléchargement du modèle… » : des avis, que le
+            // journal tenait pour des échecs à chaque dictée.
+            onNotice: { [weak self] avis in self?.overlay.setPreviewNotice(avis) })
         else {
             overlay.setPreviewNotice("aperçu indisponible sur cette machine")
             return

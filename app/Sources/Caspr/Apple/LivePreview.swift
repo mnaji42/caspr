@@ -40,6 +40,9 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     private let onText: @MainActor @Sendable (String) -> Void
     /// Raison d'un aperçu indisponible, à afficher telle quelle.
     private let onFailure: @MainActor @Sendable (String) -> Void
+    /// Ce que l'aperçu dit de lui sans avoir échoué — un modèle qui se
+    /// télécharge. Distinct de l'échec, qui va au journal comme une erreur.
+    private let onNotice: @MainActor @Sendable (String) -> Void
 
     /// Tout ce qui suit est partagé entre trois fils : le démarrage, qui
     /// tourne hors du main actor, le fil audio qui appelle `append`, et le
@@ -76,9 +79,11 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     private var isStopped: Bool { lock.withLock { stopped } }
 
     init(onText: @escaping @MainActor @Sendable (String) -> Void,
-         onFailure: @escaping @MainActor @Sendable (String) -> Void) {
+         onFailure: @escaping @MainActor @Sendable (String) -> Void,
+         onNotice: @escaping @MainActor @Sendable (String) -> Void) {
         self.onText = onText
         self.onFailure = onFailure
+        self.onNotice = onNotice
     }
 
     /// Réserve la locale auprès du système, une fois pour toutes.
@@ -158,7 +163,7 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
             // première dictée.
             let installed = await SpeechTranscriber.installedLocales
             if !installed.contains(where: { $0.identifier == locale.identifier }) {
-                await report("aperçu : téléchargement du modèle \(locale.identifier)…")
+                await report("aperçu : téléchargement du modèle \(locale.identifier)…", echec: false)
                 Log.info("aperçu : téléchargement du modèle (\(locale.identifier))…")
                 try await AppleSpeechEngine.installAssets(for: transcriber)
             }
@@ -220,9 +225,9 @@ final class LivePreview: SpeechPreviewing, @unchecked Sendable {
     }
 
     @MainActor
-    private func report(_ message: String) {
+    private func report(_ message: String, echec: Bool = true) {
         guard !isStopped else { return }
-        onFailure(message)
+        (echec ? onFailure : onNotice)(message)
     }
 
     /// Appelé depuis le fil audio, ou le fil principal pour l'écho. Le
@@ -321,14 +326,15 @@ enum SpeechPreview {
     @MainActor
     static func make(for language: String,
                      onText: @escaping @MainActor @Sendable (String) -> Void,
-                     onFailure: @escaping @MainActor @Sendable (String) -> Void)
+                     onFailure: @escaping @MainActor @Sendable (String) -> Void,
+                     onNotice: @escaping @MainActor @Sendable (String) -> Void)
     -> (any SpeechPreviewing)? {
         switch engine(for: language) {
         case .apple:
             guard #available(macOS 26.0, *) else { return nil }
-            return LivePreview(onText: onText, onFailure: onFailure)
+            return LivePreview(onText: onText, onFailure: onFailure, onNotice: onNotice)
         case .appleLegacy:
-            return LegacyLivePreview(onText: onText, onFailure: onFailure)
+            return LegacyLivePreview(onText: onText, onFailure: onFailure, onNotice: onNotice)
         case nil:
             return nil
         }

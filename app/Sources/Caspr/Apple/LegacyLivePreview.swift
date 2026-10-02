@@ -21,17 +21,29 @@ import Speech
 final class LegacyLivePreview: SpeechPreviewing, @unchecked Sendable {
     private let onText: @MainActor @Sendable (String) -> Void
     private let onFailure: @MainActor @Sendable (String) -> Void
+    private let onNotice: @MainActor @Sendable (String) -> Void
 
     private let lock = NSLock()
     private var request: SFSpeechAudioBufferRecognitionRequest?
+    /// Vrai dès `stop()`, et pour toujours, comme `LivePreview.stopped`.
+    ///
+    /// Arrêté pendant que `start` attendait le dialogue d'autorisation,
+    /// l'aperçu n'avait rien à arrêter ; `start` reprenait ensuite, ouvrait
+    /// une reconnaissance que plus personne n'arrêterait, et affichait « en
+    /// écoute… » sur la barre d'après.
+    private var stopped = false
+    private var isStopped: Bool { lock.withLock { stopped } }
 
     init(onText: @escaping @MainActor @Sendable (String) -> Void,
-         onFailure: @escaping @MainActor @Sendable (String) -> Void) {
+         onFailure: @escaping @MainActor @Sendable (String) -> Void,
+         onNotice: @escaping @MainActor @Sendable (String) -> Void) {
         self.onText = onText
         self.onFailure = onFailure
+        self.onNotice = onNotice
     }
 
     func start(language: String) async {
+        guard !isStopped else { return }
         // Avant l'autorisation, et pour la même raison qu'à la transcription :
         // avec la Dictée de macOS éteinte, tout ce qui suit répond « oui », la
         // tâche démarre, la barre affiche « en écoute… » et pas un mot
@@ -60,7 +72,7 @@ final class LegacyLivePreview: SpeechPreviewing, @unchecked Sendable {
         // Le rappel tient `onText` et non l'aperçu : celui-ci est libéré dès
         // l'arrêt, et le résultat final — la fin de la dictée — arrive après.
         let onText = self.onText
-        recognizer.recognitionTask(with: audio) { result, error in
+        let tache = recognizer.recognitionTask(with: audio) { result, error in
             if error != nil {
                 // Silencieux : une reconnaissance interrompue en fin de dictée
                 // est le cas normal, et l'annoncer ferait clignoter un
@@ -75,14 +87,21 @@ final class LegacyLivePreview: SpeechPreviewing, @unchecked Sendable {
 
         // Prise hors du contexte asynchrone : un verrou bloquant tenu à
         // travers une suspension immobiliserait un fil du pool coopératif.
-        store(request: audio)
+        guard store(request: audio) else {
+            tache.cancel()
+            return
+        }
 
-        await report("en écoute…")
+        await report("en écoute…", echec: false)
     }
 
-    private func store(request: SFSpeechAudioBufferRecognitionRequest) {
-        lock.lock(); defer { lock.unlock() }
-        self.request = request
+    /// Garde la requête, sauf si l'aperçu a été arrêté entre-temps.
+    private func store(request: SFSpeechAudioBufferRecognitionRequest) -> Bool {
+        lock.withLock {
+            guard !stopped else { return false }
+            self.request = request
+            return true
+        }
     }
 
     /// Appelé depuis le fil audio, ou le fil principal pour l'écho : on ne
@@ -99,17 +118,17 @@ final class LegacyLivePreview: SpeechPreviewing, @unchecked Sendable {
         lock.lock()
         let request = self.request
         self.request = nil
+        stopped = true
         lock.unlock()
 
         // Fin de l'audio, sans annuler la tâche : elle rend encore son
-        // résultat final, puis se termine seule — comme celle de
-        // `LegacySpeechEngine`, dont personne ne garde la référence.
-        // L'annuler aussitôt jetait la fin de la dictée, que garde le recours
+        // résultat final, puis se termine seule. L'annuler aussitôt jetait la fin de la dictée, que garde le recours
         // « Insérer l'aperçu ».
         request?.endAudio()
     }
 
-    private func report(_ message: String) async {
-        await MainActor.run { onFailure(message) }
+    private func report(_ message: String, echec: Bool = true) async {
+        guard !isStopped else { return }
+        await MainActor.run { (echec ? onFailure : onNotice)(message) }
     }
 }

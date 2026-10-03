@@ -34,6 +34,9 @@ struct TriggerCard: View, ValidatingComponent {
     var showTrialSandbox = true
     /// Affiche le raccourci « Changer de voie ». Faux dans l'accueil.
     var showVoieShortcut = false
+    /// La voie retenue peut-elle dicter ? Transmis à la zone d'essai, qui ne
+    /// juge que des droits ; c'est l'accueil, qui observe la voie, qui le sait.
+    var voiePrete = true
 
     @State private var prefs = Preferences.shared
     @State private var monitor = PermissionsMonitor.shared
@@ -80,6 +83,7 @@ struct TriggerCard: View, ValidatingComponent {
             if showTrialSandbox {
                 Divider().opacity(0.25)
                 TrialSandbox(isLocked: !permissionsComplete,
+                             voiePrete: voiePrete,
                              triggerLabel: triggerLabel)
             }
         }

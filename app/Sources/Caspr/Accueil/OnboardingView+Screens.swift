@@ -131,7 +131,7 @@ extension OnboardingView {
             }
 
             SectionLabel("Déclencheur & Zone de test")
-            TriggerCard(showTrialSandbox: true)
+            TriggerCard(showTrialSandbox: true, voiePrete: voieBlocker == nil)
         }
     }
 

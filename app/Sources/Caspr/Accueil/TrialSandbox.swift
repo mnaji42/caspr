@@ -23,6 +23,11 @@ struct TrialSandbox: View {
     /// sur la touche ne produirait rien, et l'essai raté se lirait comme
     /// « Caspr ne marche pas » au lieu de « il manque un droit ».
     var isLocked: Bool
+    /// Faux tant que la voie retenue ne peut pas dicter — ChatGPT ni
+    /// connecté ni calibré, modèle de macOS absent. La zone reste ouverte :
+    /// la carte du dessus dit quoi faire, et l'on n'annonce simplement pas
+    /// « prêt » un appui qui serait refusé.
+    var voiePrete = true
     /// Le déclencheur à annoncer — « ⌥ droite », « ⌃⌥⌘D ».
     var triggerLabel: String
 
@@ -38,6 +43,10 @@ struct TrialSandbox: View {
                 Spacer()
                 if isLocked {
                     Text("🔒 Accordez les accès ci-dessus pour débloquer")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Style.warning)
+                } else if !voiePrete {
+                    Text("Votre voie n'est pas encore prête : voir ci-dessus")
                         .font(.system(size: 11))
                         .foregroundStyle(Style.warning)
                 } else {

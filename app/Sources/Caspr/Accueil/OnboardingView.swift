@@ -148,14 +148,19 @@ struct OnboardingView: View {
         // Le déclencheur **et** ce qu'exige la voie : c'est l'étape qui rend
         // Caspr utilisable, et la dernière qu'exige la garde d'accès — qui en
         // juge avec les mêmes composants.
-        case .liveEngine:
-            TriggerCard.validate() ?? {
-                switch prefs.voie {
-                case .apple: AppleEngineCard.validate()
-                case .chatgpt: RelaisSession.validate()
-                }
-            }()
+        case .liveEngine: TriggerCard.validate() ?? voieBlocker
         case .completion: nil
+        }
+    }
+
+    /// Ce qui manque à la voie retenue pour dicter, ou `nil`.
+    ///
+    /// Lu ici, où le relais est observé : c'est ce qui redessine l'écran — et
+    /// la zone d'essai, qui le reçoit — à la fin d'une calibration.
+    var voieBlocker: ComponentValidationError? {
+        switch prefs.voie {
+        case .apple: AppleEngineCard.validate()
+        case .chatgpt: RelaisSession.validate()
         }
     }
 

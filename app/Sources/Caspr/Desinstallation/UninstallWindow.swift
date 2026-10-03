@@ -45,6 +45,11 @@ private struct UninstallView: View {
     /// change rien au disque.
     @State private var present: [Uninstall.Item] = []
     @State private var details: [Uninstall.Item: String] = [:]
+    /// Le bouton restait actif pendant l'effacement de la session ChatGPT,
+    /// qui prend un instant : un second clic lançait un second balayage, qui
+    /// ne trouvait plus rien, et c'est son compte rendu — « rien à retirer »
+    /// partout — qui s'affichait à la place du vrai.
+    @State private var enCours = false
 
     private var title: String {
         report == nil ? "Désinstaller Caspr" : "Caspr est désinstallé"
@@ -169,7 +174,10 @@ private struct UninstallView: View {
             if report == nil {
                 Button("Annuler", action: onCancel)
                     .keyboardShortcut(.cancelAction)
+                    .disabled(enCours)
                 Button("Désinstaller") {
+                    guard !enCours else { return }
+                    enCours = true
                     // La session ChatGPT s'efface par l'API de
                     // WebKit, avant le balayage des fichiers : c'est la seule
                     // voie qu'Apple garantisse, et elle demande d'attendre.
@@ -181,6 +189,7 @@ private struct UninstallView: View {
                     }
                 }
                     .buttonStyle(.borderedProminent)
+                    .disabled(enCours)
                     // Rouge, et non l'ambre des avertissements : « attention »
                     // et « ceci part » ne sont pas le même registre, et c'est
                     // le seul bouton de l'application dont l'effet ne se

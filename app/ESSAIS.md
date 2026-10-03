@@ -238,8 +238,9 @@ de le couper.
 
 ### Brut
 
-23. Choisis Brut sur la pastille, maintiens la touche de dictée, dis « Bonjour,
-    ceci est un essai », puis relâche.
+23. Appuie une fois sur la touche de dictée, choisis Brut sur la pastille, dis
+    « Bonjour, ceci est un essai », puis appuie de nouveau. (Ne la maintiens
+    pas : tenue une seconde, elle ouvre les Réglages au lieu de dicter.)
     Attendu : pendant l'écoute, la pastille des modules est en haut à droite de
     la barre, sur le module en cours. La phrase s'écrit au curseur et arrive en
     tête des transcriptions récentes. Caspr n'ouvre pas son propre micro : le

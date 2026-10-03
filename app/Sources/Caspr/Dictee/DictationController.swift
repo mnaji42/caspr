@@ -268,6 +268,10 @@ final class DictationController {
             if let refus {
                 voieDuCycle = nil
                 state = .failed(refus)
+                // Dit là où l'on regarde : l'icône seule laissait croire que
+                // la touche n'avait rien fait — sur un Mac neuf surtout, où la
+                // voie ChatGPT est choisie avant que sa calibration aboutisse.
+                overlay.showFailure(refus)
             }
         case .apple:
             macOS.prendreLeMicro()

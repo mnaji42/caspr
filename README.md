@@ -261,7 +261,7 @@ caspr/
 | | macOS path | ChatGPT path |
 |---|---|---|
 | macOS | 14+ — Apple Intelligence needs 26+, Dictation covers the rest | 14+ |
-| Chip | any Mac that runs it, Intel included | any |
+| Chip | Apple silicon — the release is built for arm64 only | Apple silicon |
 | Download | a language model, handled by macOS | nothing |
 | Account | none | ChatGPT |
 | Network | none | always |

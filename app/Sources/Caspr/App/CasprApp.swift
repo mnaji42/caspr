@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CasprCore
 
 /// Caspr vit dans la barre de menus, sans fenêtre ni icône au Dock.
 @MainActor
@@ -202,20 +203,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// D'où un dialogue qui *agit* au lieu d'instruire : ouvrir la copie déjà
     /// installée, ou installer et ouvrir s'il n'y en a pas. Un clic, et le
     /// problème n'a plus lieu d'être expliqué.
+    ///
+    /// Une copie installée **plus ancienne** se remplace au lieu de se
+    /// rouvrir : ouvrir l'image d'une version neuve pour se voir relancer
+    /// l'ancienne, c'était ne jamais pouvoir l'installer par ce chemin.
+    ///
     /// Rend `true` si la modale a pris la main — auquel cas rien d'autre ne
     /// s'ouvre, et c'est elle qui enchaînera sur l'accueil.
     @discardableResult
     private func promptToInstallIfNeeded() -> Bool {
         guard Uninstall.runsFromReadOnlyVolume else { return false }
         let destination = URL(fileURLWithPath: "/Applications/Caspr.app")
-        let installed = FileManager.default.fileExists(atPath: destination.path)
+        let installee: InstallPromptWindowController.Choice.Installee
+        if !FileManager.default.fileExists(atPath: destination.path) {
+            installee = .aucune
+        } else if let version = Bundle(url: destination)?
+                    .object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+                  Version.isNewer(UpdateChecker.currentVersion, than: version) {
+            installee = .plusAncienne(version)
+        } else {
+            // Illisible, on la garde : remplacer une copie dont on ignore la
+            // version pourrait revenir en arrière.
+            installee = .aJour
+        }
         let volume = sourceVolume
 
         installPrompt.show(.init(
-            alreadyInstalled: installed,
+            installee: installee,
             onPrimary: { [weak self] in
                 guard let self else { return }
-                if installed {
+                if case .aJour = installee {
                     // Éjecter compte autant que réinstaller : c'est la fenêtre
                     // restée ouverte sur l'icône de l'image qui provoque le
                     // double-clic au mauvais endroit.

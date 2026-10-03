@@ -327,9 +327,8 @@ Settings › Général › Version offers two ways to learn about a new version:
 Either way the request is a GET on GitHub's public API, sending nothing but an
 IP address. When a new version exists, Caspr shows its release notes and can
 download and install it, after checking that it carries the same signing
-certificate; otherwise, download the new DMG and, in the Finder, copy Caspr
-from it into Applications over the old app — launching it from the disk image
-would only offer to open the copy already installed.
+certificate; otherwise, quit Caspr, download the new DMG and open Caspr from
+it: seeing an older copy in Applications, it offers to replace it.
 
 #### Coming from 0.14 or earlier
 

@@ -23,7 +23,16 @@ final class InstallPromptWindowController {
 
     /// Ce qu'on propose, selon qu'une copie installée existe déjà.
     struct Choice {
-        let alreadyInstalled: Bool
+        /// La copie d'Applications, vue depuis l'image.
+        enum Installee {
+            case aucune
+            /// Elle porte ce numéro, plus ancien que celui de l'image.
+            case plusAncienne(String)
+            /// Aussi récente, ou de version illisible : on l'ouvre.
+            case aJour
+        }
+
+        let installee: Installee
         let onPrimary: () -> Void
         let onContinue: () -> Void
     }
@@ -64,9 +73,7 @@ private struct InstallPromptView: View {
             }
 
             // Titre
-            Text(choice.alreadyInstalled
-                 ? "Ce n'est pas la copie installée"
-                 : "Caspr n'est pas encore installé")
+            Text(title)
                 .font(.system(size: 19, weight: .bold))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
@@ -74,18 +81,9 @@ private struct InstallPromptView: View {
 
             // Description
             VStack(spacing: 12) {
-                Text(choice.alreadyInstalled
-                     ? "Caspr est bien dans Applications, mais c'est la "
-                       + "copie restée dans l'image disque qui vient de "
-                       + "s'ouvrir — les deux icônes se ressemblent."
-                     : "Il est ouvert depuis l'image disque, en lecture "
-                       + "seule : les autorisations accordées seraient "
-                       + "perdues et les mises à jour impossibles.")
-                Text(choice.alreadyInstalled
-                     ? "Ouvrez plutôt celle d'Applications : c'est elle qui "
-                       + "garde vos autorisations."
-                     : "Caspr peut s'installer dans **Applications** et "
-                       + "s'y rouvrir tout seul.")
+                // Par une clé, pour que le gras d'« Applications » s'affiche.
+                Text(LocalizedStringKey(description))
+                Text(LocalizedStringKey(proposal))
             }
             .font(.system(size: 12.5))
             .foregroundStyle(Style.textSecondary)
@@ -139,9 +137,51 @@ private struct InstallPromptView: View {
         .background(WindowBackground().ignoresSafeArea())
     }
 
+    private var title: String {
+        switch choice.installee {
+        case .aucune: "Caspr n'est pas encore installé"
+        case .plusAncienne: "Ancienne version installée"
+        case .aJour: "Ce n'est pas la copie installée"
+        }
+    }
+
+    private var description: String {
+        switch choice.installee {
+        case .aucune:
+            "Il est ouvert depuis l'image disque, en lecture seule : les "
+                + "autorisations accordées seraient perdues et les mises à "
+                + "jour impossibles."
+        case .plusAncienne(let version):
+            "Applications contient la \(version) ; c'est la "
+                + "\(UpdateChecker.currentVersion), restée dans l'image "
+                + "disque, qui vient de s'ouvrir."
+        case .aJour:
+            "Caspr est bien dans Applications, mais c'est la copie restée "
+                + "dans l'image disque qui vient de s'ouvrir — les deux "
+                + "icônes se ressemblent."
+        }
+    }
+
+    private var proposal: String {
+        switch choice.installee {
+        case .aucune:
+            "Caspr peut s'installer dans **Applications** et s'y rouvrir "
+                + "tout seul."
+        case .plusAncienne:
+            "Caspr peut la remplacer dans **Applications** et s'y rouvrir "
+                + "tout seul. Vos réglages restent."
+        case .aJour:
+            "Ouvrez plutôt celle d'Applications : c'est elle qui garde vos "
+                + "autorisations."
+        }
+    }
+
     private var primaryLabel: String {
         if working { return "Installation en cours…" }
-        return choice.alreadyInstalled ? "Ouvrir la copie installée"
-                                       : "Installer et ouvrir"
+        return switch choice.installee {
+        case .aucune: "Installer et ouvrir"
+        case .plusAncienne: "Remplacer par la \(UpdateChecker.currentVersion)"
+        case .aJour: "Ouvrir la copie installée"
+        }
     }
 }

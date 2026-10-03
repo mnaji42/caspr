@@ -992,19 +992,21 @@ de le couper.
      Caspr dans la fenêtre du volume.
      Attendu : le script passe. Il n'avait pas été exécuté depuis que son
      commentaire de la ligne 54 dit « avant de le lancer ». Le volume ne montre
-     qu'une icône. Comme /Applications/Caspr.app existe, la fenêtre propose
-     « Ouvrir la copie installée », et ce bouton relance la copie de
-     /Applications, pas celle du DMG. Le README (vers la ligne 278) le dit :
-     copier Caspr sur l'ancienne dans le Finder. À décider plus tard : la
-     fenêtre doit-elle proposer de remplacer une copie plus ancienne ?
+     qu'une icône. Comme /Applications/Caspr.app existe, à la même version,
+     la fenêtre propose « Ouvrir la copie installée », et ce bouton relance
+     la copie de /Applications, pas celle du DMG. Une copie installée plus
+     ancienne (une 0.14) donne « Ancienne version installée » et
+     « Remplacer par la 0.15.0 », qui la remplace et rouvre la nouvelle.
+     Quitte d'abord la copie installée : si elle tourne encore, `open` ne
+     fait que la ramener au premier plan.
 
 119. Quitte Caspr, mets l'app installée de côté (`mv /Applications/Caspr.app ~/Desktop/`),
      puis double-clique Caspr dans le DMG.
      Attendu : la fenêtre dit « Caspr peut s'installer dans Applications » avec
      « Applications » en gras, et non « **Applications » avec les astérisques,
      comme sur `website/images/07-Popup-souvre-installer-dans-application.png`.
-     Si les astérisques s'affichent, la chaîne d'InstallPromptWindow.swift est
-     une String construite par `+`, et non un LocalizedStringKey. Ferme la
+     Les textes passent par `LocalizedStringKey` depuis ce correctif ; si
+     les astérisques s'affichent encore, c'est un défaut. Ferme la
      fenêtre sans installer, éjecte le DMG, puis
      `mv ~/Desktop/Caspr.app /Applications/`.
 

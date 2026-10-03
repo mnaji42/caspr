@@ -281,7 +281,13 @@ final class RelaisCalibration {
     private func apprendre(_ page: RelaisPage, _ cible: RelaisCible) async throws {
         while true {
             let reponse = page.selecteurs.reponse
-            let copies = NSPasteboard.general.changeCount
+            // Le clic sur « copier » y laisse la réponse de ChatGPT : rendu à
+            // la fin de chaque essai, accepté ou refusé, comme l'automatique
+            // le rend — c'est vers la main qu'il renvoie quand il échoue.
+            let presse = NSPasteboard.general
+            let sauvegarde = cible == .copier ? PressePapiers(presse) : nil
+            let copies = presse.changeCount
+            defer { if let sauvegarde, presse.changeCount != copies { sauvegarde.rendre(presse) } }
             guard let issue = try await page.auPlus(.seconds(180), {
                 try await page.guetter(cible, reponse: reponse)
             }) else {
@@ -293,7 +299,7 @@ final class RelaisCalibration {
             let refus = cible != .copier ? nil
                 : r.selecteur.isEmpty ? RelaisDialogues.copierAilleurs
                 : (try? await page.observer(auPlus: .seconds(3), toutes: .milliseconds(100)) {
-                    NSPasteboard.general.changeCount != copies
+                    presse.changeCount != copies
                 }) == true ? nil : RelaisDialogues.copierRien
             try Task.checkCancellation()
             if let refus {

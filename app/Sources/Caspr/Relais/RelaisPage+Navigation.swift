@@ -30,10 +30,21 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
     /// La configuration reçue en paramètre doit être réutilisée telle quelle :
     /// c'est elle qui rattache la nouvelle vue à la même session, donc au même
     /// jeu de cookies. En construire une autre ferait échouer la connexion.
+    ///
+    /// Le panneau est pour la connexion seulement. Un lien d'une réponse — une
+    /// source, une page citée — ouvert dans un nouvel onglet y arrivait aussi,
+    /// sous le titre « Connexion », sans barre d'adresse : il part dans le
+    /// navigateur. Une adresse vide ou `about:blank` garde le panneau : une
+    /// connexion commence souvent ainsi, avant d'aller chez le fournisseur.
     func webView(_ webView: WKWebView,
                  createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction,
                  windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if let url = navigationAction.request.url, let hote = url.host(),
+           ["http", "https"].contains(url.scheme?.lowercased()), !Self.ouvreUneConnexion(hote: hote.lowercased()) {
+            NSWorkspace.shared.open(url)
+            return nil
+        }
         let cadre = NSRect(x: 0, y: 0, width: 560, height: 720)
         let vue = WKWebView(frame: cadre, configuration: configuration)
         vue.uiDelegate = self
@@ -50,6 +61,14 @@ extension RelaisPage: WKUIDelegate, WKNavigationDelegate {
         panneau.makeKeyAndOrderFront(nil)
         annexes.append(panneau)
         return vue
+    }
+
+    /// Les hôtes où commence une connexion à ChatGPT : le sien, celui
+    /// d'OpenAI, et ceux des comptes qu'il propose — Google, Apple, Microsoft.
+    static func ouvreUneConnexion(hote: String) -> Bool {
+        estChatGPT(hote: hote) || hote == "openai.com" || hote.hasSuffix(".openai.com")
+            || ["accounts.google.com", "appleid.apple.com", "login.microsoftonline.com", "login.live.com"]
+                .contains(hote)
     }
 
     /// La page demande la fermeture de son propre popup — typiquement à la fin

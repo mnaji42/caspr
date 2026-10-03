@@ -184,8 +184,19 @@ public final class RelaisDictee {
             // Délai de geste : le bouton d'arrêt existe pendant l'écoute.
             // Une page qui a cessé d'elle-même — ni arrêt, ni micro tenu —
             // n'a rien à arrêter : la cliquer ne trouverait rien.
-            try await observer([], delai: .arret) { vu -> Void? in
+            //
+            // Ni celle dont la zone est revenue, micro tenu ou non : la page
+            // la retire tant qu'elle écoute. Arrêtée par sa propre barre, ou
+            // par une limite de ChatGPT, elle garde le micro de WebKit, qu'aucune
+            // fin ordinaire ne rend (cf. `ouvrirLEcoute`) ; l'arrêt cherché
+            // quinze secondes faisait conclure « Transcription impossible »
+            // devant une transcription déjà dans la zone.
+            try await observer(.texte, delai: .arret) { vu -> Void? in
                 if !vu.stop, !self.page.microOuvert { return () }
+                if !vu.stop, vu.texte != nil {
+                    self.journal("relais : la page avait cessé d'écouter d'elle-même, micro de WebKit tenu", false)
+                    return ()
+                }
                 return try await self.cliquer(.stop)
             }
         }

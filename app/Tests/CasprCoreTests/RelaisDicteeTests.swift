@@ -154,6 +154,10 @@ struct RelaisDicteeTests {
 
         func vider() async throws { zone = "" }
 
+        /// La page cesse d'écouter sans qu'on l'ait arrêtée : sa propre
+        /// barre, une limite de ChatGPT.
+        func cesserDElleMeme() { arretA = t }
+
         func encadrer(avant: String, apres: String) async throws -> Bool {
             guard consignePrend else { return true }
             (self.avant, self.apres) = (avant, apres)
@@ -243,6 +247,19 @@ struct RelaisDicteeTests {
         #expect(page.clics == [.micro, .stop, .envoi])
         // Rendu tel qu'il était juste avant le clic.
         #expect(page.presse.contenu == "le presse-papiers de l'utilisateur")
+    }
+
+    /// Aucune fin ordinaire ne rend le micro de WebKit : arrêtée d'elle-même,
+    /// la page n'a plus d'arrêt à cliquer, mais le micro reste tenu.
+    @Test("La page a cessé d'écouter d'elle-même, micro tenu : la zone revenue se lit")
+    func pageArreteeDElleMeme() async throws {
+        let page = PageFactice()
+        let dictee = Self.dictee(page)
+        try await dictee.ouvrirLEcoute()
+        page.microTenu = true
+        page.cesserDElleMeme()
+        #expect(try await dictee.arreterEtLire() == "Bonjour tout le monde")
+        #expect(page.horloge.ecoule < .seconds(15))
     }
 
     // MARK: - Les échecs que la page prouve

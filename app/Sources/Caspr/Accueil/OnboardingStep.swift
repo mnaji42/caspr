@@ -18,7 +18,14 @@ enum OnboardingStep: Int, CaseIterable {
     /// L'écran du moteur final n'existe plus : qui s'y était arrêté avait
     /// franchi tout ce qui le précède, et reprend à la fin plutôt qu'à la
     /// bienvenue.
+    ///
+    /// Un accueil mené à terme se revoit depuis le début : « Terminer » ne
+    /// remet pas l'étape à zéro, et « Revoir l'accueil… » rouvrait sur
+    /// « Tout est prêt ! », à quatre « Retour » de la bienvenue. Tester le
+    /// drapeau ici couvre aussi les installations où « completion » est
+    /// déjà rangé.
     @MainActor static var resumed: OnboardingStep {
+        if Preferences.shared.onboarded { return .welcome }
         let stored = Preferences.shared.onboardingScreen
         if stored == "finalEngine" { return .completion }
         return allCases.first { $0.name == stored } ?? .welcome

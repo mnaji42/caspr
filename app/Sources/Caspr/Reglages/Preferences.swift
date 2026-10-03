@@ -70,7 +70,8 @@ final class Preferences {
     /// accorder l'accessibilité — doit revenir là où il était, et non
     /// repartir de la page de bienvenue qu'il a déjà lue.
     ///
-    /// Ne veut plus rien dire une fois `onboarded` vrai, et n'est plus lue.
+    /// Ne veut plus rien dire une fois `onboarded` vrai : elle reste rangée,
+    /// mais `OnboardingStep.resumed` l'ignore alors et rouvre à la bienvenue.
     ///
     /// Rangée sous son nom (« liveEngine »), pas sous son rang : l'ancienne
     /// clé `caspr.onboarding.step` tenait un index, qui aurait désigné l'écran

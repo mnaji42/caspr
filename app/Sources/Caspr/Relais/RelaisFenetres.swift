@@ -272,7 +272,18 @@ extension RelaisPage {
         // transparente. Elle occupe l'écran sans rien y montrer, et le système
         // n'a plus de raison de la geler.
         webView.pageZoom = compact ? Self.zoomBarre : 1
-        Task { _ = await sonder { try await self.compacter(compact, sel: self.selecteurs.composeur) } }
+        // Une page qui se charge encore — le préchauffage du lancement, le fil
+        // neuf d'après Réorganiser — n'a ni le pont ni la zone que le
+        // compactage vise, et son document neuf n'en garderait rien : la
+        // bande montrait le haut de la page pendant toute la dictée. Il
+        // attend donc la zone, puis ne s'applique que si la barre est restée
+        // compacte entre-temps.
+        let chargeait = chargementEnCours || webView.isLoading
+        Task {
+            if compact, chargeait { _ = await attendreComposeurPret(secondes: 30) }
+            guard (webView.pageZoom == Self.zoomBarre) == compact else { return }
+            _ = await sonder { try await self.compacter(compact, sel: self.selecteurs.composeur) }
+        }
 
         guard let cadre = NSScreen.main?.visibleFrame else { return }
         // « Barre » et « Rien » à la place de la barre ; « Page » d'un module

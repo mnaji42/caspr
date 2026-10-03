@@ -69,7 +69,7 @@ enum RelaisDialogues {
                 ?? "pas essayé : une étape précédente a échoué"
             return "✗ \(cible.libelle) — \(raison)"
         }
-        lignes.append(ancien.saitLire && enregistre
+        lignes.append(ancien.saitLire
             ? "✓ « Lire à haute voix » — gardé tel que vous l'aviez montré"
             : "– « Lire à haute voix » — facultatif, à montrer à la main")
         lignes.append("")

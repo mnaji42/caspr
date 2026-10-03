@@ -719,10 +719,12 @@ de le couper.
     Attendu : la fenêtre du relais part, la phrase s'écrit dans cet éditeur-là
     (journal : « insertion vers » son bundle), et Caspr n'est pas caché à tort.
 
-87. Repasse en macOS. Réglages › Dictée : règle le moteur sur Dictée.
-    Attendu : la ligne « Reconnaissance Vocale Apple » est demandée. Sur Apple
-    Intelligence, avec l'aperçu coupé, elle ne l'est pas. Remets Apple
-    Intelligence et l'aperçu.
+87. Repasse en macOS, en français (modèle Apple Intelligence présent), et ouvre
+    Réglages › Voie. La version n'est plus un réglage : Caspr la choisit seul.
+    Attendu : la carte affiche « macOS · Apple Intelligence », et la ligne
+    « Reconnaissance Vocale Apple » n'y est pas demandée, aperçu en direct
+    allumé ou non (il tourne sur la même version). Elle ne l'est que sous la
+    Dictée : c'est l'essai 88.
 
 88. Voie macOS : choisis comme langue principale une langue dont le modèle Apple
     Intelligence n'est pas téléchargé, Wi-Fi coupé.

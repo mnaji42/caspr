@@ -108,6 +108,19 @@ struct RelaisCalibrationAuto {
     /// la page, et un bouton d'arrêt l'a remplacée. L'arrêt n'est pas encore
     /// appris : le filet le cherche.
     private func prouverMicro(_ composeur: String, _ issue: inout Issue) async throws -> String? {
+        // L'accès au micro se demande AVANT le clic, Caspr au premier plan,
+        // sans rien chronométrer. Sur une machine neuve, c'était le clic de la
+        // page qui ouvrait le tout premier dialogue système du micro, derrière
+        // la fenêtre et avec quinze secondes pour y répondre ; manqué, il
+        // enregistre un refus que macOS ne redemande jamais.
+        if AudioRecorder.microphoneAccess == .undetermined {
+            await PermissionsMonitor.shared.requestMicrophone()
+        }
+        if AudioRecorder.microphoneAccess == .denied {
+            issue.preuves.manque(.micro, "Caspr n'a pas accès au micro — Réglages Système › "
+                                 + "Confidentialité et sécurité › Micro")
+            return nil
+        }
         for sel in await candidats(.micro, sinon: "aucun bouton micro n'y est seul à son repère", &issue) {
             guard await cliquer(.micro, sel, &issue) else { continue }
             // Quinze secondes : la première fois, macOS demande l'accès au

@@ -434,10 +434,10 @@ macOS convention, and it is what separates a mistake from a disaster.
 | Item | Where |
 |---|---|
 | The app | wherever it was installed — read from the bundle, not hardcoded |
-| Settings and history — **and the ChatGPT session**, named when one is signed in | `~/Library/Preferences/fr.lyriastudio.caspr.plist`, `~/Library/WebKit/fr.lyriastudio.caspr` |
+| Settings and history — **and the ChatGPT session**, named when one is signed in | `~/Library/Preferences/fr.lyriastudio.caspr.plist`, `~/Library/WebKit/fr.lyriastudio.caspr`, `~/Library/HTTPStorages/fr.lyriastudio.caspr.binarycookies` |
 | Microphone, Accessibility, Speech Recognition | TCC, via `tccutil` |
-| Logs and caches | `~/Library/Logs/Caspr`, `~/Library/Caches/…` |
-| Leftovers of the old local engine, if any | its launch agent, environment and model files |
+| Caches | `~/Library/Caches/fr.lyriastudio.caspr`, `~/Library/HTTPStorages/fr.lyriastudio.caspr` |
+| Leftovers of the old local engine, if any | its launch agent, environment, model files and logs (`~/Library/Logs/Caspr`) |
 
 The ChatGPT session is cleared through WebKit's own API before the files are
 swept, so no signed-in account is left behind. The login item is removed

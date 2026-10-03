@@ -176,12 +176,20 @@ enum Uninstall {
     /// voyait nulle part — le dossier ne porte pas le mot « Caspr » et aucun
     /// écran ne le mentionne.
     ///
+    /// Deux emplacements : le magasin de WebKit, et le fichier de cookies
+    /// que macOS range à côté du dossier `HTTPStorages` — ce dernier part avec
+    /// les caches, son voisin `.binarycookies` restait, avec les cookies de
+    /// chatgpt.com, d'auth.openai.com et de Google dedans. L'effacement par
+    /// WebKit le vide, s'il a eu le temps d'atteindre le disque.
+    ///
     /// Retirée avec les réglages plutôt que sous un élément à elle : c'est de
-    /// l'état applicatif, comme l'historique, et `detail(for: .settings)` la
-    /// nomme (« session ChatGPT connectée ») pour que la case dise ce qu'elle
+    /// l'état applicatif, comme l'historique, et `details()` la nomme
+    /// (« session ChatGPT connectée ») pour que la case dise ce qu'elle
     /// emporte.
-    private static var relaisSession: URL {
-        home.appending(path: "Library/WebKit/\(bundleIdentifier)")
+    private static var relaisSession: [URL] {
+        [home.appending(path: "Library/WebKit/\(bundleIdentifier)"),
+         home.appending(path: "Library/HTTPStorages/\(bundleIdentifier).binarycookies")]
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     /// Ce que l'ancien moteur local a laissé et qui est encore là : la même
@@ -213,7 +221,7 @@ enum Uninstall {
         // l'information qui compte le plus dans cet écran — laisser
         // derrière soi un compte connecté est précisément ce qu'on vient y
         // éviter, et une suppression qu'on ne voit pas ne rassure personne.
-        if FileManager.default.fileExists(atPath: relaisSession.path) {
+        if !relaisSession.isEmpty {
             settings += ", session ChatGPT connectée"
         }
         let caches = cacheDirectories
@@ -285,8 +293,11 @@ enum Uninstall {
             // annexes, et supprimer les fichiers sous un WebKit encore vivant
             // laisse la session revenir. Ce balayage-ci ne ramasse que ce qui
             // pourrait rester derrière.
-            if FileManager.default.fileExists(atPath: relaisSession.path) {
-                report.append(trash(relaisSession, "session ChatGPT du relais"))
+            // Une ligne pour les deux emplacements, comme les caches ; un
+            // échec passe devant, c'est lui qu'il faut lire.
+            let session = relaisSession.map { trash($0, "session ChatGPT du relais") }
+            if let ligne = session.first(where: { $0.hasPrefix("✗") }) ?? session.first {
+                report.append(ligne)
             }
             // Le démon de préférences en garde une copie en mémoire et
             // réécrirait le fichier qu'on vient de retirer : on lui fait

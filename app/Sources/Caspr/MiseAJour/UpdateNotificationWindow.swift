@@ -26,8 +26,7 @@ final class UpdateNotificationWindowController {
     func showIfNeeded() {
         let prefs = Preferences.shared
         guard prefs.checksForUpdates,
-              let update = UpdateChecker.shared.newer,
-              prefs.ignoredUpdateVersion != update.version,
+              let update = UpdateChecker.shared.proposee,
               window == nil
         else { return }
 

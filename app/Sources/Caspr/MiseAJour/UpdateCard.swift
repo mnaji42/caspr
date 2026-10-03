@@ -107,17 +107,9 @@ struct UpdateCard: View {
     @State private var checker = UpdateChecker.shared
     @State private var installer = UpdateInstaller.shared
 
-    /// La version proposée, si elle n'a pas été écartée.
-    ///
-    /// « Ignorer » n'efface pas `checker.newer` : la vérification suivante la
-    /// retrouverait et l'encart reparaîtrait, ce qui ferait de ce bouton une
-    /// promesse non tenue. C'est ici que le filtre se pose, au même endroit que
-    /// dans `UpdateNotificationWindowController`.
-    private var available: UpdateChecker.Release? {
-        guard let update = checker.newer,
-              prefs.ignoredUpdateVersion != update.version else { return nil }
-        return update
-    }
+    /// La version proposée, si elle n'a pas été écartée (cf.
+    /// `UpdateChecker.proposee`).
+    private var available: UpdateChecker.Release? { checker.proposee }
 
     var body: some View {
         Card {

@@ -13,6 +13,11 @@ extension Notification.Name {
     /// dictée.
     static let casprVoieChanged = Notification.Name("caspr.voie.changed")
 
+    /// Une version de mise à jour vient d'être ignorée, ou réaffichée. Même
+    /// raison que la voie : l'icône porte la bulle de mise à jour, et ne se
+    /// repeindrait qu'au prochain changement d'état de la dictée.
+    static let casprUpdateIgnoredChanged = Notification.Name("caspr.update.ignored.changed")
+
     /// L'accessibilité vient d'être accordée, alors que l'application tourne
     /// déjà. Le tap clavier n'a pas pu être créé au lancement et rien ne le
     /// recrée de lui-même : sans ce signal, la touche Option reste morte
@@ -270,7 +275,10 @@ final class Preferences {
     /// interrupteur déguisé, et le seul moyen de revenir en arrière serait de
     /// deviner qu'il existe.
     var ignoredUpdateVersion: String? {
-        didSet { defaults.set(ignoredUpdateVersion, forKey: Key.ignoredUpdate) }
+        didSet {
+            defaults.set(ignoredUpdateVersion, forKey: Key.ignoredUpdate)
+            NotificationCenter.default.post(name: .casprUpdateIgnoredChanged, object: nil)
+        }
     }
 
     // MARK: - Notes

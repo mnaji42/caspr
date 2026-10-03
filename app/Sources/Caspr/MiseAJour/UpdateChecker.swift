@@ -57,6 +57,20 @@ final class UpdateChecker {
     /// Renseigné seulement si la version distante est **strictement**
     /// supérieure à celle qui tourne.
     private(set) var newer: Release?
+
+    /// La version à proposer : `newer`, sauf si on l'a écartée.
+    ///
+    /// « Ignorer » n'efface pas `newer` : la vérification suivante la
+    /// retrouverait, et ce qui l'annonce reparaîtrait. Le filtre se posait
+    /// dans la carte et la fenêtre de mise à jour, pas dans la barre : après
+    /// « Ignorer », l'icône gardait sa bulle et le menu proposait toujours
+    /// d'installer, pour mener à une carte qui disait la version ignorée.
+    /// Une seule définition, que tous lisent.
+    var proposee: Release? {
+        guard let newer,
+              Preferences.shared.ignoredUpdateVersion != newer.version else { return nil }
+        return newer
+    }
     private(set) var checking = false
     /// Pour le bouton « vérifier maintenant » des Réglages, qui lui a le droit
     /// de dire que ça n'a pas marché : l'utilisateur vient de le demander.

@@ -119,13 +119,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         // La voie peut changer depuis les Réglages, le menu ou le raccourci ;
-        // l'icône doit suivre dans les trois cas.
-        NotificationCenter.default.addObserver(
-            forName: .casprVoieChanged, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.render(self.controller.state)
+        // l'icône doit suivre dans les trois cas. De même pour une mise à
+        // jour ignorée ou réaffichée : sa bulle part ou revient aussitôt.
+        for name in [Notification.Name.casprVoieChanged, .casprUpdateIgnoredChanged] {
+            NotificationCenter.default.addObserver(
+                forName: name, object: nil, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.render(self.controller.state)
+                }
             }
         }
 
@@ -319,7 +322,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if Relais.partage.enDiscussion {
                 (MenuBarIcon.image(.discussion),
                  "Caspr — discussion ChatGPT ouverte, la prochaine dictée y répond")
-            } else if UpdateChecker.shared.newer != nil {
+            } else if UpdateChecker.shared.proposee != nil {
                 (MenuBarIcon.image(.update), "Caspr — mise à jour disponible")
             } else if controller.target.isLocked {
                 (MenuBarIcon.image(.idle),
@@ -429,7 +432,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // pastille : un point permanent pour un évènement non urgent finit par
         // se faire ignorer, puis détester. Le menu s'ouvre de toute façon
         // souvent — c'est par lui qu'on atteint l'historique et les réglages.
-        if let update = UpdateChecker.shared.newer {
+        if let update = UpdateChecker.shared.proposee {
             let item = NSMenuItem(title: "↑  Installer la version \(update.version)",
                                   action: #selector(openUpdate), keyEquivalent: "")
             item.target = self

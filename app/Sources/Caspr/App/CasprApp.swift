@@ -675,13 +675,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Actions
 
+    /// Sans garde, comme la touche : tant que la configuration est inachevée,
+    /// le menu réduit n'offre pas cet élément (cf. `SetupRecoveryGuard`).
     @objc private func triggerDictation() {
-        // La dictée ne peut rien produire tant que le socle minimal n'est pas
-        // posé : plutôt qu'un échec de plus, on rouvre l'écran qui l'explique,
-        // là où la personne s'était arrêtée.
-        guard !SetupRecoveryGuard.intercept(.dictation, reopening: onboarding) else {
-            return
-        }
         controller.toggle()
     }
 
@@ -766,7 +762,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Ouvre les réglages, sur un onglet donné ou là où on les avait laissés.
     private func showPreferences(on tab: PreferencesView.Tab?) {
-        guard !SetupRecoveryGuard.intercept(.settings, reopening: onboarding) else {
+        guard !SetupRecoveryGuard.intercept(reopening: onboarding) else {
             return
         }
         preferences.show(history: controller.history, on: tab)

@@ -34,6 +34,11 @@
 /// l'application. Le menu s'ouvre donc toujours, réduit à ce qui a du sens
 /// tant que la configuration n'est pas finie.
 ///
+/// **La touche de dictée.** Volontairement : la zone d'essai de l'accueil
+/// s'en sert, et l'intercepter rouvrirait l'accueil par-dessus lui-même. Un
+/// appui que la voie ne peut pas servir est refusé par la voie, et l'élément
+/// « Terminer la configuration… » du menu réduit reste le recours.
+///
 /// **Et rien du tout une fois l'accueil terminé.** Perdre l'accessibilité six
 /// mois plus tard — ce qui arrive à chaque mise à jour d'une copie signée ad
 /// hoc — ne doit pas faire surgir l'accueil par-dessus le travail en cours. Le
@@ -76,21 +81,16 @@ enum SetupRecoveryGuard {
         !Preferences.shared.onboarded && !isMinimumViableSetupCompleted
     }
 
-    /// Intercepte une action qui suppose une configuration terminée.
+    /// Détourne vers l'accueil l'ouverture des Réglages, seule action
+    /// interceptée : ils supposent une configuration terminée.
     ///
     /// Rend `true` quand l'action a été détournée, pour que l'appelant
     /// s'arrête là.
     @discardableResult
-    static func intercept(_ reason: Reason,
-                          reopening onboarding: OnboardingWindowController) -> Bool {
+    static func intercept(reopening onboarding: OnboardingWindowController) -> Bool {
         guard shouldIntercept else { return false }
-        Log.info("configuration incomplète — accueil rouvert (\(reason.rawValue))")
+        Log.info("configuration incomplète — accueil rouvert au lieu des réglages")
         onboarding.show()
         return true
-    }
-
-    enum Reason: String {
-        case dictation
-        case settings
     }
 }

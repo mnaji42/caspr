@@ -53,6 +53,18 @@ public enum RelaisErreur: LocalizedError, Equatable {
         }
     }
 
+    /// Ce que le journal dit d'une erreur, quelle qu'elle soit : sa
+    /// description, sauf le texte d'un refus. Celui-là est lu dans la page,
+    /// et un relevé qui se trompe y a déjà pris les mots dictés — la
+    /// transcription revenue dans la zone de saisie. Rien de dicté ne passe
+    /// par le journal : sa longueur seule y entre.
+    public static func pourLeJournal(_ error: Error) -> String {
+        switch error as? RelaisErreur {
+        case .refusParChatGPT(let message)?: "ChatGPT a affiché une erreur (\(message.count) caractères)"
+        default: error.localizedDescription
+        }
+    }
+
     /// La transcription peut-elle être encore dans la page ?
     ///
     /// Non quand la page est morte : celle qu'on ouvrirait pour l'y

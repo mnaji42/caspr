@@ -465,8 +465,12 @@ public enum RelaisScripts {
       // Ni la zone de saisie, pour la même raison : la transcription y revient
       // avant d'être un message. « Je n'ai pas compris, tu peux réessayer ? »,
       // dicté, y était lu comme un refus de ChatGPT, et la dictée échouait
-      // sur les propres mots de l'utilisateur.
+      // sur les propres mots de l'utilisateur. Ni, là encore, les blocs qui
+      // l'enveloppent : leur texte est celui de la zone. Les écarter de la
+      // zone seule laissait le refus passer par eux ; un avis posé à côté de
+      // la zone, lui, se lit toujours.
       const MESSAGE = '[data-message-author-role]';
+      const PORTE = MESSAGE + ', [contenteditable="true"], textarea, input';
       const tri = (porteurs) => (el) =>
         el.matches(MESSAGE) || el.isContentEditable || champ(el)
           ? NodeFilter.FILTER_REJECT
@@ -477,7 +481,7 @@ public enum RelaisScripts {
         for (const zone of [tous('article').pop(), tous('main form').pop()]) {
           if (!zone) continue;
           const porteurs = new Set();
-          for (const m of tous(MESSAGE, zone)) {
+          for (const m of tous(PORTE, zone)) {
             for (let n = m.parentElement; n && n !== zone; n = n.parentElement) porteurs.add(n);
           }
           const parcours = document.createTreeWalker(zone, NodeFilter.SHOW_ELEMENT, tri(porteurs));

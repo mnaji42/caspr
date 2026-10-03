@@ -248,7 +248,7 @@ final class VoieChatGPT {
         let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: son, ecrit: ecrit, apercu: apercu.texte,
                                         macOSPret: manque == nil)
         let annonce = RelaisRepli.annonce(repli, apres: cause, son: son, parle: dictee.duree)
-        Log.info("relais : repli après \(cause?.localizedDescription ?? "la touche") — "
+        Log.info("relais : repli après \(cause.map(RelaisErreur.pourLeJournal) ?? "la touche") — "
                  + "\(annonce ?? "rien à livrer"), \(String(format: "%.1f", son)) s de son "
                  + "pour \(String(format: "%.1f", dictee.duree)) s parlées")
         // Une page morte porte une conversation vierge : une discussion
@@ -680,7 +680,7 @@ final class VoieChatGPT {
     /// Le son de la page, s'il y en a, va au menu en prime : « Réessayer » le
     /// transcrit par macOS, quand la fenêtre n'a plus rien à rendre.
     private func echecDeLaPage(_ error: Error) -> Issue {
-        Log.error("échec de transcription : \(error.localizedDescription)")
+        Log.error("échec de transcription : \(RelaisErreur.pourLeJournal(error))")
         garderLeSon()
         let recuperable = (error as? RelaisErreur)?.laissePeutEtreLeTexte ?? true
         // Un refus de ChatGPT porte sa raison, un quota par exemple : la
@@ -737,7 +737,7 @@ final class VoieChatGPT {
             // Une attente interrompue peut finir sur une autre erreur que
             // l'annulation — un appel au pont coupé, une copie jamais venue.
             if error is CancellationError || Task.isCancelled { throw CancellationError() }
-            Log.error("relais : \(module.identifiant) a échoué (\(error.localizedDescription)) "
+            Log.error("relais : \(module.identifiant) a échoué (\(RelaisErreur.pourLeJournal(error))) "
                       + "— transcription brute conservée")
             // Le brut est rendu, mais pas en silence. Un quota atteint surtout
             // doit se lire — sans quoi on relance, et le même refus revient.
@@ -774,7 +774,7 @@ final class VoieChatGPT {
             // abandon, pas un échec à afficher.
             guard g == generation, !(error is CancellationError) else { return nil }
             Log.error("relais : \(module.identifiant) n'a pas pu envoyer "
-                      + "(\(error.localizedDescription))")
+                      + "(\(RelaisErreur.pourLeJournal(error)))")
             avertissement = (error as? RelaisErreur)?.raisonCourte
                 ?? "\(module.nom) n'a pas pu envoyer"
         }

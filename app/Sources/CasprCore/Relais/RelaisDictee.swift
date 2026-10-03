@@ -418,7 +418,10 @@ public final class RelaisDictee {
         do {
             try await observer(.reponse) { finie.juger($0.reponse) ? () : nil }
         } catch let erreur as RelaisErreur {
-            journal("relais : \(erreur.raisonCourte ?? "\(erreur)"), lecture à haute voix abandonnée", true)
+            // Un refus, sans son texte (cf. `RelaisErreur.pourLeJournal`).
+            let raison = if case .refusParChatGPT = erreur { RelaisErreur.pourLeJournal(erreur) }
+                         else { erreur.raisonCourte ?? "\(erreur)" }
+            journal("relais : \(raison), lecture à haute voix abandonnée", true)
             return erreur
         } catch { return nil }
         quandFinie()
@@ -527,7 +530,11 @@ public final class RelaisDictee {
                 throw RelaisErreur.pasConnecte
             }
             if alertes, let message = veille.refus(vu) {
-                journal("relais : ChatGPT a refusé (« \(message) »)", true)
+                // Ni ici le texte du refus : lu dans la page, il pourrait
+                // porter — un relevé qui se trompe — les mots dictés, et rien
+                // de dicté ne passe par le journal.
+                journal("relais : ChatGPT a refusé (alerte \(vu.echec?.reconnue == true ? "reconnue" : "inconnue"), "
+                        + "\(message.count) caractères)", true)
                 throw RelaisErreur.refusParChatGPT(message)
             }
             return try await juger(vu)

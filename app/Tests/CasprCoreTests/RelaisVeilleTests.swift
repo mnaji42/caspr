@@ -29,6 +29,16 @@ struct RelaisVeilleTests {
         }
     }
 
+    /// Le texte d'un refus est lu dans la page : un relevé qui se trompe y
+    /// prend les mots dictés. Le journal n'en garde que la longueur.
+    @Test("Le journal tait le texte d'un refus, et dit les autres erreurs")
+    func refusHorsDuJournal() {
+        let dictee = "Il faut réessayer demain"
+        #expect(!RelaisErreur.pourLeJournal(RelaisErreur.refusParChatGPT(dictee)).contains(dictee))
+        #expect(RelaisErreur.pourLeJournal(RelaisErreur.pasConnecte)
+                == RelaisErreur.pasConnecte.localizedDescription)
+    }
+
     @Test("Avant l'envoi, une alerte inconnue ne compte jamais")
     func inconnueAvantLEnvoi() {
         let vus = Array(repeating: Self.alerte("Limite bientôt atteinte"), count: 10)

@@ -221,6 +221,80 @@ struct RelaisScriptsTests {
         }
     }
 
+    /// Un faux document, juste assez DOM pour les échecs écrits : des
+    /// éléments qui se cherchent par balise ou par attribut, un `main form`,
+    /// et un parcours qui suit les verdicts de `tri` comme le vrai — rejeté,
+    /// le sous-arbre est sauté ; ignoré, ses enfants sont visités.
+    static func pontSurFormulaire(_ formulaire: String) -> JSContext {
+        let ctx = JSContext()!
+        ctx.evaluateScript("""
+            var window = this, location = { hostname: 'chatgpt.com', pathname: '/' };
+            var NodeFilter = { SHOW_ELEMENT: 1, FILTER_ACCEPT: 1, FILTER_REJECT: 2, FILTER_SKIP: 3 };
+            class E {
+              constructor(tagName, attributs, texte, enfants = []) {
+                Object.assign(this, { tagName, attributs, texte, children: enfants, parentElement: null });
+                for (const c of enfants) c.parentElement = this;
+              }
+              get textContent() { return [this.texte, ...this.children.map((c) => c.textContent)].join(' ').trim(); }
+              get innerText() { return this.textContent; }
+              get isContentEditable() {
+                return this.attributs.contenteditable === 'true' || (!!this.parentElement && this.parentElement.isContentEditable);
+              }
+              getClientRects() { return [{}]; }
+              getAttribute(n) { return n in this.attributs ? this.attributs[n] : null; }
+              matches(s) { return s.split(',').some((u) => this.simple(u.trim())); }
+              simple(s) {
+                if (s === 'main form') {
+                  for (let n = this.parentElement; n && this.tagName === 'FORM'; n = n.parentElement) if (n.tagName === 'MAIN') return true;
+                  return false;
+                }
+                const a = /^\\[([\\w-]+)(?:="([^"]*)")?\\]$/.exec(s);
+                if (a) return a[1] in this.attributs && (a[2] === undefined || this.attributs[a[1]] === a[2]);
+                return this.tagName === s.toUpperCase();
+              }
+              get descendants() { return this.children.flatMap((c) => [c, ...c.descendants]); }
+              querySelectorAll(s) { return this.descendants.filter((el) => el.matches(s)); }
+            }
+            const e = (tagName, texte, enfants, attributs = {}) => new E(tagName, attributs, texte, enfants);
+            var document = e('HTML', '', [e('MAIN', '', [\(formulaire)])]);
+            document.createTreeWalker = (racine, _, filtre) => {
+              const vus = [];
+              const visiter = (n) => n.children.forEach((c) => {
+                const v = filtre(c);
+                if (v === NodeFilter.FILTER_ACCEPT) vus.push(c);
+                if (v !== NodeFilter.FILTER_REJECT) visiter(c);
+              });
+              visiter(racine);
+              return { nextNode: () => vus.shift() || null };
+            };
+            """)
+        ctx.evaluateScript(RelaisScripts.pont)
+        return ctx
+    }
+
+    /// Écartée seule, la zone laissait passer son texte par les blocs qui
+    /// l'enveloppent : « Je n'ai pas compris, tu peux réessayer ? », dicté,
+    /// y était lu comme un refus, et ses mots finissaient au journal. Un avis
+    /// que la page pose à côté de la zone, lui, se lit toujours.
+    @Test("La dictée revenue dans la zone n'est pas un échec, même par les blocs qui l'enveloppent")
+    func echecHorsDesEnveloppes() {
+        let dictee = "Je n'ai pas compris, tu peux réessayer ?"
+        let zone = "e('DIV', '', [e('DIV', '', [e('DIV', \"\(dictee)\", [], { contenteditable: 'true' }), "
+            + "e('BUTTON', 'mic', [])])])"
+        let echecs = { (ctx: JSContext) in
+            ctx.evaluateScript("window.__relais.marquer().echecs")!.toArray() as? [String] ?? []
+        }
+
+        let seule = Self.pontSurFormulaire("e('FORM', '', [\(zone)])")
+        #expect(echecs(seule) == [])
+        #expect(seule.exception == nil)
+
+        let avis = "Something went wrong. Please try again."
+        let avecAvis = Self.pontSurFormulaire("e('FORM', '', [e('DIV', '', [\(zone), e('P', '\(avis)', [])])])")
+        #expect(echecs(avecAvis) == [avis])
+        #expect(avecAvis.exception == nil)
+    }
+
     /// Caspr clique la page pour la piloter : un de ses clics retenu par une
     /// calibration en cours y apprendrait le mauvais bouton.
     @Test("La calibration ne retient qu'un clic de la main, et renonce sur demande")

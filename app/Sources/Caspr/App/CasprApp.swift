@@ -402,6 +402,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             resume.target = self
             menu.addItem(resume)
 
+            // Partir doit rester possible avant d'avoir fini d'arriver :
+            // quelqu'un sans compte ChatGPT ni langue que macOS sache
+            // transcrire abandonne ici, et jeter l'application à la corbeille
+            // laisserait ses autorisations, ses réglages et une session
+            // ChatGPT entamée. Aucun écran de l'accueil ne mène ailleurs.
+            let uninstall = NSMenuItem(title: "Désinstaller Caspr…",
+                                       action: #selector(openUninstaller), keyEquivalent: "")
+            uninstall.target = self
+            menu.addItem(uninstall)
+
             menu.addItem(.separator())
             menu.addItem(NSMenuItem(title: "Quitter Caspr",
                                     action: #selector(NSApplication.terminate(_:)),

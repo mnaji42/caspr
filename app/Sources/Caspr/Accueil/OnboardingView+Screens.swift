@@ -18,10 +18,14 @@ extension OnboardingView {
             SectionLabel("Le principe en trois points", followsHeader: true)
 
             Card {
+                // Deux appuis, et non « maintenir pour parler » : tenue une
+                // seconde, la touche Option ouvre les Réglages et renonce à
+                // la dictée (cf. `ModifierKeyMonitor.onHold`).
                 principle(1, "Écrivez au son de votre voix",
-                          "Appuyez sur une touche, parlez naturellement dans "
-                          + "n'importe quelle application, relâchez. Le texte "
-                          + "s'insère à votre curseur.")
+                          "Appuyez une fois sur votre touche de dictée, parlez "
+                          + "naturellement dans n'importe quelle application, "
+                          + "puis appuyez de nouveau : le texte s'insère à "
+                          + "votre curseur.")
                 Divider().opacity(0.25)
                 principle(2, "Deux façons de dicter",
                           "**macOS**, hors ligne et sans compte : vos paroles "
@@ -207,7 +211,7 @@ extension OnboardingView {
             VStack(alignment: .leading, spacing: 5) {
                 summary("Langue active :", prefs.primary.badge)
                 summary("Déclencheur :", prefs.triggerKind == .option
-                        ? "Touche \(prefs.triggerSide.label) (Maintenir pour parler)"
+                        ? "Touche \(prefs.triggerSide.label) (un appui pour parler, un autre pour finir)"
                         : "Raccourci clavier (\(prefs.dictateShortcut.label))")
                 summary("Voie :", voieSummary)
             }

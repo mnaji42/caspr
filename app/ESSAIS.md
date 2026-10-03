@@ -1011,10 +1011,12 @@ de le couper.
      `mv ~/Desktop/Caspr.app /Applications/`.
 
 120. Relis la section Gatekeeper du README (« The one-line equivalent… »).
-     Attendu (à revoir, rien n'a été corrigé) :
-     `xattr -d com.apple.quarantine /Applications/Caspr.app` vise une app qui
-     n'existe pas encore au premier refus, puisque Caspr se lance depuis le DMG.
-     Choisis la bonne cible avant de publier.
+     Attendu : la commande vise le fichier téléchargé,
+     `xattr -d com.apple.quarantine ~/Downloads/Caspr.dmg`, à lancer **avant**
+     de l'ouvrir — et non plus `/Applications/Caspr.app`, qui n'existe pas
+     encore au premier refus. Sur un Mac qui n'a jamais eu Caspr, après cette
+     commande, le DMG puis Caspr s'ouvrent sur la fenêtre d'installation, sans
+     le refus de Gatekeeper.
 
 121. Relis `release-notes/v0.15.0.md`.
      Attendu : il dit à qui met à jour ce qui disparaît (CrisperWhisper, corpus,

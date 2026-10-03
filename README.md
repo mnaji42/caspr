@@ -293,17 +293,18 @@ caspr/
 Caspr is **not notarized**. Notarization requires a paid Apple Developer
 account, which this project does not have yet. So on first launch macOS says:
 
-> « Apple n'a pas pu vérifier que « Caspr » ne contient pas de logiciel
-> malveillant. »
+> « Apple n'a pas pu confirmer que « Caspr » ne contenait pas de logiciel
+> malveillant susceptible d'endommager votre Mac ou de porter atteinte à votre
+> vie privée. »
 
 This is Gatekeeper doing its job: it cannot verify software it has never seen.
 It is not a claim that anything is wrong — but you are being asked to trust an
-unsigned binary from a stranger, and you should decide that deliberately. The
-source is here, and you can always build it yourself (below) instead.
+un-notarized binary from a stranger, and you should decide that deliberately.
+The source is here, and you can always build it yourself (below) instead.
 
 To open it anyway:
 
-1. Click **Terminer** on the dialog.
+1. Click **Terminé** on the dialog.
 2. Go to  **Réglages Système › Confidentialité et sécurité**.
 3. Scroll to the bottom: *« Caspr » a été bloqué…* → **Ouvrir quand même**.
 4. Confirm, and authenticate.
@@ -311,15 +312,19 @@ To open it anyway:
 Since macOS 15, Control-clicking the app no longer bypasses this — System
 Settings is the only route.
 
-The one-line equivalent, if you prefer the terminal:
+The one-line equivalent, if you prefer the terminal — run it on the downloaded
+file, **before** opening it:
 
 ```bash
-xattr -d com.apple.quarantine /Applications/Caspr.app
+xattr -d com.apple.quarantine ~/Downloads/Caspr.dmg
 ```
 
-That strips the quarantine flag so macOS stops asking. It is the same decision
-as clicking through the panel, made faster — and it disables a check that
-exists for a reason, so run it only on software you meant to install.
+That strips the quarantine flag from the disk image, so the app inside opens
+without the dialog. (Aiming at the app itself does not work at that point: it
+is not in Applications yet, and the mounted image is read-only.) It is the
+same decision as clicking through the panel, made faster — and it disables a
+check that exists for a reason, so run it only on software you meant to
+install.
 
 #### Updating
 

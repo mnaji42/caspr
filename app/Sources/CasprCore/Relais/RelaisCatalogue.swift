@@ -165,11 +165,12 @@ public enum RelaisCatalogue {
 
 /// L'emballage que Caspr ajoute autour de ce qui a été dicté.
 ///
-/// La consigne, elle, se **dit** — « traduis ça en anglais », « réponds-lui
-/// cordialement ». Elle ne se configure pas : un réglage figé ne peut pas
-/// suivre ce qu'on veut faire d'une phrase à l'autre. Ce qui se configure ici
-/// n'est que l'emballage, dont le seul rôle est d'obtenir un résultat
-/// utilisable — sans « Bien sûr ! Voici… » devant.
+/// Avec les modules livrés, la consigne se **dit** — « traduis ça en
+/// anglais », « réponds-lui cordialement » : un réglage figé ne peut pas
+/// suivre ce qu'on veut faire d'une phrase à l'autre. Qui veut la même à
+/// chaque fois se crée un module, dont les blocs Avant et Après la portent.
+/// Ce qui se configure ici n'est que l'emballage, dont le seul rôle est
+/// d'obtenir un résultat utilisable — sans « Bien sûr ! Voici… » devant.
 public enum RelaisPrompt {
     /// Réorganiser, sans résumer.
     ///

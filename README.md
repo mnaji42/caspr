@@ -72,10 +72,15 @@ floating bar while you speak:
 | **Réorganiser** | material to put in order | at the caret or in notes, after ChatGPT's reply |
 | **Discuter** | a question | nowhere: the page stays open and takes the keyboard |
 
-The instruction is **spoken**, not configured: "translate this into English"
-does not fit in a setting. If the second pass fails, you get the raw
-transcription — a ten-minute dictation is never lost — and the menu offers
-« Insérer la transcription brute de ChatGPT » to recover it after any failure.
+For these built-in modules the instruction is **spoken**, not configured:
+"translate this into English" does not fit in a setting. You can also create
+your own modules in Settings › Voie (**Nouveau module…**): name it, choose
+what it writes, and optionally add a fixed instruction placed before and/or
+after what you dictate — a "Translate" module, say.
+
+If the second pass fails, you get the raw transcription — a ten-minute
+dictation is never lost — and the menu offers « Insérer la transcription brute
+de ChatGPT » to recover it after any failure.
 
 **There is no time limit.** A long dictation can take ChatGPT thirty seconds,
 or several minutes, to transcribe and answer; Caspr waits as long as it takes,
@@ -140,7 +145,7 @@ can be changed **without interrupting you**:
 - **Destination** — the caret of whatever app you are in, or a notes file.
   The notes file is remembered independently, so switching back and forth
   costs one click, even mid-sentence.
-- **Module** (ChatGPT path) — raw, reorganise, discuss.
+- **Module** (ChatGPT path) — raw, reorganise, discuss, and any you create.
 - **Live preview** — what is being heard, as you speak, written by the macOS
   engine. It answers *"is the mic hearing me"*. On the ChatGPT path it reads
   the copy of the page's audio, once that is confirmed (see above).

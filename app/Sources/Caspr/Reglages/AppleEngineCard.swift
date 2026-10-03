@@ -219,11 +219,13 @@ struct AppleEngineCard: View, ValidatingComponent {
 
     private var headerTitle: String { shownTechnology.fullLabel }
 
+    /// Le même pour les deux versions : le titre (« macOS · … ») les nomme
+    /// déjà. Ni nom d'API, que l'on ne lit pas à l'accueil, ni « prêt
+    /// immédiatement » : la Dictée demande souvent, juste en dessous, un
+    /// droit ou un interrupteur. Toutes deux transcrivent sur la machine
+    /// (`requiresOnDeviceRecognition` pour la Dictée).
     private var headerDetail: String {
-        shownTechnology == .apple
-            ? "Fourni par macOS 26+ (SpeechTranscriber) : modèles neuronaux sur "
-                + "puce Apple. Zéro donnée envoyée au cloud."
-            : "Fourni par macOS (SFSpeechRecognizer) : prêt immédiatement."
+        "Transcrit sur ce Mac, sans rien envoyer."
     }
 
     // MARK: - La version

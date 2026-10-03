@@ -355,9 +355,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         button.image = marked
         button.toolTip = said
 
+        // Le message n'entre pas au journal, sa longueur seule : il porte le
+        // texte d'un refus de ChatGPT, qu'un relevé qui se trompe a pu
+        // prendre aux mots dictés. Chaque chemin d'échec dit sa cause là où
+        // elle naît, sans ce texte (cf. `RelaisErreur.pourLeJournal`).
         if case .failed(let message) = state {
             button.toolTip = message
-            Log.error("échec : \(message)")
+            Log.error("échec affiché (\(message.count) caractères)")
         }
     }
 

@@ -266,6 +266,7 @@ final class DictationController {
                 await self?.permissionsManquantes() ?? nil
             })
             if let refus {
+                Log.error("voie ChatGPT : \(refus)")
                 voieDuCycle = nil
                 state = .failed(refus)
                 // Dit là où l'on regarde : l'icône seule laissait croire que
@@ -354,6 +355,7 @@ final class DictationController {
             }
         }
         if let refus = await permissionsManquantes() {
+            Log.error("permissions : \(refus)")
             state = .failed(refus)
             return
         }
@@ -379,6 +381,7 @@ final class DictationController {
             macOS.apercu.demarrer(langue: language, version: version)
             Feedback.recordingStarted()
         } catch {
+            Log.error("enregistrement impossible : \(error.localizedDescription)")
             state = .failed(error.localizedDescription)
         }
     }
@@ -490,6 +493,7 @@ final class DictationController {
         do {
             try await livraison.deliver(text, to: target)
         } catch {
+            Log.error("échec d'insertion : \(error.localizedDescription)")
             if isAtRest { state = .failed(error.localizedDescription) }
         }
     }
@@ -541,6 +545,7 @@ final class DictationController {
             do {
                 try await livraison.insererLApercu()
             } catch {
+                Log.error("échec d'insertion : \(error.localizedDescription)")
                 if isAtRest { state = .failed(error.localizedDescription) }
                 return
             }

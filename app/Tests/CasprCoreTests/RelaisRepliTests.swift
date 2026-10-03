@@ -175,4 +175,21 @@ struct RelaisRepliTests {
         #expect(!RelaisRepli.silence(apres: nil, apercu: ""))
         #expect(!RelaisRepli.silence(apres: .pageInterrompue, apercu: ""))
     }
+
+    /// Un refus relevé à tort pendant la transcription porte les mots dictés.
+    /// La barre et le menu les montrent — c'est l'écran de l'utilisateur —,
+    /// le journal, jamais : ni la ligne du repli, ni l'échec que l'icône
+    /// affiche ensuite, qui ne garde que sa longueur (cf. `CasprApp.render`).
+    @Test("Le journal d'un repli après un refus n'en garde pas le texte, la barre si")
+    func refusHorsDuJournal() {
+        let dictee = "Je n'ai pas compris, tu peux réessayer ?"
+        let refus = RelaisErreur.refusParChatGPT(dictee)
+        for repli: RelaisRepli in [.garder, .transcrireParMacOS, .inserer(dictee), .insererLApercu(dictee), .rien] {
+            #expect(!RelaisRepli.pourLeJournal(repli, apres: refus).contains(dictee))
+        }
+        #expect(RelaisRepli.annonce(.garder, apres: refus)?.contains(dictee) == true)
+        #expect(RelaisRepli.pourLeJournal(.garder, apres: nil) == "repli après la touche — gardé dans le menu de Caspr")
+        #expect(RelaisRepli.pourLeJournal(.rien, apres: .pasConnecte)
+                == "repli après \(RelaisErreur.pasConnecte.localizedDescription) — rien à livrer")
+    }
 }

@@ -90,14 +90,7 @@ public enum RelaisRepli: Equatable, Sendable {
     /// une partie vaut mieux que rien —, mais pas pour le tout.
     public static func annonce(_ repli: RelaisRepli, apres cause: RelaisErreur?,
                                son: Double = 0, parle: Double = 0) -> String? {
-        var issue: String
-        switch repli {
-        case .inserer: issue = "transcription brute insérée"
-        case .transcrireParMacOS: issue = "transcrit par macOS"
-        case .insererLApercu: issue = "aperçu de macOS inséré"
-        case .garder: issue = "gardé dans le menu de Caspr"
-        case .rien: return nil
-        }
+        guard var issue = repli.issue else { return nil }
         if repli == .transcrireParMacOS, !couvre(son: son, parle: parle) {
             issue += " (\(Int(son.rounded())) s de son sur \(Int(parle.rounded())) s)"
         }
@@ -106,6 +99,27 @@ public enum RelaisRepli: Equatable, Sendable {
                 + (repli == .garder ? "" : " — \(motif(apres: nil))")
         }
         return "\(motif(apres: cause)) — \(issue)"
+    }
+
+    /// Ce que devient la dictée, sans d'où vient le repli ni le texte qu'il
+    /// porte ; `nil` pour `rien`.
+    public var issue: String? {
+        switch self {
+        case .inserer: "transcription brute insérée"
+        case .transcrireParMacOS: "transcrit par macOS"
+        case .insererLApercu: "aperçu de macOS inséré"
+        case .garder: "gardé dans le menu de Caspr"
+        case .rien: nil
+        }
+    }
+
+    /// Ce que le journal dit d'un repli : sa cause et son issue, sans le
+    /// texte d'un refus. L'annonce, elle, le porte — la barre et le menu
+    /// doivent dire d'emblée si c'est un quota —, et un relevé qui se trompe
+    /// y a mis les mots dictés (cf. `RelaisErreur.pourLeJournal`).
+    public static func pourLeJournal(_ repli: RelaisRepli, apres cause: RelaisErreur?) -> String {
+        "repli après \(cause.map(RelaisErreur.pourLeJournal) ?? "la touche") — "
+            + (repli.issue ?? "rien à livrer")
     }
 
     /// Pourquoi on s'est passé de ChatGPT : ce que la barre montre pendant

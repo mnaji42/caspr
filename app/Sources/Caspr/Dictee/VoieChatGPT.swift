@@ -248,8 +248,8 @@ final class VoieChatGPT {
         let repli = RelaisRepli.choisir(brutLu: brut, secondesAudio: son, ecrit: ecrit, apercu: apercu.texte,
                                         macOSPret: manque == nil)
         let annonce = RelaisRepli.annonce(repli, apres: cause, son: son, parle: dictee.duree)
-        Log.info("relais : repli après \(cause.map(RelaisErreur.pourLeJournal) ?? "la touche") — "
-                 + "\(annonce ?? "rien à livrer"), \(String(format: "%.1f", son)) s de son "
+        Log.info("relais : \(RelaisRepli.pourLeJournal(repli, apres: cause)), "
+                 + "\(String(format: "%.1f", son)) s de son "
                  + "pour \(String(format: "%.1f", dictee.duree)) s parlées")
         // Une page morte porte une conversation vierge : une discussion
         // restée ouverte y enverrait la suite sans son contexte.
@@ -463,6 +463,7 @@ final class VoieChatGPT {
     private func derouler(_ g: Int, _ permissions: () async -> String?) async {
         if let refus = await permissions() {
             guard g == generation else { return }
+            Log.error("relais : \(refus)")
             terminer(.demarrageManque(nil), echec: refus)
             return
         }
@@ -545,6 +546,9 @@ final class VoieChatGPT {
 
     /// Le démarrage a échoué sur la page.
     private func demarrageManque(_ error: Error) {
+        // Le journal le dit ici, et non l'icône d'échec : un refus lu au
+        // démarrage porterait son texte jusqu'à elle.
+        Log.error("relais : démarrage manqué — \(RelaisErreur.pourLeJournal(error))")
         // La barre dit pourquoi, quand la raison tient en une ligne ; elle
         // s'efface sinon, au lieu de rester sur « ChatGPT se prépare… » devant
         // une dictée qui n'aura pas lieu.

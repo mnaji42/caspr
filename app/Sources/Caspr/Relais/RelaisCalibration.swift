@@ -168,6 +168,8 @@ final class RelaisCalibration {
               !Task.isCancelled
         else { return false }
         await page.rendreLeMicro()
+        // Rendre le micro peut attendre : la fenêtre a pu se fermer entre-temps.
+        guard !Task.isCancelled else { return false }
 
         guard let nouveau = issue.preuves.calibrage(remplacant: ancien) else {
             Log.error("relais : calibration automatique incomplète — manquent "

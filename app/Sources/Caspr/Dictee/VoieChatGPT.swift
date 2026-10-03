@@ -525,10 +525,22 @@ final class VoieChatGPT {
     /// l'aurait privée de son ; la copie de son propre flux ne lui retire
     /// rien (cf. `RelaisEcho`). Coupé dans les réglages, aucun analyseur ne
     /// démarre, et l'écho ne construit aucun tampon.
+    ///
+    /// Seulement si macOS sait écrire la langue sans rien demander ni rien
+    /// télécharger (cf. `EngineSafetyManager.manque`), la même garde que le
+    /// repli. Sinon l'aperçu ouvrait, au milieu d'une dictée ChatGPT, le
+    /// dialogue système de la reconnaissance vocale — que l'accueil n'avait
+    /// jamais annoncé à qui choisit ChatGPT — ou le téléchargement du modèle
+    /// d'Apple Intelligence. Ces deux gestes appartiennent à la voie macOS.
     private func ecouterLApercu(_ g: Int) {
         guard Preferences.shared.livePreviewEnabled else { return }
-        sonRecu = false
         let langue = Preferences.shared.primaryLanguage
+        if let manque = EngineSafetyManager.manque(for: langue) {
+            Log.info("relais : aperçu de macOS sauté — \(manque)")
+            overlay.setPreviewNotice("aperçu de macOS indisponible — \(manque)")
+            return
+        }
+        sonRecu = false
         apercu.demarrer(langue: langue, version: EngineSafetyManager.engine(for: langue))
         relais.suivreLeSon { [weak self] morceau, taux in
             self?.sonRecu = true

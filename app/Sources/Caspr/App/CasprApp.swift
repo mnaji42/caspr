@@ -681,12 +681,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         controller.toggle()
     }
 
-    /// Mène au bouton, pas au navigateur.
-    ///
-    /// L'installation vit dans les Réglages plutôt que dans ce menu : elle
-    /// dure une minute, elle a des étapes, elle peut échouer pour une raison
-    /// qui demande une phrase entière. Un élément de menu ne sait rien montrer
-    /// de tout ça, et la barre se referme au premier clic.
     @objc private func toggleVoie() {
         changerDeVoie()
     }
@@ -725,8 +719,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Mène au bouton, pas au navigateur.
+    ///
+    /// L'installation vit dans les Réglages plutôt que dans ce menu : elle
+    /// dure une minute, elle a des étapes, elle peut échouer pour une raison
+    /// qui demande une phrase entière. Un élément de menu ne sait rien montrer
+    /// de tout ça, et la barre se referme au premier clic.
+    ///
+    /// Sur l'onglet Général, où vit ce bouton : ouverts « là où on les avait
+    /// laissés », les Réglages pouvaient montrer la Voie ou l'historique, et
+    /// l'élément qui promet « un bouton fait tout le reste » menait à un écran
+    /// sans bouton.
     @objc private func openUpdate() {
-        openPreferences()
+        showPreferences(on: .general)
     }
 
     @objc private func openOnboarding() {

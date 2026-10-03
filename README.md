@@ -510,9 +510,10 @@ is nearly always ahead of the last release.
 
 ### Signing, and why ad-hoc is not good enough
 
-Without a certificate the workflow still produces a DMG, ad-hoc signed. It
-installs and runs — but the bundle's designated requirement becomes the
-binary's own hash:
+Without a certificate, a tagged release fails on purpose; only a manual run of
+the workflow, which publishes nothing, still produces an ad-hoc-signed DMG.
+That DMG installs and runs — but the bundle's designated requirement becomes
+the binary's own hash:
 
 ```
 designated => cdhash H"f82cc3b2…"

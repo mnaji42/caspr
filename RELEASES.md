@@ -86,9 +86,10 @@ Sans eux, `codesign` signe **ad hoc** : l'exigence désignée du bundle devient 
 `cdhash`, qui change à chaque build. macOS y voit alors une autre application et
 **révoque l'autorisation d'accessibilité de tous les utilisateurs à chaque mise
 à jour** — et `UpdateInstaller` refuse d'installer, à raison, puisque rien ne
-prouve plus que la nouvelle version vient du même auteur. Le build ne casse pas
-pour autant : il laisse un avertissement, et c'est tout ce qui distingue une
-release utilisable d'une release qui casse les installations existantes.
+prouve plus que la nouvelle version vient du même auteur. C'est pourquoi, sur un
+tag, l'absence de certificat fait échouer la release (`exit 1`) : une version ad
+hoc casserait la mise à jour intégrée. Seul un lancement manuel du workflow, qui
+ne publie rien, se contente d'une signature ad hoc, avec un avertissement.
 
 Le jour d'un compte Apple Developer, on y met le *Developer ID Application* à la
 place : rien d'autre ne change dans le workflow.

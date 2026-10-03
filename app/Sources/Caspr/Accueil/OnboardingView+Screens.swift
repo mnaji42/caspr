@@ -44,10 +44,14 @@ extension OnboardingView {
             SectionLabel("Ce que nous allons configurer")
 
             Card(highlighted: true) {
+                // Sans compter les accès : leur nombre dépend de la voie, qui
+                // n'est pas encore choisie (cf. `liveEngineStep`).
                 Text(.init("Ce court parcours vous aide à **choisir votre façon "
-                           + "de dicter**, **choisir vos langues**, **activer "
-                           + "les deux accès système requis** et **faire un "
-                           + "premier essai vocal**."))
+                           + "de dicter**, **choisir vos langues**, **accorder "
+                           + "ce que votre voie demande** (le micro et "
+                           + "l'accessibilité, puis selon le cas la "
+                           + "reconnaissance vocale de macOS ou la connexion à "
+                           + "ChatGPT) et **faire un premier essai vocal**."))
                     .font(.system(size: 12))
                     .foregroundStyle(Color(hex: 0xCCFBF1))
                     .lineSpacing(2)
@@ -141,10 +145,7 @@ extension OnboardingView {
                 SectionLabel("Bon à savoir pour votre quotidien")
                 VStack(spacing: 0) {
                     tip("menubar.arrow.up.rectangle", "Barre des menus & Raccourci rapide",
-                        "Caspr reste toujours accessible dans la barre des "
-                        + "menus en haut.\n**💡 Astuce :** Maintenir votre "
-                        + "touche de dictée (**⌥ Option**) pendant **1 "
-                        + "seconde** ouvre directement les Réglages.")
+                        menubarTip)
                     Divider().opacity(0.25)
                     tip("arrow.left.arrow.right", "Passer de macOS à ChatGPT",
                         "« Écrire avec ChatGPT », dans le menu de la barre, "
@@ -155,9 +156,9 @@ extension OnboardingView {
                     tip("checkmark.shield", "Filet de sécurité : vous ne perdez jamais rien",
                         "Même si aucune application n'a le focus ou si votre "
                         + "curseur n'était pas actif, votre dictée est "
-                        + "immédiatement enregistrée dans l'**Historique "
-                        + "local** du menu pour que vous puissiez la copier à "
-                        + "tout moment.")
+                        + "immédiatement enregistrée dans « **Transcriptions "
+                        + "récentes** », au menu de la barre, pour que vous "
+                        + "puissiez la copier à tout moment.")
                     Divider().opacity(0.25)
                     tip("text.cursor", "Au curseur ou dans un fichier de notes",
                         "Par défaut, Caspr écrit là où clignote votre "
@@ -189,8 +190,9 @@ extension OnboardingView {
                     onOpenSettings()
                 }
                 .buttonStyle(CasprSecondaryButtonStyle())
-                Text("Vous pourrez toujours réouvrir les réglages ou "
-                     + "l'onboarding depuis l'icône de la barre des menus.")
+                Text("Vous pourrez toujours rouvrir les Réglages ou l'accueil "
+                     + "(« Revoir l'accueil… ») depuis l'icône de la barre des "
+                     + "menus.")
                     .font(.system(size: 11))
                     .foregroundStyle(Style.textTertiary)
                     .multilineTextAlignment(.center)
@@ -199,6 +201,17 @@ extension OnboardingView {
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
         }
+    }
+
+    /// L'appui long n'existe que sous la touche Option : sous le raccourci,
+    /// le guetteur d'Option n'est pas démarré, et l'astuce enverrait chercher
+    /// un geste qui ne fait rien.
+    private var menubarTip: String {
+        let menu = "Caspr reste toujours accessible dans la barre des menus en haut."
+        guard prefs.triggerKind == .option else { return menu }
+        return menu + "\n**💡 Astuce :** Maintenir votre touche de dictée "
+            + "(**⌥ Option**) pendant **1 seconde** ouvre directement les "
+            + "Réglages."
     }
 
     private var recap: some View {

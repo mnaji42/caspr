@@ -1,10 +1,10 @@
-# Essais à la main, avant de fusionner la refonte
+# Essais à la main, avant de publier la 0.15
 
-Branche `refonte-apple-chatgpt`, dans `~/Desktop/projet-perso/CrispType-refonte`
-(depuis 90f00e4). Ce que `swift test` ne peut pas voir : la vraie page
-ChatGPT, le micro, les fenêtres, le presse-papiers, la migration de ta
-machine. Repris de la liste du 23 septembre (112 essais), et mis à jour pour
-ce que la refonte du relais a changé :
+Sur `main`, dans `~/Desktop/projet-perso/CrispType`, où la refonte est
+fusionnée. Ce que `swift test` ne peut pas voir : la vraie page ChatGPT, le
+micro, les fenêtres, le presse-papiers, la migration de ta machine. Repris de
+la liste du 23 septembre (112 essais), et mis à jour pour ce que la refonte du
+relais a changé :
 
 - **E1 — aucune limite de temps.** Plus aucune attente de ChatGPT ne finit
   parce que le temps passe : seuls toi (la touche, la croix, Échap pendant
@@ -97,7 +97,7 @@ coup : `/usr/bin/log show --last 15m --info --predicate 'subsystem == "fr.lyrias
 ## 2. Installer
 
 9. Caspr quitté, lance :
-   `cd ~/Desktop/projet-perso/CrispType-refonte && ./scripts/install.sh`
+   `cd ~/Desktop/projet-perso/CrispType && ./scripts/install.sh`
    Attendu : la compilation passe, `/Applications/Caspr.app` est remplacée et
    relancée, et l'icône apparaît dans la barre des menus. Aucune alerte ne parle
    de moteur local, de service ou de CrisperWhisper. macOS ne redemande pas
@@ -962,7 +962,7 @@ de le couper.
 
 ---
 
-## 7. Avant de publier : le site, le README, la fusion
+## 7. Avant de publier : le site, le README
 
 116. Ouvre `website/index.html` et `website/en.html` dans un navigateur.
      Attendu : la section « Deux voies » (tableau comparatif) est là. En largeur
@@ -1028,36 +1028,9 @@ de le couper.
      annule tout. Il ne promet pas encore l'aperçu sous ChatGPT : à ajouter si
      l'écho est prouvé. Ces notes s'affichent dans l'app après la release.
 
-122. Fusion dans `main`, dans `~/Desktop/projet-perso/CrispType` et pas dans le
-     worktree, `main` intouché depuis 90f00e4 :
-     ```
-     cd ~/Desktop/projet-perso/CrispType
-     git merge refonte-apple-chatgpt
-     git archive ORIG_HEAD docs | tar -x -C .
-     ```
-     La troisième ligne **aussitôt**, avant toute autre opération : la branche a
-     retiré `docs/` du suivi, et la fusion efface dix notes personnelles du
-     disque.
-     Attendu : `ls -R docs` montre à nouveau les 10 fichiers :
-     `ProjetOrganisation/08_ROADMAP_REFONTE.md`,
-     `ProjetOrganisation/09_ANALYSE_PROTOTYPE.md`, `cahier-des-charges.md`,
-     `download-test.html`, `idees.md`, `prompt.md`, `v2-macos27.md`, et sous
-     `images/` : `download/01-fichier-telecharger-doubleclick.png`,
-     `onboarding/macos26-clean/notes.md` et
-     `onboarding/macos26-clean/telechargement.png`. `git status --porcelain`
-     est vide. Si l'étape a été oubliée (ORIG_HEAD a bougé), prends
-     `git archive 90f00e4 docs` à la place.
-     Puis `rm -f .python-version` : c'est l'épinglage Python de l'ancien moteur,
-     et `.gitignore` ne le cache plus après la fusion — il apparaîtrait comme un
-     fichier à committer. Puis `./scripts/install.sh release`, qui installe la
-     version fusionnée dans /Applications. Ne lance
-     `git worktree remove ../CrispType-refonte` qu'ensuite. Pas de push, pas de
-     tag.
-     À savoir : ces 10 fichiers restent dans l'historique public de main. Les en
-     retirer demanderait de réécrire l'historique (git filter-repo) et de forcer
-     le push.
+122. *Déjà fait* : la refonte est fusionnée dans `main`.
 
-123. Après l'installation de l'essai 122, refais une dictée Brut et une dictée
+123. Après `./scripts/install.sh release`, refais une dictée Brut et une dictée
      Réorganiser sur la voie ChatGPT, puis une dictée macOS.
      Attendu : les trois s'écrivent au curseur, et la ligne de l'écho est là
      (essai 26).
@@ -1120,9 +1093,8 @@ de le couper.
 
 130. Dernière vérification :
      `mdfind -name Sofler ; mdfind -name CrisperWhisper ; launchctl list | grep -i -E 'sofler|engine'`
-     Attendu : rien de lié à l'app. Seul `docs/ProjetOrganisation/prototype-react/src/context/SoflerContext.jsx`
-     peut rester : il est dans `docs/`, gitignoré et privé. Supprime-le si tu
-     n'en veux plus.
+     Attendu : rien de lié à l'app. Seul un fichier de tes notes privées
+     (`docs/`, gitignoré) peut rester. Supprime-le si tu n'en veux plus.
 
 ---
 

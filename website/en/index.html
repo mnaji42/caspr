@@ -61,7 +61,7 @@
         "Dictation through ChatGPT, with your own account",
         "ChatGPT modules: raw text, reorganise, ask a question",
         "Text inserted at the caret of the active app",
-        "Dictations appended to a dated Markdown file",
+        "Dictations appended to a notes file",
         "Switch between paths from the menu or a shortcut"
       ],
       "author": { "@id": "https://lyriastudio.fr/#org" }
@@ -105,7 +105,7 @@
           "name": "Why does macOS refuse to open the app the first time?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Because the app is not notarised by Apple, which requires a paid developer account. Caspr is ad-hoc signed, so macOS warns on first launch. You grant permission once in System Settings, under Privacy & Security. The install guide walks through every step."
+            "text": "Because the app is not notarised by Apple, which requires a paid developer account. Caspr is signed with a self-signed certificate, which macOS does not recognise, so it warns on first launch. You grant permission once in System Settings, under Privacy & Security. The install guide walks through every step."
           }
         },
         {
@@ -494,23 +494,23 @@
         <h2 id="notes-title">Speak now, sort it out later</h2>
         <p class="lead">
           Not every sentence has a destination the moment it occurs to you. Switch to
-          <strong>Notes</strong> and the text goes to a dated Markdown file instead of the
-          caret — no app to open, nothing to leave behind. The day accumulates, and you
-          read it back when the time comes.
+          <strong>Notes</strong> and the text is appended to the end of a text file you
+          picked instead of the caret — no app to open, nothing to leave behind. Ideas
+          pile up, and you read them back when the time comes.
         </p>
       </div>
 
       <div class="notefile">
         <div class="notefile-head">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg>
-          <span>~/Notes/2026-08-20.md</span>
+          <span>~/Notes/notes.md</span>
         </div>
         <div class="notefile-body">
           <ol>
-            <li><span class="notefile-time">09:14</span><span class="notefile-text">Remind Sarah the file is waiting on her review.</span></li>
-            <li><span class="notefile-time">09:41</span><span class="notefile-text">Churn is up on the March cohort, dig in before Friday.</span></li>
-            <li><span class="notefile-time">11:02</span><span class="notefile-text">Idea: revisit the protocol after the threshold change.</span></li>
-            <li><span class="notefile-time">14:27</span><span class="notefile-text">Check the spread on the long maturities.</span></li>
+            <li><span class="notefile-text">Remind Sarah the file is waiting on her review.</span></li>
+            <li><span class="notefile-text">Churn is up on the March cohort, dig in before Friday.</span></li>
+            <li><span class="notefile-text">Idea: revisit the protocol after the threshold change.</span></li>
+            <li><span class="notefile-text">Check the spread on the long maturities.</span></li>
           </ol>
         </div>
       </div>
@@ -617,7 +617,7 @@
             </button>
           </h3>
           <div class="faq-a" id="q3"><div>
-            <p>Because the app is not notarised by Apple — notarisation requires a paid developer account. Caspr is ad-hoc signed, so macOS warns on first launch.</p>
+            <p>Because the app is not notarised by Apple — notarisation requires a paid developer account. Caspr is signed with a self-signed certificate, which macOS does not recognise, so it warns on first launch.</p>
             <p>You grant permission once, in System Settings under Privacy &amp; Security. The guide that opens on download shows every step in pictures.</p>
           </div></div>
         </div>

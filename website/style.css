@@ -721,7 +721,7 @@ kbd {
   align-items: center;
 }
 
-/* Le fichier de notes, tel qu'il s'écrit au fil de la journée. */
+/* Le fichier de notes, tel qu'il se remplit dictée après dictée. */
 .notefile {
   max-width: 46rem;
   margin-inline: auto;
@@ -751,7 +751,6 @@ kbd {
 }
 .notefile-body ol { list-style: none; }
 .notefile-body li { display: flex; gap: var(--s-3); padding-block: 2px; }
-.notefile-time { color: var(--accent); flex-shrink: 0; }
 .notefile-text { color: var(--text-2); }
 .notefile-body li:last-child .notefile-text { color: var(--text-1); }
 

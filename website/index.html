@@ -60,7 +60,7 @@
         "Dictée par ChatGPT, avec votre propre compte",
         "Modules ChatGPT : texte brut, réorganisation, question",
         "Insertion du texte au curseur de l'application active",
-        "Accumulation des dictées dans un fichier Markdown daté",
+        "Ajout des dictées à la fin d'un fichier de notes",
         "Passage d'une voie à l'autre depuis le menu ou un raccourci"
       ],
       "author": { "@id": "https://lyriastudio.fr/#org" }
@@ -104,7 +104,7 @@
           "name": "Pourquoi macOS refuse-t-il d'ouvrir l'application la première fois ?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Parce que l'application n'est pas notariée par Apple, ce qui suppose un compte développeur payant. Caspr est signé de façon ad hoc. macOS affiche donc un avertissement au premier lancement, et l'autorisation se donne une fois dans Réglages Système, rubrique Confidentialité et sécurité. Le guide d'installation détaille chaque étape."
+            "text": "Parce que l'application n'est pas notariée par Apple, ce qui suppose un compte développeur payant. Caspr est signé avec un certificat auto-signé, que macOS ne reconnaît pas : il affiche donc un avertissement au premier lancement, et l'autorisation se donne une fois dans Réglages Système, rubrique Confidentialité et sécurité. Le guide d'installation détaille chaque étape."
           }
         },
         {
@@ -495,23 +495,24 @@
         <h2 id="notes-titre">Parlez maintenant, triez plus tard</h2>
         <p class="lead">
           Toutes les phrases n'ont pas de destination au moment où elles vous viennent.
-          Basculez sur <strong>Notes</strong> : le texte part dans un fichier Markdown daté
-          au lieu du curseur, sans ouvrir d'application ni quitter ce que vous faisiez.
-          La journée s'accumule, et vous la relisez quand c'est le moment.
+          Basculez sur <strong>Notes</strong> : le texte s'ajoute à la fin d'un fichier
+          texte que vous avez choisi, au lieu du curseur, sans ouvrir d'application ni
+          quitter ce que vous faisiez. Les idées s'accumulent, et vous les relisez quand
+          c'est le moment.
         </p>
       </div>
 
       <div class="notefile">
         <div class="notefile-head">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg>
-          <span>~/Notes/2026-08-20.md</span>
+          <span>~/Notes/notes.md</span>
         </div>
         <div class="notefile-body">
           <ol>
-            <li><span class="notefile-time">09:14</span><span class="notefile-text">Rappeler à Sarah que le dossier attend sa relecture.</span></li>
-            <li><span class="notefile-time">09:41</span><span class="notefile-text">Le churn remonte sur la cohorte de mars, creuser avant vendredi.</span></li>
-            <li><span class="notefile-time">11:02</span><span class="notefile-text">Idée : reprendre le protocole après le changement de seuil.</span></li>
-            <li><span class="notefile-time">14:27</span><span class="notefile-text">Vérifier le spread sur les échéances longues.</span></li>
+            <li><span class="notefile-text">Rappeler à Sarah que le dossier attend sa relecture.</span></li>
+            <li><span class="notefile-text">Le churn remonte sur la cohorte de mars, creuser avant vendredi.</span></li>
+            <li><span class="notefile-text">Idée : reprendre le protocole après le changement de seuil.</span></li>
+            <li><span class="notefile-text">Vérifier le spread sur les échéances longues.</span></li>
           </ol>
         </div>
       </div>
@@ -619,7 +620,7 @@
             </button>
           </h3>
           <div class="faq-a" id="q3"><div>
-            <p>Parce que l'application n'est pas notariée par Apple — la notarisation suppose un compte développeur payant. Caspr est signé de façon ad hoc, alors macOS affiche un avertissement au premier lancement.</p>
+            <p>Parce que l'application n'est pas notariée par Apple — la notarisation suppose un compte développeur payant. Caspr est signé avec un certificat auto-signé, que macOS ne reconnaît pas : il affiche donc un avertissement au premier lancement.</p>
             <p>L'autorisation se donne une fois, dans Réglages Système, rubrique Confidentialité et sécurité. Le guide qui s'ouvre au téléchargement montre chaque étape en image.</p>
           </div></div>
         </div>

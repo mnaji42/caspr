@@ -25,9 +25,9 @@
      titre. Ils disent ce que Caspr écrit — pas des slogans. */
   const PHRASES = LANG === 'en'
     ? ['at the speed of your thoughts', 'right where your caret is',
-       'into your daily notes', 'offline, or through ChatGPT']
+       'into your notes file', 'offline, or through ChatGPT']
     : ['à la vitesse de votre pensée', 'là où est votre curseur',
-       'dans vos notes du jour', 'hors ligne ou par ChatGPT'];
+       'dans votre fichier de notes', 'hors ligne ou par ChatGPT'];
 
   const typed = document.getElementById('typed');
   const ghost = document.querySelector('.typing-ghost');
@@ -122,7 +122,7 @@
       image: '03-erreur-car-car-pas-verifier-par-apple-terminer.png',
       title: t('macOS refuse — c\'est attendu', 'macOS refuses — this is expected'),
       text: t(
-        'Au premier lancement, macOS annonce qu\'il n\'a pas pu vérifier l\'application. Cliquez sur <strong>Terminer</strong> : l\'autorisation se donne au réglage suivant.',
+        'Au premier lancement, macOS annonce qu\'il n\'a pas pu vérifier l\'application. Cliquez sur <strong>Terminé</strong> : l\'autorisation se donne au réglage suivant.',
         'On first launch, macOS reports it could not verify the app. Click <strong>Done</strong> — you grant permission in the next step.'
       )
     },

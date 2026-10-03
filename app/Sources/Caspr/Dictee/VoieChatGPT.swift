@@ -266,8 +266,19 @@ final class VoieChatGPT {
             // Rien ne s'écrit : le brut est au menu depuis sa lecture, et
             // l'abandon y met le son (48, 54). Un échec prouvé reste un
             // échec — le menu le dit, sans le son d'une annulation.
-            abandonner(ecouteQuiDemarre: false, pageMorte: pageMorte, echec: cause == nil ? nil : annonce)
-            overlay.showFailure(annonce ?? "")
+            //
+            // Sauf une zone vide sans aperçu écrit : rien ne prouve alors
+            // qu'on ait parlé. La crête a pu prendre le clic de la touche pour
+            // une voix, et macOS, qui tranche ailleurs (`RelaisRepli.silence`),
+            // ne transcrit ni pour un module qui n'écrit nulle part, ni quand
+            // il n'est pas prêt. Le son reste au menu — une voix prise pour un
+            // bruit coûterait la dictée —, mais un appui muet ne passe plus
+            // pour une panne de ChatGPT.
+            let douteux = RelaisRepli.silence(apres: cause, apercu: apercu.texte)
+            abandonner(ecouteQuiDemarre: false, pageMorte: pageMorte,
+                       echec: cause == nil || douteux ? nil : annonce)
+            overlay.showFailure(douteux ? "Rien n'a été entendu ? Le son est gardé dans le menu de Caspr"
+                                        : annonce ?? "")
         case .transcrireParMacOS:
             // La page est arrêtée puis préparée d'abord, comme après un
             // abandon (93) : ChatGPT cesse d'écouter à l'instant où l'on y

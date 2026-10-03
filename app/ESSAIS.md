@@ -497,6 +497,11 @@ de le couper.
     le menu ne propose ni « Réessayer » ni « Insérer l'aperçu ». Sur la voie
     ChatGPT, la barre peut d'abord dire « ChatGPT n'a rien transcrit —
     transcription par macOS… » : la crête a dépassé 0,03, et macOS vérifie.
+    Refais-le sous Discuter, puis (si tu en as un) sur un Mac sans Apple
+    Intelligence ou sans droit de reconnaissance vocale : macOS n'y vérifie
+    pas, et si la crête dépasse 0,03, la barre dit « Rien n'a été entendu ?
+    Le son est gardé dans le menu de Caspr », sans icône d'erreur — jamais
+    « ChatGPT n'a rien transcrit » —, et le menu propose alors « Réessayer ».
     Dans tous les cas, note la crête de la ligne « relais : écho » du journal
     (fais-le trois fois, dont une en appuyant fort sur la touche) : c'est la
     mesure qui manque pour fixer `RelaisRepli.creteDeParole` au-dessus du

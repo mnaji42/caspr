@@ -318,8 +318,15 @@ délibérément : un bruit pris pour une voix ne coûte qu'un passage de macOS
 sur ce bruit, une voix prise pour un bruit coûtait la dictée. Et ce passage
 tranche : si macOS n'entend rien non plus dans ce son, sans aperçu écrit, deux
 moteurs s'accordent sur un silence, et la dictée finit comme un appui sans
-parole — « Rien n'a été entendu », rien au menu (`RelaisRepli.silence`). Le
-seuil ne décide donc que du détour par macOS, jamais de l'issue. Il n'est pas
+parole — « Rien n'a été entendu », rien au menu (`RelaisRepli.silence`).
+
+Ce passage n'a pas toujours lieu : un module qui n'écrit nulle part (Discuter)
+garde le son sans le transcrire, et macOS pas prêt — modèle à télécharger,
+droit jamais accordé — ne transcrit rien au milieu d'une dictée. Sans aperçu
+écrit, rien ne tranche alors entre un appui muet et une voix perdue : le son
+reste au menu, sans échec, et la barre le dit sans accuser ChatGPT (« Rien
+n'a été entendu ? Le son est gardé dans le menu de Caspr »). Le seuil ne
+décide donc pas de la dictée, seulement de ce qu'on en garde. Il n'est pas
 encore mesuré sur un appui muet : la ligne de l'écho donne la crête de chaque
 dictée, et l'essai 57 la relève.
 

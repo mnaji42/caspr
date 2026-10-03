@@ -76,6 +76,13 @@ public final class RelaisDictee {
     /// `RelaisVeille.empreinte`).
     private var empreintes: [String] = []
     private var lecture: Task<RelaisErreur?, Never>?
+    /// La page a-t-elle été vue en train d'enregistrer depuis le clic du
+    /// micro ? Seul ce relevé distingue, à l'arrêt, une page qui a cessé
+    /// d'écouter d'elle-même d'une page qui n'a pas encore basculé : WebKit
+    /// ouvre le micro avant que ChatGPT remplace la zone par sa barre d'onde,
+    /// et dans cet intervalle la zone est encore là, vide, sans bouton
+    /// d'arrêt — exactement comme une page arrêtée.
+    private var ecouteVue = false
 
     /// La page que cette dictée a prise est-elle morte depuis ?
     public var pageMorte: Bool { epoque.map { $0 != page.epoque } ?? false }
@@ -132,6 +139,7 @@ public final class RelaisDictee {
         try await marquer()
         // L'écho doit être prêt quand la page demandera le micro, au clic.
         page.armerEcho()
+        ecouteVue = false
         var ouverte = false
         defer { if !ouverte { page.desarmerEcho() } }
         // WebKit peut tenir le micro d'avant le clic : aucune fin ordinaire de
@@ -153,7 +161,10 @@ public final class RelaisDictee {
         // écoute : la barre disait « on vous écoute » devant une page sourde,
         // et tout ce qu'on disait se perdait à l'arrêt, sur « rien n'a été
         // entendu ».
-        try await observer([], delai: .ecoute) { self.ecoute($0, microDejaTenu: microDejaTenu) ? () : nil }
+        try await observer([], delai: .ecoute) { vu -> Void? in
+            if vu.enregistrement { self.ecouteVue = true }
+            return self.ecoute(vu, microDejaTenu: microDejaTenu) ? () : nil
+        }
         ouverte = true
     }
 
@@ -191,9 +202,16 @@ public final class RelaisDictee {
             // fin ordinaire ne rend (cf. `ouvrirLEcoute`) ; l'arrêt cherché
             // quinze secondes faisait conclure « Transcription impossible »
             // devant une transcription déjà dans la zone.
+            //
+            // Seulement si on l'a vue enregistrer : une zone encore là, juste
+            // après le clic, peut être celle que ChatGPT n'a pas encore retirée
+            // — conclure « elle a cessé » laissait alors la page écouter, micro
+            // ouvert, sans que personne ne l'arrête (cf. `ecouteVue`). Dans le
+            // doute, on clique l'arrêt jusqu'à ce qu'il prenne.
             try await observer(.texte, delai: .arret) { vu -> Void? in
+                if vu.enregistrement { self.ecouteVue = true }
                 if !vu.stop, !self.page.microOuvert { return () }
-                if !vu.stop, vu.texte != nil {
+                if !vu.stop, vu.texte != nil, self.ecouteVue {
                     self.journal("relais : la page avait cessé d'écouter d'elle-même, micro de WebKit tenu", false)
                     return ()
                 }

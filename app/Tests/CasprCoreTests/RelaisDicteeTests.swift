@@ -56,7 +56,9 @@ struct RelaisDicteeTests {
         var chargementEnCours = false
         /// WebKit tient le micro hors de toute écoute : resté pris d'avant.
         var microTenu = false
-        var microOuvert: Bool { ecoute || microTenu }
+        /// WebKit ouvre le micro au clic, avant que l'interface ne bascule.
+        var microAuClic = false
+        var microOuvert: Bool { ecoute || microTenu || (microAuClic && ecouteA != nil && arretA == nil) }
         var selecteurs: RelaisSelecteurs = {
             var s = RelaisSelecteurs()
             (s.micro, s.stop, s.composeur, s.envoi, s.copier, s.lecture) = ("m", "s", "c", "e", "k", "l")
@@ -260,6 +262,18 @@ struct RelaisDicteeTests {
         page.cesserDElleMeme()
         #expect(try await dictee.arreterEtLire() == "Bonjour tout le monde")
         #expect(page.horloge.ecoule < .seconds(15))
+    }
+
+    @Test("Arrêt juste après le clic, micro ouvert avant que l'interface bascule : on clique l'arrêt et on lit la dictée")
+    func arretAvantLaBascule() async throws {
+        let page = PageFactice()
+        page.microAuClic = true
+        page.ecouteEnRetard = .milliseconds(500)
+        let dictee = Self.dictee(page)
+        try await dictee.ouvrirLEcoute()
+        #expect(try await dictee.arreterEtLire() == "Bonjour tout le monde")
+        #expect(page.arrete)
+        #expect(page.clics.contains(.stop))
     }
 
     // MARK: - Les échecs que la page prouve

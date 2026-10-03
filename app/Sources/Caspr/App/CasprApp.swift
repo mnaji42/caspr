@@ -683,7 +683,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(settings)
 
         // L'accueil contient la seule explication de ce que fait
-        // l'accessibilité et de ce qu'implique la licence du modèle. Ne
+        // l'accessibilité et des deux voies (macOS ou ChatGPT). Ne
         // l'afficher qu'une fois reviendrait à cacher ces deux réponses à
         // quiconque n'a pas tout lu le premier jour.
         let welcome = NSMenuItem(title: "Revoir l'accueil…", action: #selector(openOnboarding),

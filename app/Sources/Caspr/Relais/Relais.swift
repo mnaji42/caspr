@@ -249,8 +249,9 @@ final class Relais: ObservableObject {
     /// appuyer une seconde fois.
     ///
     /// Ce préchargement avait été retiré parce qu'une page ChatGPT vivante
-    /// privait de son le micro de Caspr. Les deux modes s'excluant désormais,
-    /// Caspr n'ouvre plus le micro du tout dans ce mode : la raison a disparu.
+    /// privait de son le micro de Caspr. Les deux voies s'excluant désormais,
+    /// Caspr n'ouvre plus le micro du tout sur la voie ChatGPT : la raison a
+    /// disparu.
     func prechauffer() {
         guard voieChatGPT, estCalibre else { return }
         _ = try? pageActive()

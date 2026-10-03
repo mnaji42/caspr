@@ -11,7 +11,7 @@ import SwiftUI
 ///
 /// ## Interrupteur, et pas case à cocher
 ///
-/// La distinction n'est pas décorative, et `FeatureSwitch` la portait déjà :
+/// La distinction n'est pas décorative :
 /// une case à cocher se lit « ce détail est retenu », un interrupteur « cette
 /// fonctionnalité est en marche ». Les confondre fait mettre en marche toute
 /// une fonctionnalité en croyant cocher une préférence. Les sous-options gardent donc

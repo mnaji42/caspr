@@ -6,7 +6,7 @@ import Foundation
 /// Le matériel délivre typiquement du 44,1 ou 48 kHz. Le 16 kHz est un héritage
 /// du moteur local, qui l'exigeait ; il reste parce qu'il suffit à la voix et
 /// tient une longue dictée en trois fois moins de mémoire. `SpeechTranscriber`
-/// le reconvertit au format de son analyseur (cf. `AppleSpeechEngine.buffers`),
+/// le reconvertit au format de son analyseur (cf. `AppleSpeechEngine.ceder`),
 /// `SFSpeechRecognizer` le prend tel quel.
 ///
 /// On convertit pendant l'enregistrement plutôt qu'à la fin : ça étale le coût

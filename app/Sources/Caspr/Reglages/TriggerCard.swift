@@ -6,8 +6,8 @@ import SwiftUI
 /// La même vue dans l'accueil et dans les Réglages — c'est tout l'intérêt du
 /// composant. Ses deux paramètres ne règlent que ce qui n'a de sens qu'à un
 /// endroit : la zone d'essai à l'accueil, quand on n'a encore jamais vu Caspr
-/// écrire ; le raccourci « Changer de voie » dans les Réglages, parce que
-/// l'accueil ne présente pas encore les deux voies.
+/// écrire ; le raccourci « Changer de voie » dans les Réglages, onglet Dictée,
+/// où il se règle — l'accueil se contente de l'annoncer à sa dernière étape.
 ///
 /// ## Ce qui se replie, et ce qui ne doit jamais se replier
 ///

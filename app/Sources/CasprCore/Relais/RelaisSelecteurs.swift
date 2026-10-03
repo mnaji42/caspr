@@ -34,7 +34,7 @@ public struct RelaisSelecteurs: Codable, Equatable {
     public var micro = ""
     public var stop = ""
     public var composeur = ""
-    /// Les deux suivants ne servent qu'aux modes qui renvoient le texte à
+    /// Les deux suivants ne servent qu'aux modules qui renvoient le texte à
     /// ChatGPT. Ils sont calibrés à part, la première fois qu'on en a besoin :
     /// imposer cinq clics à qui ne veut que transcrire serait payer d'avance
     /// pour une fonctionnalité qu'on n'utilisera peut-être jamais.
@@ -103,7 +103,7 @@ public struct RelaisSelecteurs: Codable, Equatable {
     // n'utilise **pas** les valeurs par défaut des propriétés. Ajouter `envoi`
     // et `reponse` a donc rendu illisibles les calibrages déjà enregistrés, et
     // tous les utilisateurs ont perdu le leur en installant la mise à jour —
-    // avec, en cascade, le mode relais qui refuse de démarrer et un écran de
+    // avec, en cascade, la voie ChatGPT qui refusait de démarrer et un écran de
     // réglages annonçant « configuration inachevée » à qui venait de la
     // terminer.
     //

@@ -26,10 +26,25 @@ public struct RelaisEtape: Equatable, Sendable {
     public var facultative = false
 
     /// Dans l'ordre où les boutons existent : l'arrêt n'existe que pendant
-    /// l'écoute, l'envoi qu'une fois la zone remplie, « copier » et « Lire à
-    /// haute voix » qu'une fois la réponse venue. Les cinq premières sont
-    /// celles de l'automatique (cf. `RelaisPreuves.parcours`) ; la dernière,
-    /// facultative, ne sert qu'aux modules qui font parler.
+    /// l'écoute, l'envoi qu'une fois la zone remplie, la réponse, « copier » et
+    /// « Lire à haute voix » qu'une fois ChatGPT revenu. L'automatique en
+    /// éprouve cinq (cf. `RelaisPreuves.parcours`) ; la dernière, facultative,
+    /// ne sert qu'aux modules qui font parler.
+    ///
+    /// ## Pourquoi la réponse y figure désormais
+    ///
+    /// Elle n'y était pas, et c'était le seul repère que rien ne permettait de
+    /// réapprendre. Or « copier » n'est accepté que s'il est celui de la
+    /// dernière réponse, cherchée par ce repère-là : un calibrage périmé le
+    /// faisait refuser indéfiniment, et recalibrer n'y changeait rien puisque
+    /// l'étape n'existait pas.
+    ///
+    /// Le module repose par ailleurs sur un seul pari écrit en dur,
+    /// `[data-message-author-role="assistant"]`, alors que tout le reste est
+    /// appris — c'est le principe de conception de `RelaisSelecteurs`. Mesuré
+    /// le 4 octobre 2026 : ChatGPT ne l'écrit plus, la page n'offrait donc
+    /// « aucune réponse » et la calibration ne pouvait plus aboutir. Cette
+    /// étape rend le pari réparable sans attendre une version.
     public static let parcoursManuel: [RelaisEtape] = [
         RelaisEtape(cible: .micro, consigne: """
             Cliquez le bouton micro dans la page. L'enregistrement va démarrer, \
@@ -51,8 +66,15 @@ public struct RelaisEtape: Equatable, Sendable {
             fois la zone remplie, et le message doit partir pour qu'une réponse \
             existe.
             """)),
+        RelaisEtape(cible: .reponse, consigne: """
+            Attendez que ChatGPT ait fini de répondre, puis cliquez **dans le \
+            texte de sa réponse** — n'importe où dedans.
+
+            Caspr apprend ainsi à reconnaître ses réponses, pour ne jamais les \
+            confondre avec vos propres messages.
+            """),
         RelaisEtape(cible: .copier, consigne: """
-            Attendez que ChatGPT ait fini de répondre, puis cliquez l'icône \
+            Cliquez maintenant l'icône \
             « copier » sous **sa** réponse — deux carrés superposés.
 
             Sous la réponse, pas sous votre propre message : la page en porte une par \

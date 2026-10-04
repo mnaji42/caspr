@@ -389,9 +389,41 @@ public enum RelaisScripts {
       // offrir : « ce n'est pas le bouton de la réponse ». Opposée à un clic
       // juste, elle envoie chercher une erreur là où il n'y en a pas — trois
       // tours de diagnostic y sont passés. Chacune dit maintenant laquelle.
+      // Ce que la page offre autour du bouton cliqué, quand on n'y trouve pas
+      // de réponse.
+      //
+      // `REPONSES` est le seul pari écrit en dur de ce module, alors que tout
+      // le reste s'apprend. Le jour où ChatGPT le dément — le 4 octobre 2026 —
+      // la page n'offre plus « aucune réponse » et il n'y avait aucun moyen de
+      // le constater sans deviner. Les attributs des ancêtres du bouton le
+      // disent en une ligne, et nomment du même coup ce qui devrait prendre la
+      // relève.
+      function inventaire(el) {
+        // Sous `try` entier : c'est un diagnostic, appelé **depuis un chemin
+        // d'échec**. S'il lève, il emporte le refus qu'il devait expliquer et
+        // la calibration rend `null` au lieu d'une raison — ce qu'un test a
+        // attrapé sur un document qui n'expose pas `attributes`.
+        try { return inventaireOuLeve(el); } catch (e) { return 'page illisible'; }
+      }
+
+      function inventaireOuLeve(el) {
+        const vus = [];
+        let n = el;
+        for (let i = 0; i < 10 && n && n.nodeType === 1; i++) {
+          const noms = [...n.attributes]
+            .filter((a) => a.name.startsWith('data-') || a.name === 'role')
+            .map((a) => (a.value && a.value.length < 24 ? a.name + '=' + a.value : a.name));
+          if (noms.length) vus.push(n.tagName.toLowerCase() + '[' + noms.join(' ') + ']');
+          n = n.parentElement;
+        }
+        const compte = 'article:' + tous('article').length
+          + ' role:' + tous('[data-message-author-role]').length;
+        return compte + (vus.length ? ' — ' + vus.join(' < ') : ' — aucun attribut data-');
+      }
+
       function copierDesigne(el, derniere) {
         const refus = (raison) => ({ ok: true, selecteur: '', parent: '', raison });
-        if (!derniere) return refus('aucune réponse trouvée dans la page');
+        if (!derniere) return refus('aucune réponse trouvée dans la page — ' + inventaire(el));
         let tour = el;
         while (tour && !tour.contains(derniere)) tour = tour.parentElement;
         if (!tour) return refus('ce bouton et la dernière réponse n\u2019ont aucun bloc commun');

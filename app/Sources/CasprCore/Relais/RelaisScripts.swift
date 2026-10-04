@@ -35,7 +35,13 @@ public enum RelaisScripts {
       // Les réponses de ChatGPT, et elles seules : le rôle est posé sur chaque
       // message par son auteur, là où `article` porte aussi ceux de
       // l'utilisateur.
-      const REPONSES = '[data-message-author-role="assistant"]';
+      // Le conteneur d'un échange. Relevé sur la page le 4 octobre 2026 :
+      // `data-message-author-role`, `article`, `conversation-turn` et
+      // `data-message-id` ont tous disparu d'un coup — le Diagnostic les compte
+      // à zéro. `data-turn-key` porte désormais le tour, et il englobe la
+      // question **et** la réponse, là où l'ancien balisage donnait un élément
+      // par message.
+      const REPONSES = '[data-turn-key]';
 
       // Les conteneurs que ChatGPT nomme lui-même, et sur lesquels une chaîne
       // de position peut s'ancrer.
@@ -46,7 +52,7 @@ public enum RelaisScripts {
       // toute la page, celui sur lequel le filet des réponses est déjà bâti.
       // Faute de le reconnaître, aucun ancêtre d'un paragraphe de réponse ne
       // pouvait servir d'ancre, et la chaîne restait une forme.
-      const ANCRES = [REPONSES, '[data-message-author-role="user"]', '#prompt-textarea'];
+      const ANCRES = [REPONSES, '[data-content-search-turn-key]', '#prompt-textarea'];
 
 
       // Filet de secours tant que l'utilisateur n'a pas calibré, et rien de
@@ -70,7 +76,12 @@ public enum RelaisScripts {
           'button[aria-label*="termin" i]',
         ],
         composeur: [
+          // `#prompt-textarea` a disparu ; la zone porte maintenant
+          // `data-composer-markdown` et le rôle `textbox`. Le
+          // `contenteditable` reste, et il est seul dans la page.
           '#prompt-textarea',
+          '[data-composer-markdown]',
+          '[role="textbox"][contenteditable="true"]',
           'div[contenteditable="true"]',
           'textarea',
         ],
@@ -81,6 +92,7 @@ public enum RelaisScripts {
         ],
         reponse: [
           REPONSES,
+          '[data-content-search-turn-key]',
           'article',
         ],
         copier: [
@@ -232,7 +244,53 @@ public enum RelaisScripts {
         if (!idEngendre(el.id)) candidats.push('#' + esc(el.id));
         const aria = el.getAttribute('aria-label');
         if (aria) candidats.push('[aria-label="' + guillemets(aria) + '"]');
+        // Du plus solide au plus fragile : l'identité de la page d'abord, sa
+        // description ensuite, et le nom de fonction en dernier recours.
+        candidats.push(...donneesSemantiques(el));
+        candidats.push(...classesSemantiques(el));
         return candidats;
+      }
+
+      // Les attributs `data-*` par lesquels la page se décrit elle-même.
+      //
+      // On ne regardait que `data-testid`. Or ChatGPT en pose beaucoup d'autres
+      // qui nomment une fonction, et ce sont souvent les seuls repères durables
+      // qui restent une fois les identifiants partis : `data-composer-markdown`
+      // sur la zone de saisie, `data-turn-key` sur un tour.
+      //
+      // Retenus par leur **présence**, jamais par leur valeur : celle d'un tour
+      // est un UUID qui change à chaque message, et la viser reviendrait à
+      // désigner ce message-ci et pas le suivant — la faute qu'`idEngendre`
+      // évite déjà pour les identifiants.
+      function donneesSemantiques(el) {
+        const attrs = el.attributes ? [...el.attributes] : [];
+        return attrs.map((a) => a.name)
+          .filter((n) => n !== 'data-testid' && /^data(-[a-z]+){1,4}$/.test(n))
+          .map((n) => '[' + n + ']');
+      }
+
+      // Une classe qui nomme ce que l'élément **est**, et non comment il
+      // s'affiche.
+      //
+      // Les classes de ChatGPT sont pour l'essentiel des utilitaires de style —
+      // `mt-1.5`, `flex`, `max-w-(--thread-content-max-width)` — qui changent au
+      // moindre ajustement visuel et ne valent rien comme repère. Mais la page
+      // en pose quelques-unes qui nomment une fonction, et c'est parfois le
+      // **seul** repère offert : la barre d'actions d'une réponse ne porte ni
+      // `data-testid`, ni identifiant, ni libellé d'accessibilité — rien que
+      // `turn-action-controls`. Sans la reconnaître, `paireCopier` ne pouvait
+      // retenir aucun bloc, et « copier » était refusé quoi qu'on clique.
+      //
+      // On ne garde que les kebab-case alphabétiques d'au moins deux mots : un
+      // utilitaire de style porte presque toujours un chiffre, un crochet, un
+      // deux-points ou une barre oblique. Elles passent en **dernier**, après
+      // les attributs, et comme tous les candidats elles sont éprouvées — c'est
+      // la page qui tranche, pas cette expression régulière.
+      function classesSemantiques(el) {
+        const brut = typeof el.className === 'string' ? el.className : '';
+        return brut.split(/\s+/)
+          .filter((c) => c.length >= 8 && /^[a-z]+(-[a-z]+){1,3}$/.test(c))
+          .map((c) => '.' + c);
       }
 
       // Le premier des repères de l'élément qui passe l'épreuve `garde` ; ''
@@ -447,7 +505,7 @@ public enum RelaisScripts {
         let tour = el;
         while (tour && !tour.contains(derniere)) tour = tour.parentElement;
         if (!tour) return refus('ce bouton et la dernière réponse n\u2019ont aucun bloc commun');
-        const autres = tous('[data-message-author-role], article', tour)
+        const autres = tous(REPONSES + ', [data-message-author-role], article', tour)
           .filter((m) => !m.contains(derniere) && !derniere.contains(m));
         if (autres.length) {
           return refus('ce bouton n\u2019est pas sous la dernière réponse : le plus '

@@ -129,4 +129,48 @@ struct RelaisSelecteursTests {
         #expect(s.envoi == "envoi")
         #expect(s.copier == "copier")
     }
+    /// Le calibrage réel d'une machine où la dictée bouclait, relevé dans
+    /// `relais.selecteurs` le 4 octobre 2026.
+    ///
+    /// Cinq repères sur sept sont des adresses — un `data-testid`, des libellés
+    /// d'accessibilité — et deux sont des chaînes de position. Ce sont
+    /// exactement les deux qui ont cassé : la zone de saisie, que la dictée
+    /// attendait sans fin (« zone non » à chaque relevé du journal), et la
+    /// réponse, dont le dernier élément trouvé tombait dans un autre tour — ce
+    /// qui faisait refuser par « Pas ce bouton-là » un bouton « copier »
+    /// pourtant correctement désigné.
+    @Test("Un repère retenu par sa position est signalé comme fragile")
+    func positionalSelectorsAreFlagged() throws {
+        let s = try relire(#"""
+            {"stop":"[aria-label=\"Arrêter la dictée\"]",
+             "composeur":"div:nth-of-type(3) > div:nth-of-type(2) > div > div > div > div",
+             "micro":"[aria-label=\"Dicter\"]",
+             "reponse":"div:nth-of-type(1) > div:nth-of-type(1) > div > div > div > p",
+             "copier":"[data-testid=\"copy-turn-action-button\"]",
+             "envoi":"[aria-label=\"Envoyer\"]",
+             "lecture":"[data-testid=\"voice-play-turn-action-button\"]"}
+            """#)
+        #expect(s.estCalibre)
+        #expect(s.fragiles == [.composeur, .reponse])
+    }
+
+    /// Un calibrage entièrement fait d'adresses ne doit rien déclencher : la
+    /// mise en garde ne vaut que si elle reste rare.
+    @Test("Des repères d'identité ne sont pas signalés")
+    func addressSelectorsAreNotFlagged() {
+        var s = RelaisSelecteurs()
+        s.micro = #"[aria-label="Dicter"]"#
+        s.stop = #"[aria-label="Arrêter"]"#
+        s.composeur = "#prompt-textarea"
+        s.reponse = #"[data-message-author-role="assistant"]"#
+        #expect(s.fragiles.isEmpty)
+    }
+
+    /// Une cible jamais calibrée n'est pas « fragile » : elle est absente, ce
+    /// qu'`estCalibre` et le filet des heuristiques traitent déjà.
+    @Test("Un repère vide n'est pas fragile")
+    func emptySelectorIsNotFragile() {
+        #expect(RelaisSelecteurs().fragiles.isEmpty)
+    }
 }
+

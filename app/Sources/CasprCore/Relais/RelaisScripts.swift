@@ -385,14 +385,40 @@ public enum RelaisScripts {
       //
       // Le chemin structurel n'est qu'un dernier recours — il casse au moindre
       // remaniement, mais une calibration automatique le réapprend.
-      function selecteurStable(el, genre) {
+      function selecteurStable(el, genre, cible) {
         const repere = premierRepere(el, leRetrouve(el, genre));
         if (repere) return repere;
+        const chaine = chaineAncree(el);
+        return designeBien(el, genre, cible, chaine) ? chaine : '';
+      }
 
+      // La chaîne de position de l'élément, **ancrée** dès qu'un ancêtre porte
+      // un repère solide.
+      //
+      // Sans ancre, `div:nth-of-type(1) > … > p` n'est pas une adresse : c'est
+      // une *forme*, et `querySelectorAll` la fait répondre partout où cette
+      // forme se retrouve dans le document — y compris sous les messages de
+      // l'utilisateur.
+      //
+      // Mesuré sur une calibration réelle : la zone de saisie et la réponse
+      // avaient toutes deux été retenues ainsi. Conséquences, et il a fallu les
+      // journaux pour les relier à cette ligne — « zone non » à chaque relevé,
+      // la dictée attendant sans fin une zone qu'aucun élément trouvé n'était ;
+      // et « Pas ce bouton-là » opposé à un bouton « copier » pourtant
+      // correctement désigné, parce que `derniereReponse` prend le dernier du
+      // document et tombait sur un paragraphe d'un autre tour.
+      //
+      // Préfixée d'un ancêtre retrouvable, la même chaîne redevient une
+      // adresse : « ce nœud-là, dans ce bloc-ci ».
+      function chaineAncree(el) {
         const parts = [];
         let n = el;
-        while (n && n.nodeType === 1 && parts.length < 6) {
-          if (!idEngendre(n.id)) { parts.unshift('#' + esc(n.id)); break; }
+        for (let i = 0; i < 6 && n && n.nodeType === 1; i++) {
+          if (!idEngendre(n.id)) { parts.unshift('#' + esc(n.id)); return parts.join(' > '); }
+          if (n !== el) {
+            const ancre = premierRepere(n, leRetrouve(n, 'bloc'));
+            if (ancre) { parts.unshift(ancre); return parts.join(' > '); }
+          }
           let part = n.tagName.toLowerCase();
           const p = n.parentElement;
           if (p) {
@@ -403,6 +429,25 @@ public enum RelaisScripts {
           n = p;
         }
         return parts.join(' > ');
+      }
+
+      // Le repère construit désigne-t-il vraiment ce qu'on croit ?
+      //
+      // Les repères d'attribut sont éprouvés depuis longtemps (`leRetrouve`) ;
+      // la chaîne de position, elle, était retenue sans que personne demande
+      // jamais ce qu'elle désignait. Un repère non éprouvé n'échoue pas tout de
+      // suite : il échoue des jours plus tard, dans une attente muette.
+      //
+      // La réponse demande davantage que « retrouver l'élément ». La dictée en
+      // prend **le dernier du document** (`derniereReponse`) : un repère qui
+      // répond aussi sous le message de l'utilisateur la fait partir du mauvais
+      // tour. Le rôle que ChatGPT écrit sur chaque message tranche — et quand
+      // la page ne l'écrit nulle part, on n'exige rien de plus : on ne bloque
+      // pas une calibration sur une forme de page qu'on ne reconnaît pas.
+      function designeBien(el, genre, cible, sel) {
+        if (!sel || !leRetrouve(el, genre)(sel)) return false;
+        if (cible !== 'reponse') return true;
+        return tous(sel).every((m) => !m.closest('[data-message-author-role="user"]'));
       }
 
       // Le premier ancêtre qui porte un repère valide.
@@ -939,7 +984,7 @@ public enum RelaisScripts {
             const el = ev.target.closest(CLIQUABLE[genre] || '*');
             if (!convient(genre, el)) return null;
             if (cible === 'copier') return copierDesigne(el, derniereReponse(selReponse));
-            const repere = { ok: true, selecteur: selecteurStable(el, genre), parent: selecteurAncetre(el) };
+            const repere = { ok: true, selecteur: selecteurStable(el, genre, cible), parent: selecteurAncetre(el) };
             if (cible !== 'lecture') return repere;
             if (ouvreUnMenu(el) && !menu) { menu = repere; return null; } // on attend le vrai bouton
             return { ...repere, menu: menu ? menu.selecteur : '', menuParent: menu ? menu.parent : '' };

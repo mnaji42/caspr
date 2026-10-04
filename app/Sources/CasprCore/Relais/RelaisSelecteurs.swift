@@ -94,6 +94,33 @@ public struct RelaisSelecteurs: Codable, Equatable {
     /// deux que les heuristiques ont le plus de mal à deviner.
     public var estCalibre: Bool { !micro.isEmpty && !stop.isEmpty }
 
+    /// Un repère qui décrit une **forme** plutôt qu'une adresse.
+    ///
+    /// `div:nth-of-type(3) > div:nth-of-type(2) > div > div > div > div` ne
+    /// porte ni identifiant, ni `data-testid`, ni libellé : il répond partout
+    /// où cette forme se retrouve dans la page, et nulle part si elle bouge
+    /// d'un cran. Les calibrations produisaient ça sans le vérifier — cf.
+    /// `chaineAncree`, qui ne le fait plus.
+    ///
+    /// Le critère est volontairement grossier — aucun crochet, aucun dièse —
+    /// parce qu'il ne sert qu'à **prévenir**, jamais à bloquer : un faux
+    /// positif coûte une recalibration inutile, un faux négatif laisse l'état
+    /// d'avant. Rien d'irréversible dans un sens comme dans l'autre.
+    static func estFragile(_ repere: String) -> Bool {
+        !repere.isEmpty && !repere.contains("[") && !repere.contains("#")
+    }
+
+    /// Les cibles dont le repère ne désigne plus une adresse.
+    ///
+    /// Elles viennent des calibrations faites avant que les chaînes de position
+    /// soient ancrées et éprouvées. Rien ne les distingue à l'œil d'un
+    /// calibrage valide : la dictée attend simplement sans fin une zone de
+    /// saisie qu'elle ne retrouve pas, et la calibration oppose « Pas ce
+    /// bouton-là » à un bouton correctement désigné.
+    public var fragiles: [RelaisCible] {
+        RelaisCible.allCases.filter { Self.estFragile(self[$0]) }
+    }
+
     /// Sait-on faire lire la réponse à haute voix ?
     public var saitLire: Bool { !lecture.isEmpty }
 

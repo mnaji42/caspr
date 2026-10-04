@@ -86,6 +86,21 @@ struct RelaisSession: View, ValidatingComponent {
                      + "Caspr n'aura pas appris les boutons de la page — seul, ou "
                      + "en vous les faisant montrer.",
                      warning: true)
+            } else if !magasin.selecteurs.fragiles.isEmpty {
+                // Calibré, et pourtant inutilisable : le cas que rien ne disait.
+                // Sans cette ligne, la dictée attend sans fin une zone de saisie
+                // introuvable, et la calibration oppose « Pas ce bouton-là » à un
+                // bouton correctement désigné — deux symptômes qui ne désignent
+                // pas leur cause et qu'on ne peut pas relier sans les journaux.
+                Note("Calibrage à refaire : "
+                     + magasin.selecteurs.fragiles.map(\.libelle)
+                        .joined(separator: ", ")
+                     + " a été retenu par sa position dans la page et non par "
+                     + "son identité. Un remaniement de ChatGPT suffit à le "
+                     + "rendre introuvable, et la dictée attend alors sans "
+                     + "rien dire. Recalibrez : les repères appris le seront "
+                     + "désormais de façon durable.",
+                     warning: true)
             }
             capacites
             // Grisés pendant qu'un autre flux pilote la page. Un bouton qu'on

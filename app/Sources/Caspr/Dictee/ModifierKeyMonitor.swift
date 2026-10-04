@@ -186,6 +186,30 @@ final class ModifierKeyMonitor {
             // Option a servi à composer un caractère ou à cliquer : on annule.
             if isDown { usedAsModifier = true }
 
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            // ## Le tap coupé par macOS, et que personne ne rallumait
+            //
+            // Le système coupe un tap dont le rappel a mis trop de temps — une
+            // calibration qui pilote la page y suffit — et il **reste** coupé :
+            // ces deux évènements tombaient dans le `default`, donc dans le
+            // vide.
+            //
+            // Les évènements perdus entre-temps emportent le relâchement
+            // d'Option. Le décompte du maintien va alors à son terme et les
+            // réglages s'ouvrent, sur une touche que plus personne ne tient.
+            // `isDown` reste vrai par-dessus le marché.
+            //
+            // Mesuré : au premier appui qui suit un calibrage, et une seule
+            // fois — l'appui d'après revoit un relâchement et remet l'état
+            // d'aplomb tout seul, ce qui faisait passer le défaut pour un
+            // caprice.
+            Log.info("tap clavier coupé par le système — réarmé")
+            cancelHoldTimer()
+            isDown = false
+            usedAsModifier = false
+            didHold = false
+            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+
         default:
             break
         }

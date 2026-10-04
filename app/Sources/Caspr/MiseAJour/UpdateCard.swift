@@ -163,7 +163,21 @@ struct UpdateCard: View {
                     if available != nil {
                         badge("Mise à jour disponible", color: Self.amber,
                               text: Self.amberText)
-                    } else if checker.lastCheckedAt != nil, !checker.checking {
+                    } else if checker.lastCheckedAt != nil, !checker.checking,
+                              checker.lastError == nil {
+                        // `lastError == nil` est la condition qui manquait.
+                        // `lastCheckedAt` n'est écrite que par une vérification
+                        // **aboutie**, et elle est persistée : une requête qui
+                        // échoue la laisse donc en place, et la pastille
+                        // continuait d'affirmer « à jour » sur la foi d'une
+                        // réponse vieille d'un jour. Constaté sur une machine
+                        // sans réseau, qui était en réalité deux versions en
+                        // retard.
+                        //
+                        // Rien ne la remplace : la raison de l'échec s'affiche
+                        // juste en dessous, et une pastille « vérification
+                        // impossible » répéterait en trois mots ce que la phrase
+                        // dit déjà mieux.
                         badge("✓ À jour", color: Style.accent, text: Style.accent)
                     }
                 }

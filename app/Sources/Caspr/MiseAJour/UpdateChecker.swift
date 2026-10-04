@@ -186,7 +186,31 @@ final class UpdateChecker {
                             },
                             asset: asset)
         } catch {
-            lastError = error.localizedDescription
+            lastError = Self.describe(error)
+        }
+    }
+
+    /// La raison de l'échec, en français quelle que soit la langue du Mac.
+    ///
+    /// `URLError.localizedDescription` suit la langue du **système**, pas celle
+    /// de l'application : la carte affichait « The request timed out. » au
+    /// milieu d'une interface française. C'est le même défaut que celui déjà
+    /// corrigé sur les tailles et les dates, et la même parade.
+    ///
+    /// Les erreurs que Caspr fabrique lui-même — `Failure` — passent par le
+    /// repli : elles sont déjà écrites en français.
+    private static func describe(_ error: Error) -> String {
+        guard let url = error as? URLError else { return error.localizedDescription }
+        return switch url.code {
+        case .timedOut:
+            "GitHub n'a pas répondu à temps. Réessayez : une vérification "
+                + "n'engage rien."
+        case .notConnectedToInternet, .networkConnectionLost:
+            "Pas de connexion : Caspr n'a pas pu joindre GitHub."
+        case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+            "GitHub est injoignable depuis ce Mac."
+        default:
+            url.localizedDescription
         }
     }
 

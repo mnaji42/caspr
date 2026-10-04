@@ -383,16 +383,29 @@ public enum RelaisScripts {
       // celui de la dernière réponse (cf. `guetter`) : dans le plus petit
       // bloc qui les porte tous deux, aucun autre message. Sinon un repère
       // vide — un refus, que Swift explique.
+      //
+      // Quatre façons de refuser, et elles n'appellent pas le même geste. Elles
+      // rendaient toutes le même repère vide, et Swift n'avait qu'une phrase à
+      // offrir : « ce n'est pas le bouton de la réponse ». Opposée à un clic
+      // juste, elle envoie chercher une erreur là où il n'y en a pas — trois
+      // tours de diagnostic y sont passés. Chacune dit maintenant laquelle.
       function copierDesigne(el, derniere) {
-        const refus = { ok: true, selecteur: '', parent: '' };
-        if (!derniere) return refus;
+        const refus = (raison) => ({ ok: true, selecteur: '', parent: '', raison });
+        if (!derniere) return refus('aucune réponse trouvée dans la page');
         let tour = el;
         while (tour && !tour.contains(derniere)) tour = tour.parentElement;
-        const autres = tour && tous('[data-message-author-role], article', tour)
+        if (!tour) return refus('ce bouton et la dernière réponse n\u2019ont aucun bloc commun');
+        const autres = tous('[data-message-author-role], article', tour)
           .filter((m) => !m.contains(derniere) && !derniere.contains(m));
-        if (!autres || autres.length) return refus;
+        if (autres.length) {
+          return refus('ce bouton n\u2019est pas sous la dernière réponse : le plus '
+                       + 'petit bloc qui les réunit porte ' + autres.length
+                       + ' autre(s) message(s)');
+        }
         const repere = repereCopier(el, derniere);
-        return repere ? { ok: true, ...repere } : refus;
+        // `ok: true` : `repereCopier` ne rend que le couple repère/bloc.
+        return repere ? { ok: true, ...repere }
+                      : refus('aucun repère stable ne ramène à ce bouton seul');
       }
 
       // Le repère d'un « copier » tel que la dictée le retrouvera, pour les

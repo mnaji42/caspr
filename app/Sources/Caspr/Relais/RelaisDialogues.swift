@@ -90,13 +90,25 @@ enum RelaisDialogues {
     // MARK: - Le parcours manuel
 
     /// Un « copier » refusé par la page (cf. `guetter` du pont).
-    static let copierAilleurs = """
-        Ce bouton « copier » n'est pas celui de la réponse de ChatGPT : la page en \
-        pose un sous chaque message, le vôtre compris, et Caspr copierait alors \
-        votre demande.
+    /// Ce que la page a constaté, et le geste qui en découle.
+    ///
+    /// Le texte était fixe et n'énonçait qu'une des quatre causes possibles —
+    /// « ce n'est pas le bouton de la réponse ». Opposé à un clic juste, il
+    /// envoyait chercher une erreur là où il n'y en avait pas. La raison vient
+    /// maintenant de `copierDesigne`, qui sait laquelle s'est produite.
+    static func copierAilleurs(_ raison: String) -> String {
+        let constat = raison.isEmpty
+            ? "Ce bouton « copier » n'est pas celui de la réponse de ChatGPT."
+            : "Caspr n'a pas pu retenir ce bouton : \(raison)."
+        return constat + """
 
-        Désignez le bouton sous la réponse elle-même — deux carrés superposés.
-        """
+
+            La page pose un « copier » sous chaque message, le vôtre compris. \
+            Désignez celui de la **dernière** réponse de la conversation — deux \
+            carrés superposés, sous le dernier message de ChatGPT. Une réponse \
+            plus ancienne ne convient pas.
+            """
+    }
 
     /// Un clic que la page a laissé passer, mais qui n'a rien copié.
     static let copierRien = """

@@ -13,13 +13,19 @@ extension RelaisPage {
         let parent: String
         /// L'ouvre-menu cliqué d'abord, pour « Lire à haute voix ».
         var menu = "", menuParent = ""
+        /// Pourquoi la page a refusé ce clic, quand `selecteur` est vide.
+        ///
+        /// Quatre refus possibles pour « copier », qui n'appellent pas le même
+        /// geste — cf. `copierDesigne`. Sans cette raison, ils rendaient tous
+        /// le même repère vide et l'on n'avait qu'une phrase à opposer.
+        var raison = ""
         private enum CodingKeys: CodingKey { case selecteur, parent }
     }
 
     /// Ce que rend une fonction du pont : chacune n'en remplit qu'une partie.
     private struct Rendu: Decodable {
         let ok: Bool
-        let texte, voie, selecteur, parent, menu, menuParent: String?
+        let texte, voie, selecteur, parent, menu, menuParent, raison: String?
     }
 
     private struct Liste<Element: Decodable>: Decodable {
@@ -279,7 +285,8 @@ extension RelaisPage {
     func guetter(_ cible: RelaisCible, reponse: String) async throws -> Repere? {
         let r: Rendu = try await pont(.guetter, cible.rawValue, reponse)
         return r.ok ? Repere(selecteur: r.selecteur ?? "", parent: r.parent ?? "",
-                             menu: r.menu ?? "", menuParent: r.menuParent ?? "") : nil
+                             menu: r.menu ?? "", menuParent: r.menuParent ?? "",
+                             raison: r.raison ?? "") : nil
     }
 
     /// Fait renoncer une calibration qui attend un clic — au repos.

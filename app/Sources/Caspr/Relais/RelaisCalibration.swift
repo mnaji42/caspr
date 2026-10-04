@@ -297,10 +297,17 @@ final class RelaisCalibration {
             // Le guetteur a été retiré de la page : c'est un abandon.
             guard let r = issue else { throw CancellationError() }
             let refus = cible != .copier ? nil
-                : r.selecteur.isEmpty ? RelaisDialogues.copierAilleurs
+                : r.selecteur.isEmpty ? RelaisDialogues.copierAilleurs(r.raison)
                 : (try? await page.observer(auPlus: .seconds(3), toutes: .milliseconds(100)) {
                     presse.changeCount != copies
                 }) == true ? nil : RelaisDialogues.copierRien
+            // Au journal aussi : un refus relu après coup vaut mieux qu'un
+            // dialogue dont on ne se rappelle plus les termes exacts.
+            if refus != nil {
+                Log.error("relais : « copier » refusé — "
+                          + (r.selecteur.isEmpty ? (r.raison.isEmpty ? "sans raison" : r.raison)
+                                                 : "le clic n'a rien copié"))
+            }
             try Task.checkCancellation()
             if let refus {
                 guard RelaisDialogues.demander("Pas ce bouton-là", refus) else { throw CancellationError() }

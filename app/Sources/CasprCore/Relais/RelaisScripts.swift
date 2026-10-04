@@ -37,6 +37,17 @@ public enum RelaisScripts {
       // l'utilisateur.
       const REPONSES = '[data-message-author-role="assistant"]';
 
+      // Les conteneurs que ChatGPT nomme lui-même, et sur lesquels une chaîne
+      // de position peut s'ancrer.
+      //
+      // `reperesPossibles` ne regarde que `data-testid`, l'identifiant et le
+      // libellé d'accessibilité. Le rôle que ChatGPT écrit sur chaque message
+      // n'en fait pas partie — alors que c'est l'attribut le plus durable de
+      // toute la page, celui sur lequel le filet des réponses est déjà bâti.
+      // Faute de le reconnaître, aucun ancêtre d'un paragraphe de réponse ne
+      // pouvait servir d'ancre, et la chaîne restait une forme.
+      const ANCRES = [REPONSES, '[data-message-author-role="user"]', '#prompt-textarea'];
+
 
       // Filet de secours tant que l'utilisateur n'a pas calibré, et rien de
       // plus : ce sont des paris sur des libellés d'accessibilité, pas un
@@ -386,6 +397,25 @@ public enum RelaisScripts {
       // Le chemin structurel n'est qu'un dernier recours — il casse au moindre
       // remaniement, mais une calibration automatique le réapprend.
       function selecteurStable(el, genre, cible) {
+        // ## La réponse, c'est le tour — pas le paragraphe cliqué
+        //
+        // On désigne « la réponse de ChatGPT » en cliquant dedans, donc sur un
+        // paragraphe. Mais ce que la dictée veut, c'est le message entier : le
+        // bouton « copier » se cherche autour de lui (`copierDesigne`), et un
+        // paragraphe exclut le reste de la réponse.
+        //
+        // Surtout, un paragraphe n'a rien qui le nomme : on en tirait une
+        // chaîne de position, éprouvée sur un fil neuf où elle ne désignait
+        // encore que lui. Au troisième message elle répondait ailleurs, et le
+        // refus tombait sur un bouton pourtant bien désigné — « le premier
+        // message fonctionne, ensuite ça refait le bug ».
+        //
+        // Le tour, lui, porte le rôle que ChatGPT écrit sur chaque message.
+        // Il n'y a donc rien à apprendre ici : la bonne réponse est connue, et
+        // elle vaut pour toute la conversation. Rendu avant l'épreuve de
+        // `leRetrouve`, qui demanderait de retrouver l'élément cliqué —
+        // justement celui qu'on remplace, et à dessein.
+        if (cible === 'reponse' && el.closest(REPONSES)) return REPONSES;
         const repere = premierRepere(el, leRetrouve(el, genre));
         if (repere) return repere;
         const chaine = chaineAncree(el);
@@ -416,7 +446,8 @@ public enum RelaisScripts {
         for (let i = 0; i < 6 && n && n.nodeType === 1; i++) {
           if (!idEngendre(n.id)) { parts.unshift('#' + esc(n.id)); return parts.join(' > '); }
           if (n !== el) {
-            const ancre = premierRepere(n, leRetrouve(n, 'bloc'));
+            const valide = leRetrouve(n, 'bloc');
+            const ancre = premierRepere(n, valide) || ANCRES.find(valide);
             if (ancre) { parts.unshift(ancre); return parts.join(' > '); }
           }
           let part = n.tagName.toLowerCase();
@@ -447,6 +478,22 @@ public enum RelaisScripts {
       function designeBien(el, genre, cible, sel) {
         if (!sel || !leRetrouve(el, genre)(sel)) return false;
         if (cible !== 'reponse') return true;
+        // ## Pourquoi la réponse ne se contente pas d'être retrouvée
+        //
+        // La dictée en prend le **dernier** élément du document
+        // (`derniereReponse`), dans une conversation qui s'allonge. Une forme
+        // nue ne désigne donc pas la même chose au premier message et au
+        // troisième : éprouvée sur un fil neuf — une seule réponse, aucun
+        // paragraphe concurrent — elle passe, puis se met à répondre ailleurs.
+        //
+        // C'est ce qui a été mesuré : « le premier message fonctionne, ensuite
+        // ça refait le bug ». La vérification d'un repère ne peut pas voir la
+        // page de demain ; elle peut exiger une ancre, qui la rend inutile.
+        //
+        // Une ancre, donc, et aucun élément désigné sous un message de
+        // l'utilisateur. Sans ancre possible, la calibration échoue en nommant
+        // la cible — mieux qu'un repère qui marchera une fois.
+        if (!sel.includes('[') && !sel.includes('#')) return false;
         return tous(sel).every((m) => !m.closest('[data-message-author-role="user"]'));
       }
 

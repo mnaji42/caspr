@@ -104,7 +104,18 @@ extension RelaisPage {
     private static let tailleBarre = NSSize(width: 420, height: 62)
     /// Assez d'écart au-dessus de la barre de Caspr pour qu'on lise deux objets
     /// distincts et non un bloc collé.
-    private static let hauteurBarre: CGFloat = 218
+    ///
+    /// **Dérivée, et non plus constante.** 218 avait été mesuré quand la barre
+    /// de Caspr était plus basse. Depuis, elle grandit : la rangée des modules
+    /// lui ajoute 37 points et l'aperçu en direct jusqu'à 63 — son sommet monte
+    /// à 279. Posée à 218 sur 62 de haut, la barre du relais s'étalait donc de
+    /// 218 à 280 : elle passait *derrière* celle de Caspr au lieu de la
+    /// surmonter, et la pastille qui dit si ChatGPT écoute disparaissait sous
+    /// les pastilles de modules.
+    ///
+    /// Calculée des mesures de la barre elle-même : une rangée ajoutée demain
+    /// la remontera sans que personne ait à y penser.
+    private static var hauteurBarre: CGFloat { RecordingOverlay.sommetMaximal + 12 }
     /// La page rendue à 65 % : les 420 points de la barre valent alors environ
     /// 650 points CSS. Le dézoom élargit la page que voit ChatGPT, pour qu'il
     /// garde sa mise en page large plutôt que de basculer sur celle des

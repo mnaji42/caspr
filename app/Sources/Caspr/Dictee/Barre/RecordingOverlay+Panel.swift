@@ -409,7 +409,7 @@ extension RecordingOverlay {
         let size = panel.frame.size
         let frame = screen.visibleFrame
         panel.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2,
-                                     y: frame.minY + 90))
+                                     y: frame.minY + Self.basDeLaBarre))
     }
 
     @objc private func annulerDepuisLaBarre() {

@@ -211,6 +211,31 @@ final class RecordingOverlay {
     /// lire comme deux plans distincts.
     static let tabGap: CGFloat = 9
     static let previewLines = 3
+
+    // MARK: - Ce que la barre occupe, pour qui doit se poser au-dessus
+
+    /// Hauteur du bas de l'écran à laquelle la barre se pose (cf. `position`).
+    static let basDeLaBarre: CGFloat = 90
+
+    /// La hauteur maximale que la barre puisse atteindre.
+    ///
+    /// Elle n'est pas fixe : la rangée des modules en ajoute une, et l'aperçu
+    /// en direct jusqu'à trois lignes de plus. Calculée des mêmes mesures que
+    /// `resize`, et non recopiée, pour qu'une rangée ajoutée demain la mette à
+    /// jour toute seule.
+    static var hauteurMaximale: CGFloat {
+        controlRowHeight + tabGap + padding + rowHeight + padding
+            + controlRowHeight + tabGap
+            + rowSpacing + CGFloat(previewLines) * previewLineHeight
+    }
+
+    /// Le plus haut que le sommet de la barre puisse monter.
+    ///
+    /// Publié pour la fenêtre du relais, qui doit se poser au-dessus sans
+    /// jamais la recouvrir. Elle s'en tenait à une constante choisie quand la
+    /// barre était plus basse, et qui a cessé d'être vraie le jour où l'aperçu
+    /// en direct a pu la faire grandir.
+    static var sommetMaximal: CGFloat { basDeLaBarre + hauteurMaximale }
     static let previewFontSize: CGFloat = 13
     static let previewLineHeight: CGFloat = 18
     /// **Largeur unique, dans les trois états.**

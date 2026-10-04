@@ -151,7 +151,10 @@ struct RelaisSelecteursTests {
              "lecture":"[data-testid=\"voice-play-turn-action-button\"]"}
             """#)
         #expect(s.estCalibre)
-        #expect(s.fragiles == [.composeur, .reponse])
+        // `reponse` est fragile elle aussi, et n'est pas signalée : aucun
+        // parcours ne l'apprend, donc « recalibrez » n'y pourrait rien.
+        #expect(RelaisSelecteurs.estFragile(s.reponse))
+        #expect(s.fragiles == [.composeur])
     }
 
     /// Un calibrage entièrement fait d'adresses ne doit rien déclencher : la

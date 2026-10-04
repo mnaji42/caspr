@@ -110,15 +110,29 @@ public struct RelaisSelecteurs: Codable, Equatable {
         !repere.isEmpty && !repere.contains("[") && !repere.contains("#")
     }
 
-    /// Les cibles dont le repère ne désigne plus une adresse.
+    /// Les cibles dont le repère ne désigne plus une adresse **et** qu'une
+    /// calibration peut réapprendre.
     ///
     /// Elles viennent des calibrations faites avant que les chaînes de position
     /// soient ancrées et éprouvées. Rien ne les distingue à l'œil d'un
     /// calibrage valide : la dictée attend simplement sans fin une zone de
-    /// saisie qu'elle ne retrouve pas, et la calibration oppose « Pas ce
-    /// bouton-là » à un bouton correctement désigné.
+    /// saisie qu'elle ne retrouve pas.
+    ///
+    /// ## Pourquoi le parcours filtre la liste
+    ///
+    /// L'avertissement dit « recalibrez ». Il ne doit donc nommer que ce qu'une
+    /// recalibration répare. `reponse` n'est dans aucun parcours — ni manuel ni
+    /// automatique : il n'y a pas de clic qui l'apprenne. Signalé, il faisait
+    /// réclamer indéfiniment un geste sans effet, et l'avertissement restait
+    /// affiché à qui venait justement de tout recalibrer.
+    ///
+    /// Le taire n'est pas le cacher : ce repère-là n'est plus consulté que par
+    /// les pages qui ne nomment pas leurs tours, `derniereReponse` préférant
+    /// ce que ChatGPT écrit lui-même. Un reste périmé y est sans effet.
     public var fragiles: [RelaisCible] {
-        RelaisCible.allCases.filter { Self.estFragile(self[$0]) }
+        let apprenables = Set(RelaisEtape.parcoursManuel.map(\.cible))
+        return RelaisCible.allCases
+            .filter { apprenables.contains($0) && Self.estFragile(self[$0]) }
     }
 
     /// Sait-on faire lire la réponse à haute voix ?

@@ -442,8 +442,13 @@ final class Relais: ObservableObject {
     /// dire qu'on en a fini avec le texte laissé dans la page.
     private func attendreLaPreparation() async throws {
         if enRecuperation { preparerLaProchaine() }
+        var tours = 0
         _ = try await RelaisHorlogeReelle.systeme.guetter(toutes: .milliseconds(100)) { () -> Void? in
-            if case .preparation = repos { nil } else { () }
+            guard case .preparation = repos else { return () }
+            // Dit, comme toute attente sans fin qui dure (cf. `RelaisDictee.observer`).
+            tours += 1
+            if tours % 100 == 0 { Log.error("relais : l'appui attend la préparation de la page depuis \(tours / 10) s") }
+            return nil
         }
     }
 

@@ -83,6 +83,8 @@ public final class RelaisDictee {
     /// et dans cet intervalle la zone est encore là, vide, sans bouton
     /// d'arrêt — exactement comme une page arrêtée.
     private var ecouteVue = false
+    /// Appels à la page en échec d'affilée (cf. `essayer`).
+    private var echecsDuPont = 0
 
     /// La page que cette dictée a prise est-elle morte depuis ?
     public var pageMorte: Bool { epoque.map { $0 != page.epoque } ?? false }
@@ -543,13 +545,24 @@ public final class RelaisDictee {
                              _ juger: (RelaisInstantane) async throws -> T?) async throws -> T {
         var veille = RelaisVeille(apresEnvoi: envoye)
         var tour = 0
+        var dernier: RelaisInstantane?
         let valeur = try await horloge.guetter(auPlus: delai?.duree) { () async throws -> T? in
             if pageMorte { throw RelaisErreur.pageInterrompue }
             tour += 1
+            // Une attente sans fin ne doit pas être muette. Sans échéance, la
+            // seule trace d'une page qui ne dit jamais ce qu'on attend était…
+            // aucune : « ChatGPT se prépare » indéfiniment, et rien au journal
+            // pour dire si la page chargeait, se taisait ou montrait autre
+            // chose. Toutes les dix secondes environ, ce qu'elle dit.
+            if delai == nil, tour % 40 == 0 {
+                journal("relais : toujours en attente après \(tour) relevés — "
+                        + Self.resume(dernier, chargement: page.chargementEnCours), true)
+            }
             let alertes = marquee && tour % 4 == 0
             guard !page.chargementEnCours,
                   let vu = try await essayer({ try await self.page.instantane(alertes ? demande.union(.alertes) : demande) })
             else { return nil }
+            dernier = vu
             if pageMorte { throw RelaisErreur.pageInterrompue }
             // L'échec prouvé qu'une échéance rattrapait jadis : une session
             // perdue en pleine attente ne rendra jamais rien.
@@ -586,9 +599,34 @@ public final class RelaisDictee {
     /// tranche sur-le-champ, et un pont absent d'une page chargée : elle a dit
     /// tout ce qu'elle dira (cf. `RelaisErreur.pontAbsent`).
     private func essayer<T>(_ operation: @escaping @MainActor () async throws -> T) async throws -> T? {
-        do { return try await AppelAnnulable.appeler(operation) }
+        do {
+            let valeur = try await AppelAnnulable.appeler(operation)
+            echecsDuPont = 0
+            return valeur
+        }
         catch RelaisErreur.pontAbsent where !Task.isCancelled { throw RelaisErreur.pontAbsent }
-        catch { if Task.isCancelled { throw CancellationError() }; return nil }
+        catch {
+            if Task.isCancelled { throw CancellationError() }
+            // Avalée pour réessayer au tour suivant — mais dite : répétée sans
+            // fin, une erreur du pont faisait attendre la dictée pour toujours
+            // sans laisser une ligne. La première, puis toutes les quarante.
+            echecsDuPont += 1
+            if echecsDuPont == 1 || echecsDuPont % 40 == 0 {
+                journal("relais : appel à la page en échec (\(echecsDuPont) de suite) — "
+                        + RelaisErreur.pourLeJournal(error), true)
+            }
+            return nil
+        }
+    }
+
+    /// Ce que dit le dernier relevé d'une attente qui dure, pour le journal :
+    /// des drapeaux, jamais un texte de la page.
+    static func resume(_ vu: RelaisInstantane?, chargement: Bool) -> String {
+        if chargement { return "la page se dit en chargement" }
+        guard let vu else { return "aucun relevé n'a abouti" }
+        let oui = { (b: Bool) in b ? "oui" : "non" }
+        return "zone \(oui(vu.composeur)), micro \(oui(vu.micro)), arrêt \(oui(vu.stop)), "
+            + "enregistrement \(oui(vu.enregistrement)), écran de connexion \(oui(vu.authentification))"
     }
 
     /// Un clic qui a pris, ou `nil` pour le tour suivant.

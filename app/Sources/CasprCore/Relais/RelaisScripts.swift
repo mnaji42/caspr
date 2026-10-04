@@ -1174,10 +1174,23 @@ public enum RelaisScripts {
             main form ~ * { display: none !important; }
           `;
           document.head.appendChild(style);
+          // ## D'abord tout en bas, et seulement ensuite le cadrage fin
+          //
+          // La barre de saisie est le dernier élément de la page dans les deux
+          // états — la zone de texte au repos, la pastille d'enregistrement
+          // pendant l'écoute. Pousser chaque conteneur qui défile jusqu'en bas
+          // la met donc dans la bande sans avoir à la désigner.
+          //
+          // C'est ce qui manquait. Le cadrage ne partait que de la zone de
+          // texte, et ChatGPT la **retire** de la page le temps de l'écoute :
+          // `trouver` ne rendait plus rien, aucun défilement n'avait lieu, et
+          // la bande restait noire dès qu'on parlait — précisément quand elle
+          // sert. Le cadrage d'avant tenait par un `form` que le nouveau
+          // balisage n'a plus non plus.
+          for (const n of tous('*')) {
+            if (n.scrollHeight > n.clientHeight + 4) n.scrollTop = n.scrollHeight;
+          }
           const el = trouver('composeur', selecteur);
-          // La pastille remplace la zone de saisie pendant l'écoute : on vise
-          // le bloc qui les porte l'une et l'autre, pour que le cadrage tienne
-          // dans les deux états.
           const bloc = el ? (el.closest('form') || el.parentElement || el) : null;
           // Centré dans les deux sens : la bande est plus étroite que la page,
           // et un cadrage vertical seul laissait la pastille décalée à gauche.

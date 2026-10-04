@@ -314,6 +314,27 @@ public enum RelaisScripts {
       // aurait rendu à sa place le premier `article` venu — le message de
       // l'utilisateur, dans un fil neuf.
       function derniereReponse(selReponse) {
+        // ## Le rôle que ChatGPT écrit passe avant le repère appris
+        //
+        // `REPONSES` est plus sûr que tout ce qu'on pourrait apprendre : il ne
+        // désigne que des réponses, jamais le message de l'utilisateur. La
+        // mise en garde ci-dessus visait le second filet, `article`, qui lui
+        // ramène n'importe quel message — elle ne vaut pas pour celui-ci.
+        //
+        // Le repère appris, lui, n'est **jamais réappris** : `.reponse` ne
+        // figure pas dans `RelaisEtape.parcoursManuel`, qui va du micro à
+        // « copier » sans passer par la réponse. Un calibrage ancien y survit
+        // donc indéfiniment, et aucune recalibration ne le corrige. Celui
+        // relevé sur une machine était une chaîne de position : « copier » y
+        // était refusé à chaque essai, avec un message qui accusait le clic
+        // qu'on venait de faire au lieu d'un repère vieux de plusieurs
+        // versions.
+        //
+        // C'est aussi ce que fait déjà `copierPret`, qui compte les réponses
+        // par `REPONSES` sans consulter le repère : deux endroits répondaient à
+        // « laquelle est la dernière réponse » par deux règles différentes.
+        const nommees = tous(REPONSES);
+        if (nommees.length) return dernierVu(nommees);
         const listes = selReponse ? [tous(selReponse)] : HEURISTIQUES.reponse.map((s) => tous(s));
         return dernierVu(listes.find((l) => l.length) || []);
       }

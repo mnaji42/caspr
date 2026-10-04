@@ -1283,7 +1283,18 @@ public enum RelaisScripts {
             // Au premier niveau qui en contient, et seul à ce niveau (cf.
             // `copierAutour`) : plus haut, on entrerait dans les messages
             // voisins.
-            const el = copierAutour(derniere, s);
+            //
+            // À défaut, le dernier de la page. Le tour groupe désormais la
+            // question **et** la réponse : `copierAutour` y trouve deux boutons
+            // « copier » et renonce — à juste titre, il ne devine pas, mais
+            // l'automate s'arrêtait là alors que la main, elle, aboutissait.
+            // Le dernier de la page est celui de la dernière réponse, pour la
+            // raison qui fait déjà retenir le dernier bloc à `paireCopier` : la
+            // réponse vient après la question. Et rien n'est cru sur parole —
+            // Swift clique chaque candidat et ne garde que celui dont la copie
+            // s'observe.
+            const el = copierAutour(derniere, s)
+              || dernierVu(tous(s).filter((b) => visible(b) && convient('bouton', b)));
             const c = el && !ouvreUnMenu(el) && repereCopier(el, derniere, [s]);
             if (c && !liste.some((x) => x.selecteur === c.selecteur && x.parent === c.parent)) liste.push(c);
           }

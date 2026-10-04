@@ -18,7 +18,7 @@ public enum RelaisScripts {
         case cliquer, lire, ecrire, encadrer, copierLaReponse, cliquerBouton
         case lireReponse, compacter, oublierBrouillon, candidats, candidatsCopier
         case guetter, abandonnerCalibration
-        case marquer, instantane
+        case marquer, instantane, structure
     }
 
     /// Le pont injecté dans la page.
@@ -423,6 +423,26 @@ public enum RelaisScripts {
 
       function copierDesigne(el, derniere) {
         const refus = (raison) => ({ ok: true, selecteur: '', parent: '', raison });
+        // ## La paire d'abord, et sans chercher de réponse
+        //
+        // C'est elle que la dictée suivra : `boutonCopier`, quand un bloc est
+        // connu, prend le **dernier** bloc de ce sélecteur et le bouton qui y
+        // est seul — sans jamais consulter le repère de la réponse. Exiger ici
+        // de retrouver la dernière réponse ajoutait donc une condition que le
+        // chemin d'exécution n'a pas.
+        //
+        // Elle ne garde rien de ce qu'elle prétendait garantir. Le bloc retenu
+        // doit déjà être le dernier de son espèce (`paireCopier`), ce qui
+        // écarte une réponse plus ancienne ; et il porte le libellé que la page
+        // met sous une réponse, jamais sous le message de l'utilisateur. La
+        // confusion qu'on redoutait est donc écartée par la paire elle-même.
+        //
+        // Mesuré le 4 octobre 2026 : ChatGPT n'écrit plus
+        // `data-message-author-role`, aucune réponse n'était trouvée, et cette
+        // condition surnuméraire refusait seule tous les clics — y compris
+        // justes. La chercher reste le repli de qui n'a aucun bloc adressable.
+        const paire = paireCopier(el);
+        if (paire) return { ok: true, ...paire };
         if (!derniere) return refus('aucune réponse trouvée dans la page — ' + inventaire(el));
         let tour = el;
         while (tour && !tour.contains(derniere)) tour = tour.parentElement;
@@ -434,10 +454,11 @@ public enum RelaisScripts {
                        + 'petit bloc qui les réunit porte ' + autres.length
                        + ' autre(s) message(s)');
         }
-        const repere = repereCopier(el, derniere);
-        // `ok: true` : `repereCopier` ne rend que le couple repère/bloc.
-        return repere ? { ok: true, ...repere }
-                      : refus('aucun repère stable ne ramène à ce bouton seul');
+        // `paireCopier` a déjà échoué plus haut : seul le repère seul reste.
+        const seul = repereCopier(el, derniere);
+        return seul ? { ok: true, ...seul }
+                    : refus('aucun repère stable ne ramène à ce bouton seul — '
+                            + inventaire(el));
       }
 
       // Le repère d'un « copier » tel que la dictée le retrouvera, pour les
@@ -513,7 +534,8 @@ public enum RelaisScripts {
           if (!idEngendre(n.id)) { parts.unshift('#' + esc(n.id)); return parts.join(' > '); }
           if (n !== el) {
             const valide = leRetrouve(n, 'bloc');
-            const ancre = premierRepere(n, valide) || ANCRES.find(valide);
+            const ancre = premierRepere(n, valide) || ANCRES.find(valide)
+              || [ancreFamille(n)].filter(Boolean).find(valide);
             if (ancre) { parts.unshift(ancre); return parts.join(' > '); }
           }
           let part = n.tagName.toLowerCase();
@@ -526,6 +548,23 @@ public enum RelaisScripts {
           n = p;
         }
         return parts.join(' > ');
+      }
+
+      // Un `data-testid` numéroté désigne **ce** message et pas le suivant —
+      // `conversation-turn-6`. `idEngendre` le rejette donc comme repère, et il
+      // a raison : visé tel quel, il change de cible au message d'après.
+      //
+      // Son préfixe, lui, désigne la **famille** : tous les tours de la
+      // conversation. C'est exactement ce qu'il faut pour ancrer « la dernière
+      // réponse », que `dernierVu` choisit ensuite parmi eux. Un repère qu'on
+      // écartait entièrement alors que la moitié en était bonne.
+      //
+      // Proposé seulement, jamais imposé : comme tous les autres candidats, il
+      // passe par `leRetrouve`, et c'est la page qui dit s'il tient.
+      function ancreFamille(n) {
+        const id = n.getAttribute && n.getAttribute('data-testid');
+        const m = id && /^(.*[-_])\d+$/.exec(id);
+        return m ? '[data-testid^="' + m[1] + '"]' : null;
       }
 
       // Le repère construit désigne-t-il vraiment ce qu'on croit ?
@@ -963,6 +1002,27 @@ public enum RelaisScripts {
         // pendant l'attente l'effaçait, et la réponse d'avant, relue comme
         // nouvelle, était lue à haute voix à la place de celle qu'on
         // attendait.
+        // Ce que la page offre, en clair, pour le Diagnostic.
+        //
+        // Le relais ne tient que par des repères appris d'une page qu'on ne
+        // contrôle pas, et quand ChatGPT en change, les symptômes ne désignent
+        // jamais leur cause : un refus de calibration, une attente sans fin.
+        // Les compter ici évite de les deviner — c'est ce qui a manqué le jour
+        // où `data-message-author-role` a disparu, et ce qu'on ne pouvait
+        // obtenir qu'en instrumentant un chemin d'échec à la fois.
+        structure() {
+          const essais = ['article', '[data-message-author-role]',
+                          '[data-testid^="conversation-turn"]', '[data-turn]',
+                          '[data-message-id]', '#prompt-textarea',
+                          '[contenteditable="true"]', 'textarea',
+                          '[data-testid="copy-turn-action-button"]',
+                          '[aria-label="Actions sur la réponse"]'];
+          const lignes = essais.map((sel) => sel + ' : ' + tous(sel).length);
+          const bouton = dernierVu(tous('[data-testid="copy-turn-action-button"]'));
+          const autour = bouton ? '\n\nAutour du dernier « copier » :\n' + inventaire(bouton) : '';
+          return { ok: true, texte: lignes.join('\n') + autour };
+        },
+
         marquer() {
           return { echecs: [...alertesVisibles(), ...echecsEcrits()], reponses: tous(REPONSES).length };
         },
@@ -1097,7 +1157,12 @@ public enum RelaisScripts {
             const el = ev.target.closest(CLIQUABLE[genre] || '*');
             if (!convient(genre, el)) return null;
             if (cible === 'copier') return copierDesigne(el, derniereReponse(selReponse));
-            const repere = { ok: true, selecteur: selecteurStable(el, genre, cible), parent: selecteurAncetre(el) };
+            const selecteur = selecteurStable(el, genre, cible);
+            // Un repère vide est un échec, et il était muet : `introuvable`
+            // nommait la cible sans jamais dire ce que la page offrait. C'est
+            // ce qui a coûté un tour de plus sur la réponse.
+            const repere = { ok: true, selecteur, parent: selecteurAncetre(el),
+                             raison: selecteur ? '' : inventaire(el) };
             if (cible !== 'lecture') return repere;
             if (ouvreUnMenu(el) && !menu) { menu = repere; return null; } // on attend le vrai bouton
             return { ...repere, menu: menu ? menu.selecteur : '', menuParent: menu ? menu.parent : '' };

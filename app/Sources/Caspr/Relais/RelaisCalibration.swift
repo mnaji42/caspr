@@ -313,7 +313,14 @@ final class RelaisCalibration {
                 guard RelaisDialogues.demander("Pas ce bouton-là", refus) else { throw CancellationError() }
                 continue
             }
-            guard !r.selecteur.isEmpty else { throw RelaisErreur.introuvable(cible) }
+            guard !r.selecteur.isEmpty else {
+                // Ce que la page offrait, au moment où l'on n'a rien su en
+                // tirer. Sans cette ligne, « Calibrer à nouveau ? » renvoie
+                // indéfiniment vers la même impasse sans rien apprendre.
+                Log.error("relais : repère introuvable pour \(cible.rawValue) — "
+                          + (r.raison.isEmpty ? "sans détail" : r.raison))
+                throw RelaisErreur.introuvable(cible)
+            }
             var s = page.selecteurs
             s[cible] = r.selecteur
             // Le bloc qui porte les boutons des barres d'actions : la page en

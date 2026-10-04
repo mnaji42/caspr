@@ -11,37 +11,16 @@ struct RelaisEtapeTests {
     /// remplie, « copier » et la lecture qu'une fois la réponse venue.
     @Test("Les étapes suivent l'ordre où les boutons existent")
     func ordre() {
-        #expect(etapes.map(\.cible)
-                == [.micro, .stop, .composeur, .envoi, .reponse, .copier, .lecture])
+        #expect(etapes.map(\.cible) == [.micro, .stop, .composeur, .envoi, .copier, .lecture])
     }
 
-    /// La réponse se montre juste avant « copier », parce que c'est d'elle que
-    /// dépend son acceptation : le bouton n'est retenu que s'il est celui de la
-    /// **dernière** réponse, cherchée par ce repère-là.
-    @Test("La réponse précède « copier », dont elle conditionne l'acceptation")
-    func laReponsePrecedeCopier() throws {
-        let cibles = etapes.map(\.cible)
-        let reponse = try #require(cibles.firstIndex(of: .reponse))
-        let copier = try #require(cibles.firstIndex(of: .copier))
-        #expect(reponse < copier)
-    }
-
-    /// La main apprend **un repère de plus** que l'automatique : celui de la
-    /// réponse.
-    ///
-    /// L'invariant était l'égalité, et il a tenu tant que `REPONSES` —
-    /// `[data-message-author-role="assistant"]`, le seul pari écrit en dur du
-    /// module — répondait. Le 4 octobre 2026 ChatGPT ne l'écrit plus : la page
-    /// n'offre « aucune réponse », l'automatique ne peut plus rien éprouver, et
-    /// la main n'avait aucun moyen de réparer puisque l'étape n'existait pas.
-    /// Elle existe maintenant, et l'automatique ne sait toujours pas la faire —
-    /// un clic ne se devine pas. L'écart est donc voulu, et il est d'exactement
-    /// une cible.
-    @Test("La main apprend la réponse en plus de ce qu'éprouve l'automatique")
-    func unRepereDePlusQueLAutomatique() {
+    /// Les deux parcours apprennent les mêmes repères : ce que la main montre
+    /// en plus de l'automatique, c'est « Lire à haute voix », et rien d'autre.
+    @Test("Les étapes obligatoires sont celles de l'automatique")
+    func memesReperesQueLAutomatique() {
         let obligatoires = etapes.filter { !$0.facultative }.map(\.cible)
-        #expect(Set(obligatoires) == Set(RelaisPreuves.parcours).union([.reponse]))
-        #expect(obligatoires.count == RelaisPreuves.parcours.count + 1)
+        #expect(Set(obligatoires) == Set(RelaisPreuves.parcours))
+        #expect(obligatoires.count == RelaisPreuves.parcours.count)
     }
 
     /// Renoncer à « Lire à haute voix » garde les cinq repères appris avant

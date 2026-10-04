@@ -289,6 +289,12 @@ extension RelaisPage {
                              raison: r.raison ?? "") : nil
     }
 
+    /// Ce que la page offre, compté : pour le Diagnostic, et pour nous.
+    func structure() async -> String {
+        let r: Rendu? = try? await pont(.structure)
+        return r?.texte ?? "la page n'a pas répondu"
+    }
+
     /// Fait renoncer une calibration qui attend un clic — au repos.
     func abandonnerCalibration() async {
         _ = await sonder { try await self.pont(.abandonnerCalibration) as Rendu }

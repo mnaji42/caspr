@@ -192,6 +192,12 @@ enum RelaisDialogues {
             \(ligne("Micro", sel.micro))
             \(ligne("Arrêt", sel.stop))
             \(ligne("Zone de texte", sel.composeur))
+            \(ligne("Réponse", sel.reponse))
+            \(ligne("Copier", sel.copier))
+            \(ligne("Bloc de copier", sel.copierParent))
+
+            CE QUE LA PAGE OFFRE
+            \(await page.structure())
             """)
     }
 }
